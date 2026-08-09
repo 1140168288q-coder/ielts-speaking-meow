@@ -8,22 +8,34 @@ import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core'
 import type { InitialTranscript, PracticeService } from './application/practiceService'
 import { createBrowserRuntime } from './app/runtime'
+import { ImportController } from './app/ImportController'
+import { SettingsController } from './app/SettingsController'
 import { questionBank } from './data/questions'
 import type {
   ActionableFeedback,
+  AiFeedback,
   PracticeAttempt,
   Question,
   SavedExpression,
   TrainingSession,
 } from './domain/models'
+import type { ImportedQuestionRecord } from './domain/imports'
+import type { LLMProvider } from './ports/ai'
 import type {
   AudioFocus,
   AudioFocusState,
+  RecordedAudioSTTProvider,
   STTProvider,
   STTSession,
 } from './ports/speech'
 
-type AppView = 'questions' | 'practice' | 'history' | 'expressions'
+type AppView =
+  | 'questions'
+  | 'practice'
+  | 'history'
+  | 'expressions'
+  | 'imports'
+  | 'settings'
 
 const partLabel = (part: 1 | 2 | 3) => `Part ${part}`
 
@@ -44,6 +56,13 @@ const formatDate = (value: string) =>
     minute: '2-digit',
   }).format(new Date(value))
 
+const audioExtension = (mimeType: string) => {
+  if (mimeType.includes('wav')) return 'wav'
+  if (mimeType.includes('mp4') || mimeType.includes('aac')) return 'm4a'
+  if (mimeType.includes('mpeg')) return 'mp3'
+  return 'webm'
+}
+
 const statusLabel: Record<TrainingSession['status'], string> = {
   'first-ready': '等待第一次回答',
   'first-review': '查看第一次反馈',
@@ -54,6 +73,11 @@ const statusLabel: Record<TrainingSession['status'], string> = {
 }
 
 export const SAFE_PRACTICE_BACK_EVENT = 'ielts-speaking-meow:safe-practice-back'
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure scroll behavior has a focused navigation regression test.
+export function resetViewScroll(): void {
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+}
 
 export type AndroidBackAction =
   | 'safe-practice-exit'
@@ -125,24 +149,30 @@ export function App() {
   const [session, setSession] = useState<TrainingSession | null>(null)
   const [sessions, setSessions] = useState<TrainingSession[]>([])
   const [expressions, setExpressions] = useState<SavedExpression[]>([])
+  const [importedQuestions, setImportedQuestions] = useState<
+    ImportedQuestionRecord[]
+  >([])
   const [loading, setLoading] = useState(true)
   const [storageError, setStorageError] = useState<string | null>(null)
   const [navigationNotice, setNavigationNotice] = useState<string | null>(null)
   const [practiceExitGuardActive, setPracticeExitGuardActive] = useState(false)
 
   const refreshLibrary = useCallback(async () => {
-    const [nextSessions, nextExpressions] = await Promise.all([
+    const [nextSessions, nextExpressions, nextImportedQuestions] = await Promise.all([
       runtime.practiceService.listSessions(),
       runtime.practiceService.listExpressions(),
+      runtime.storage.listImportedQuestions(),
     ])
     setSessions(nextSessions)
     setExpressions(nextExpressions)
-  }, [runtime.practiceService])
+    setImportedQuestions(nextImportedQuestions)
+  }, [runtime.practiceService, runtime.storage])
 
   useEffect(() => {
     let active = true
     const load = async () => {
       try {
+        await runtime.initialize()
         await refreshLibrary()
       } catch (error) {
         if (active) {
@@ -164,7 +194,7 @@ export function App() {
       void runtime.audioFocus.stopAllPlayback()
       void runtime.storage.close()
     }
-  }, [refreshLibrary, runtime.audioFocus, runtime.storage])
+  }, [refreshLibrary, runtime])
 
   const openSession = (nextSession: TrainingSession) => {
     setPracticeExitGuardActive(false)
@@ -233,6 +263,10 @@ export function App() {
   }, [navigateSafely, view])
 
   useEffect(() => {
+    resetViewScroll()
+  }, [view])
+
+  useEffect(() => {
     const handleSafeBack = () => navigateSafelyRef.current('questions')
     window.addEventListener(SAFE_PRACTICE_BACK_EVENT, handleSafeBack)
     return () => {
@@ -282,8 +316,12 @@ export function App() {
     }
   }, [])
 
+  const allQuestions = [
+    ...questionBank,
+    ...importedQuestions.map((record) => record.question),
+  ]
   const activeQuestion = session
-    ? questionBank.find((question) => question.id === session.questionId) ?? null
+    ? allQuestions.find((question) => question.id === session.questionId) ?? null
     : null
 
   return (
@@ -329,9 +367,11 @@ export function App() {
           <LoadingView />
         ) : view === 'questions' ? (
           <QuestionLibrary
+            questions={allQuestions}
             sessions={sessions}
             onStart={(question) => void startQuestion(question)}
             onResume={openSession}
+            onImport={() => navigateSafely('imports')}
           />
         ) : view === 'practice' && session && activeQuestion ? (
           <PracticeFlow
@@ -341,15 +381,47 @@ export function App() {
             service={runtime.practiceService}
             audioFocus={runtime.audioFocus}
             stt={runtime.stt}
+            remoteStt={runtime.remoteStt}
+            textAi={runtime.textAi}
             onExitGuardChange={setPracticeExitGuardActive}
             onChange={handleSessionChange}
             onBack={() => navigateSafely('questions')}
           />
         ) : view === 'history' ? (
-          <HistoryView sessions={sessions} onOpen={openSession} />
-        ) : (
+          <HistoryView
+            questions={allQuestions}
+            sessions={sessions}
+            onOpen={openSession}
+          />
+        ) : view === 'expressions' ? (
           <ExpressionLibrary
             expressions={expressions}
+            audioFocus={runtime.audioFocus}
+          />
+        ) : view === 'imports' ? (
+          <ImportController
+            service={runtime.importService}
+            organizer={runtime.textAi}
+            existingQuestions={allQuestions}
+            onImported={(records) => {
+              setImportedQuestions((current) => [
+                ...current.filter(
+                  (existing) =>
+                    !records.some((record) => record.id === existing.id),
+                ),
+                ...records,
+              ])
+            }}
+            onStartQuestion={(question) => void startQuestion(question)}
+            onBack={() => navigateSafely('questions')}
+          />
+        ) : (
+          <SettingsController
+            service={runtime.apiSettings}
+            textAi={runtime.textAi}
+            remoteStt={runtime.remoteStt}
+            voiceAi={runtime.voiceAi}
+            systemStt={runtime.stt}
             audioFocus={runtime.audioFocus}
           />
         )}
@@ -384,6 +456,7 @@ function BottomNavigation({
     { view: 'questions', label: '练习', icon: '◉' },
     { view: 'history', label: '记录', icon: '↻' },
     { view: 'expressions', label: '表达', icon: '✦' },
+    { view: 'settings', label: '设置', icon: '⚙' },
   ]
 
   return (
@@ -404,24 +477,28 @@ function BottomNavigation({
 }
 
 function QuestionLibrary({
+  questions,
   sessions,
   onStart,
   onResume,
+  onImport,
 }: {
+  questions: Question[]
   sessions: TrainingSession[]
   onStart: (question: Question) => void
   onResume: (session: TrainingSession) => void
+  onImport: () => void
 }) {
   const [part, setPart] = useState<1 | 2 | 3>(1)
-  const questions = questionBank.filter((question) => question.part === part)
+  const partQuestions = questions.filter((question) => question.part === part)
   const resumable = sessions.find((item) => item.status !== 'completed')
   const resumableQuestion = resumable
-    ? questionBank.find((question) => question.id === resumable.questionId)
+    ? questions.find((question) => question.id === resumable.questionId)
     : undefined
 
   const pickRandom = () => {
-    const index = Math.floor(Math.random() * questions.length)
-    const question = questions[index]
+    const index = Math.floor(Math.random() * partQuestions.length)
+    const question = partQuestions[index]
     if (question) {
       onStart(question)
     }
@@ -466,6 +543,9 @@ function QuestionLibrary({
         <button className="secondary-button compact" type="button" onClick={pickRandom}>
           随机一题
         </button>
+        <button className="secondary-button compact" type="button" onClick={onImport}>
+          导入材料
+        </button>
       </div>
 
       <div className="part-tabs" role="tablist" aria-label="IELTS Speaking 部分">
@@ -485,7 +565,7 @@ function QuestionLibrary({
       </div>
 
       <div className="question-list">
-        {questions.map((question, index) => (
+        {partQuestions.map((question, index) => (
           <article className="question-row" key={question.id}>
             <span className="question-number">{String(index + 1).padStart(2, '0')}</span>
             <button type="button" onClick={() => onStart(question)}>
@@ -513,6 +593,8 @@ function PracticeFlow({
   service,
   audioFocus,
   stt,
+  remoteStt,
+  textAi,
   onExitGuardChange,
   onChange,
   onBack,
@@ -522,6 +604,8 @@ function PracticeFlow({
   service: PracticeService
   audioFocus: AudioFocus
   stt: STTProvider
+  remoteStt: RecordedAudioSTTProvider
+  textAi: LLMProvider
   onExitGuardChange: (active: boolean) => void
   onChange: (session: TrainingSession) => void
   onBack: () => void
@@ -532,12 +616,16 @@ function PracticeFlow({
   const [elapsedMs, setElapsedMs] = useState(0)
   const [liveTranscript, setLiveTranscript] = useState('')
   const [sttNote, setSttNote] = useState<string | null>(null)
+  const [aiNote, setAiNote] = useState<string | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
   const [expression, setExpression] = useState('')
   const sttSessionRef = useRef<STTSession | null>(null)
   const recordingActiveRef = useRef(false)
   const transcriptRef = useRef('')
   const finalSegmentsRef = useRef<string[]>([])
   const lifecycleGenerationRef = useRef(0)
+  const aiRequestGenerationRef = useRef(0)
+  const aiRequestInFlightRef = useRef(false)
 
   const firstAttempt = session.attempts.find(
     (attempt) => attempt.attemptNumber === 1,
@@ -589,6 +677,11 @@ function PracticeFlow({
     }
   }, [releaseAudioForLifecycle])
 
+  useEffect(() => () => {
+    aiRequestGenerationRef.current += 1
+    aiRequestInFlightRef.current = false
+  }, [])
+
   const speak = async (text: string) => {
     setMessage(null)
     try {
@@ -606,7 +699,7 @@ function PracticeFlow({
       setMessage(
         error instanceof Error
           ? error.message
-          : '系统朗读暂不可用，你仍可以继续练习。',
+          : '语音播放暂不可用，你仍可以继续练习。',
       )
     }
   }
@@ -677,7 +770,11 @@ function PracticeFlow({
         return
       }
       recordingActiveRef.current = true
-      startLiveStt()
+      if (remoteStt.isConfigured()) {
+        setSttNote('停止后会先保存原录音，再使用独立 STT API 转写。')
+      } else {
+        startLiveStt()
+      }
     } catch (error) {
       onExitGuardChange(false)
       setMessage(formatMicrophoneStartError(error))
@@ -697,32 +794,180 @@ function PracticeFlow({
     try {
       const recording = await audioFocus.stopRecording()
       const transcript = transcriptRef.current.trim()
-      const transcriptInput: InitialTranscript = transcript
-        ? { text: transcript, status: 'ready', source: 'stt' }
-        : {
+      const useRemoteStt = remoteStt.isConfigured()
+      const transcriptInput: InitialTranscript = useRemoteStt
+        ? { text: '', status: 'pending', source: null }
+        : transcript
+          ? { text: transcript, status: 'ready', source: 'stt' }
+          : {
             text: '',
             status: 'failed',
             source: null,
             errorCode: stt.isAvailable() ? 'no-transcript' : 'unavailable',
           }
-      const updated = await service.saveAttempt(
+      let updated = await service.saveAttempt(
         session.id,
         recordingAttempt,
         recording,
         transcriptInput,
       )
       onChange(updated)
-      setMessage(
-        transcript
-          ? '录音和转写已保存在本机。'
-          : '录音已保存在本机；请手动补充转写。',
-      )
+
+      if (useRemoteStt) {
+        setMessage('原录音已保存在本机，正在请求独立 STT API…')
+        try {
+          const remoteTranscript = await remoteStt.transcribe({
+            audio: recording.blob,
+            mimeType: recording.mimeType,
+            fileName: `attempt-${recordingAttempt}.${audioExtension(recording.mimeType)}`,
+            language: 'en',
+          })
+          updated = await service.applySttTranscript(
+            session.id,
+            recordingAttempt,
+            remoteTranscript,
+          )
+          onChange(updated)
+          setMessage('录音和独立 STT 转写均已保存在本机。')
+        } catch (error) {
+          if (transcript.length > 0) {
+            updated = await service.applySttTranscript(
+              session.id,
+              recordingAttempt,
+              transcript,
+            )
+            onChange(updated)
+            setMessage('远程 STT 失败，已保留原录音并采用设备转写。')
+          } else {
+            updated = await service.markTranscriptionFailed(
+              session.id,
+              recordingAttempt,
+              'remote-stt-failed',
+            )
+            onChange(updated)
+            setMessage(
+              error instanceof Error
+                ? `${error.message} 原录音已保留，可重试或手工输入。`
+                : '远程 STT 失败；原录音已保留，可重试或手工输入。',
+            )
+          }
+        }
+      } else {
+        setMessage(
+          transcript
+            ? '录音和转写已保存在本机。'
+            : '录音已保存在本机；请手动补充转写。',
+        )
+      }
+
+      if (recordingAttempt === 1) {
+        await requestAiFeedback(updated)
+      }
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : '录音保存失败，请重试。',
       )
     } finally {
       onExitGuardChange(false)
+      setBusy(false)
+    }
+  }
+
+  const requestAiFeedback = async (targetSession: TrainingSession) => {
+    const attempt = targetSession.attempts.find(
+      (item) => item.attemptNumber === 1,
+    )
+    if (
+      !textAi.isConfigured() ||
+      attempt?.transcript.status !== 'ready' ||
+      attempt.transcript.text.trim().length === 0
+    ) {
+      return
+    }
+
+    if (aiRequestInFlightRef.current) {
+      setAiNote('Text AI 反馈仍在处理中，请等待本次请求完成。')
+      return
+    }
+
+    const generation = ++aiRequestGenerationRef.current
+    aiRequestInFlightRef.current = true
+    setAiBusy(true)
+    setAiNote('正在获取少量 Text AI 反馈…')
+    try {
+      const feedback = await textAi.getFeedback({
+        question,
+        transcript: attempt.transcript.text,
+        metrics: attempt.metrics,
+      })
+
+      if (generation !== aiRequestGenerationRef.current) return
+      const updated = await service.applyAiFeedbackIfTranscriptCurrent(
+        targetSession.id,
+        {
+          attemptId: attempt.id,
+          text: attempt.transcript.text,
+          updatedAt: attempt.transcript.updatedAt,
+        },
+        feedback,
+      )
+      if (generation !== aiRequestGenerationRef.current) return
+      if (updated === null) {
+        setAiNote('转写已发生变化，本次旧 Text AI 结果未保存；可按新转写重试。')
+        return
+      }
+      onChange(updated)
+      setAiNote('Text AI 反馈已保存；本地反馈和原录音未被覆盖。')
+    } catch (error) {
+      if (generation !== aiRequestGenerationRef.current) return
+      setAiNote(
+        error instanceof Error
+          ? `${error.message} 你仍可使用本地反馈继续。`
+          : 'Text AI 暂不可用；你仍可使用本地反馈继续。',
+      )
+    } finally {
+      if (generation === aiRequestGenerationRef.current) {
+        aiRequestInFlightRef.current = false
+        setAiBusy(false)
+      }
+    }
+  }
+
+  const retryTranscription = async (attempt: PracticeAttempt) => {
+    if (aiRequestInFlightRef.current) {
+      setMessage('Text AI 正在处理当前转写，请等待完成后再重试转写。')
+      return
+    }
+    if (!remoteStt.isConfigured()) {
+      setMessage('请先在设置中配置独立 STT API，或直接手工输入转写。')
+      return
+    }
+    setBusy(true)
+    setMessage('原录音仍在本机，正在重试转写…')
+    try {
+      const audio = await service.getAudio(attempt.audio.id)
+      if (audio === null) throw new Error('找不到这段本地录音。')
+      const transcript = await remoteStt.transcribe({
+        audio,
+        mimeType: attempt.audio.mimeType,
+        fileName: `attempt-${attempt.attemptNumber}.${audioExtension(attempt.audio.mimeType)}`,
+        language: 'en',
+      })
+      const updated = await service.applySttTranscript(
+        session.id,
+        attempt.attemptNumber,
+        transcript,
+      )
+      onChange(updated)
+      setMessage('转写重试成功，原录音仍保留。')
+      if (attempt.attemptNumber === 1) await requestAiFeedback(updated)
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `${error.message} 原录音仍保留。`
+          : '转写重试失败；原录音仍保留。',
+      )
+    } finally {
       setBusy(false)
     }
   }
@@ -746,6 +991,10 @@ function PracticeFlow({
   }
 
   const updateTranscript = async (attempt: PracticeAttempt, text: string) => {
+    if (aiRequestInFlightRef.current) {
+      setMessage('Text AI 正在处理当前转写，请等待完成后再保存修改。')
+      return
+    }
     setBusy(true)
     setMessage(null)
     try {
@@ -842,11 +1091,20 @@ function PracticeFlow({
           <AttemptReview
             attempt={firstAttempt}
             label="第一次回答"
-            busy={busy}
+            busy={busy || aiBusy}
             onPlay={() => void playAttempt(firstAttempt)}
             onSaveTranscript={(text) => void updateTranscript(firstAttempt, text)}
+            onRetryTranscription={() => void retryTranscription(firstAttempt)}
           />
-          <FeedbackPanel feedback={session.localFeedback} />
+          <FeedbackPanel
+            feedback={session.localFeedback}
+            aiFeedback={session.aiFeedback}
+            aiNote={aiNote}
+            aiConfigured={textAi.isConfigured()}
+            busy={aiBusy}
+            onRetryAi={() => void requestAiFeedback(session)}
+            onSpeak={(text) => void speak(text)}
+          />
           <section className="next-attempt-card">
             <p className="eyebrow">第二次是核心</p>
             <h2>这次只带着上面的重点，再说一次。</h2>
@@ -854,7 +1112,7 @@ function PracticeFlow({
             <button
               type="button"
               className="primary-button"
-              disabled={busy}
+              disabled={busy || aiBusy}
               onClick={() => void prepareSecond()}
             >
               准备第二次回答
@@ -863,7 +1121,10 @@ function PracticeFlow({
         </>
       ) : session.status === 'second-ready' && !secondAttempt ? (
         <>
-          <FocusReminder feedback={session.localFeedback} />
+          <FocusReminder
+            feedback={session.localFeedback}
+            aiFeedback={session.aiFeedback}
+          />
           <RecordingStage
             attemptNumber={2}
             isRecording={isRecording}
@@ -885,6 +1146,7 @@ function PracticeFlow({
           onExpressionChange={setExpression}
           onPlay={(attempt) => void playAttempt(attempt)}
           onSaveTranscript={(attempt, text) => void updateTranscript(attempt, text)}
+          onRetryTranscription={(attempt) => void retryTranscription(attempt)}
           onSaveExpression={() => void saveExpression()}
           onSpeakExpression={(text) => void speak(text)}
         />
@@ -931,7 +1193,7 @@ function QuestionCard({
           {speaking ? '停止播报' : '播放题目'}
         </button>
         <span className="audio-state">
-          {recording ? '录音中，播报已锁定' : speaking ? '正在用系统语音播报' : '可随时重播'}
+          {recording ? '录音中，播报已锁定' : speaking ? '正在播报' : '可随时重播'}
         </span>
       </div>
     </article>
@@ -990,20 +1252,40 @@ function RecordingStage({
   )
 }
 
-function AttemptReview({
+export function AttemptReview({
   attempt,
   label,
   busy,
   onPlay,
   onSaveTranscript,
+  onRetryTranscription,
 }: {
   attempt: PracticeAttempt
   label: string
   busy: boolean
   onPlay: () => void
   onSaveTranscript: (text: string) => void
+  onRetryTranscription?: () => void
 }) {
   const [draft, setDraft] = useState(attempt.transcript.text)
+  const lastIncomingTranscript = useRef({
+    attemptId: attempt.id,
+    text: attempt.transcript.text,
+  })
+
+  useEffect(() => {
+    const previous = lastIncomingTranscript.current
+    const incomingText = attempt.transcript.text
+    lastIncomingTranscript.current = {
+      attemptId: attempt.id,
+      text: incomingText,
+    }
+    setDraft((current) =>
+      previous.attemptId !== attempt.id || current === previous.text
+        ? incomingText
+        : current,
+    )
+  }, [attempt.id, attempt.transcript.text, attempt.transcript.updatedAt])
 
   return (
     <section className="review-card">
@@ -1022,7 +1304,9 @@ function AttemptReview({
         <span>
           转写文本
           <small>
-            {attempt.transcript.status === 'failed'
+            {attempt.transcript.status === 'pending'
+              ? '原录音已保存，正在等待转写'
+              : attempt.transcript.status === 'failed'
               ? '自动转写不可用，请按录音手动输入'
               : '请修正明显的识别错误'}
           </small>
@@ -1042,6 +1326,20 @@ function AttemptReview({
       >
         保存转写并重新分析
       </button>
+      {(attempt.transcript.status === 'failed' ||
+        attempt.transcript.status === 'pending') &&
+      onRetryTranscription ? (
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy}
+          onClick={onRetryTranscription}
+        >
+          {attempt.transcript.status === 'pending'
+            ? '重新发起独立 STT 转写'
+            : '用独立 STT 重试转写'}
+        </button>
+      ) : null}
       <p className="analysis-caveat">这里不做发音分；文本也不会被当作发音事实。</p>
     </section>
   )
@@ -1058,7 +1356,23 @@ function Metrics({ metrics }: { metrics: PracticeAttempt['metrics'] }) {
   )
 }
 
-function FeedbackPanel({ feedback }: { feedback: ActionableFeedback[] }) {
+function FeedbackPanel({
+  feedback,
+  aiFeedback,
+  aiNote,
+  aiConfigured,
+  busy,
+  onRetryAi,
+  onSpeak,
+}: {
+  feedback: ActionableFeedback[]
+  aiFeedback: AiFeedback | null
+  aiNote: string | null
+  aiConfigured: boolean
+  busy: boolean
+  onRetryAi: () => void
+  onSpeak: (text: string) => void
+}) {
   return (
     <section className="feedback-section">
       <p className="eyebrow">本地反馈 · 最多 3 条</p>
@@ -1082,21 +1396,87 @@ function FeedbackPanel({ feedback }: { feedback: ActionableFeedback[] }) {
           当前没有足够的高置信度文本信号。可以先补充转写，再重新分析。
         </div>
       )}
-      <div className="ai-offline-row">
-        <span aria-hidden="true">✓</span>
-        Text AI 未配置也能继续；当前显示可解释的本地分析。
-      </div>
+      {aiFeedback ? (
+        <div className="ai-feedback-block">
+          <div className="section-heading compact-heading">
+            <div>
+              <p className="eyebrow">Text AI · 已校验结构</p>
+              <h3>补充语言反馈</h3>
+            </div>
+          </div>
+          <div className="feedback-list">
+            {aiFeedback.keyIssues.map((item, index) => (
+              <article
+                key={`${item.title}-${index}`}
+                className={`feedback-card ${item.kind}`}
+              >
+                <span className="feedback-index">AI</span>
+                <div>
+                  <h3>{item.title}</h3>
+                  <p>{item.observation}</p>
+                  <strong>{item.action}</strong>
+                  {item.evidence ? <small>依据：{item.evidence}</small> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+          {aiFeedback.revisions.naturalVersion ? (
+            <div className="natural-version-card">
+              <small>Natural Version（只作可说出口的参考）</small>
+              <p>{aiFeedback.revisions.naturalVersion}</p>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => onSpeak(aiFeedback.revisions.naturalVersion ?? '')}
+              >
+                ▶ 听推荐表达
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="ai-offline-row">
+          <span aria-hidden="true">✓</span>
+          {aiConfigured
+            ? 'Text AI 暂无有效结果；本地反馈仍可继续使用。'
+            : 'Text AI 未配置也能继续；当前显示可解释的本地分析。'}
+        </div>
+      )}
+      {aiNote ? <div className="inline-note">{aiNote}</div> : null}
+      {aiConfigured && !aiFeedback ? (
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy}
+          onClick={onRetryAi}
+        >
+          {busy ? '正在获取 Text AI 反馈…' : '获取 / 重试 Text AI 反馈'}
+        </button>
+      ) : null}
     </section>
   )
 }
 
-function FocusReminder({ feedback }: { feedback: ActionableFeedback[] }) {
+function FocusReminder({
+  feedback,
+  aiFeedback,
+}: {
+  feedback: ActionableFeedback[]
+  aiFeedback: AiFeedback | null
+}) {
+  const aiTips = aiFeedback?.secondAttemptTips ?? []
+  const reminders = aiTips.length > 0
+    ? aiTips.map((action, index) => ({
+        title: `AI 重点 ${index + 1}`,
+        action,
+      }))
+    : feedback
   return (
     <section className="focus-reminder">
       <p className="eyebrow">第二次回答目标</p>
       <h2>不要背范文，只带走这些动作。</h2>
       <ol>
-        {(feedback.length ? feedback : [
+        {(reminders.length ? reminders : [
           {
             title: '保留你的想法',
             action: '用更清楚的一到两个句子重新组织刚才的内容。',
@@ -1121,6 +1501,7 @@ function ComparisonView({
   onExpressionChange,
   onPlay,
   onSaveTranscript,
+  onRetryTranscription,
   onSaveExpression,
   onSpeakExpression,
 }: {
@@ -1132,6 +1513,7 @@ function ComparisonView({
   onExpressionChange: (value: string) => void
   onPlay: (attempt: PracticeAttempt) => void
   onSaveTranscript: (attempt: PracticeAttempt, text: string) => void
+  onRetryTranscription: (attempt: PracticeAttempt) => void
   onSaveExpression: () => void
   onSpeakExpression: (text: string) => void
 }) {
@@ -1153,6 +1535,7 @@ function ComparisonView({
           busy={busy}
           onPlay={() => onPlay(first)}
           onSaveTranscript={(text) => onSaveTranscript(first, text)}
+          onRetryTranscription={() => onRetryTranscription(first)}
         />
         <AttemptReview
           attempt={second}
@@ -1160,6 +1543,7 @@ function ComparisonView({
           busy={busy}
           onPlay={() => onPlay(second)}
           onSaveTranscript={(text) => onSaveTranscript(second, text)}
+          onRetryTranscription={() => onRetryTranscription(second)}
         />
       </div>
 
@@ -1217,7 +1601,7 @@ function ComparisonView({
             disabled={!expression.trim()}
             onClick={() => onSpeakExpression(expression)}
           >
-            ▶ 听系统示范
+            ▶ 听示范
           </button>
           <button
             type="button"
@@ -1256,9 +1640,11 @@ function Delta({
 }
 
 function HistoryView({
+  questions,
   sessions,
   onOpen,
 }: {
+  questions: Question[]
   sessions: TrainingSession[]
   onOpen: (session: TrainingSession) => void
 }) {
@@ -1272,7 +1658,7 @@ function HistoryView({
       {sessions.length ? (
         <div className="history-list">
           {sessions.map((session) => {
-            const question = questionBank.find((item) => item.id === session.questionId)
+            const question = questions.find((item) => item.id === session.questionId)
             if (!question) return null
             return (
               <button type="button" key={session.id} onClick={() => onOpen(session)}>
@@ -1308,7 +1694,7 @@ function ExpressionLibrary({
     try {
       await audioFocus.speak({ text, language: 'en-US', rate: 0.92 })
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '系统朗读暂不可用。')
+      setMessage(error instanceof Error ? error.message : '语音播放暂不可用。')
     }
   }
 
@@ -1330,7 +1716,7 @@ function ExpressionLibrary({
               </div>
               <p>{item.text}</p>
               <button type="button" onClick={() => void speak(item.text)}>
-                ▶ 听系统示范
+                ▶ 播放示范
               </button>
             </article>
           ))}

@@ -17,6 +17,8 @@ android/capacitor-cordova-android-plugins/build/
 *.keystore
 *.apk
 artifacts/android-acceptance/
+artifacts/android-acceptance-v1.1/
+artifacts/v1.1-qa/
 .env
 .env.*
 !.env.example

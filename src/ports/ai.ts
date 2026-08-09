@@ -4,6 +4,12 @@ import type {
   Question,
   SpeechMetrics,
 } from '../domain/models'
+import type { ImportQuestionCandidate } from '../domain/imports'
+import type {
+  SttConfiguration,
+  TextAiConfiguration,
+  VoiceAiConfiguration,
+} from '../domain/apiConfiguration'
 
 export interface LLMFeedbackRequest {
   question: Question
@@ -29,6 +35,19 @@ export interface LLMProvider {
   compareAttempts(request: LLMComparisonRequest): Promise<AiFeedback>
 }
 
+export interface MaterialQuestionRequest {
+  fileName: string
+  extractedText: string
+}
+
+/** Optional Text AI helper. Calling it is an explicit user upload action. */
+export interface MaterialQuestionOrganizer {
+  isConfigured(): boolean
+  extractQuestions(
+    request: MaterialQuestionRequest,
+  ): Promise<ImportQuestionCandidate[]>
+}
+
 /** Reserved for future acoustic evidence. V1 does not provide pronunciation scores. */
 export interface PronunciationProvider {
   readonly id: string
@@ -47,21 +66,6 @@ export interface SecureSecretStorage {
   remove(name: SecretName): Promise<void>
 }
 
-export interface TextAIConfiguration {
-  provider: string
-  endpoint: string
-  model: string
-}
-
-export interface VoiceAIConfiguration {
-  provider: string
-  endpoint: string
-  model: string
-  voice: string
-}
-
-export interface STTConfiguration {
-  provider: string
-  endpoint: string
-  model: string
-}
+export type TextAIConfiguration = TextAiConfiguration
+export type VoiceAIConfiguration = VoiceAiConfiguration
+export type STTConfiguration = SttConfiguration

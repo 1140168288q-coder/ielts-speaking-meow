@@ -90,6 +90,20 @@ export interface STTProvider {
   start(request: STTRequest, listener: STTListener): Promise<STTSession>
 }
 
+export interface RecordedAudioSTTRequest {
+  audio: Blob
+  mimeType: string
+  fileName: string
+  language?: string
+}
+
+/** Remote/file STT runs only after the original recording has been saved. */
+export interface RecordedAudioSTTProvider {
+  readonly id: string
+  isConfigured(): boolean
+  transcribe(request: RecordedAudioSTTRequest): Promise<string>
+}
+
 export interface AudioRecording {
   blob: Blob
   mimeType: string

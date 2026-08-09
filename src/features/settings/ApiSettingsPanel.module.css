@@ -1,0 +1,318 @@
+.panel,
+.cards {
+  display: grid;
+  gap: 18px;
+}
+
+.intro {
+  padding: 14px 0 5px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--orange-dark, #8f3214);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.intro h1 {
+  margin: 0;
+  color: var(--ink, #2f2a26);
+  font-size: clamp(27px, 7vw, 40px);
+  line-height: 1.3;
+}
+
+.intro > p:not(.eyebrow) {
+  margin: 11px 0 0;
+  color: var(--muted, #665f59);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.settingsCard {
+  overflow: hidden;
+  border: 1px solid var(--line, #eadfd4);
+  border-radius: 21px;
+  background: #fff;
+  box-shadow: 0 7px 25px rgba(94, 64, 44, 0.04);
+}
+
+.cardToggle {
+  display: grid;
+  width: 100%;
+  min-height: 92px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 18px;
+  border: 0;
+  color: var(--ink, #2f2a26);
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cardToggle > span {
+  min-width: 0;
+}
+
+.cardToggle small,
+.cardToggle strong,
+.cardToggle em {
+  display: block;
+}
+
+.cardToggle small {
+  color: var(--orange-dark, #8f3214);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cardToggle strong {
+  margin: 4px 0;
+  font-size: 19px;
+}
+
+.cardToggle em {
+  color: var(--muted, #665f59);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.statusPill {
+  padding: 6px 10px;
+  border: 1px solid #cfe6dd;
+  border-radius: 999px;
+  color: #267564;
+  background: var(--mint-soft, #e9f6f1);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.cardBody {
+  display: grid;
+  gap: 15px;
+  padding: 18px;
+  border-top: 1px solid var(--line, #eadfd4);
+  background: #fffcf8;
+}
+
+.purpose {
+  margin: 0;
+  color: var(--muted, #665f59);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.independenceNote {
+  padding: 11px 13px;
+  border-radius: 13px;
+  color: #397767;
+  background: var(--mint-soft, #e9f6f1);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field > span {
+  color: var(--ink, #2f2a26);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.field > small {
+  color: var(--muted, #665f59);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid #dcd0c5;
+  border-radius: 13px;
+  color: var(--ink, #2f2a26);
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.field input:disabled,
+.field select:disabled {
+  opacity: 0.62;
+}
+
+.secretBlock {
+  display: grid;
+  gap: 7px;
+}
+
+.secretStatus {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-left: 3px;
+}
+
+.secretStatus span {
+  color: var(--muted, #665f59);
+  font-size: 10px;
+}
+
+.secretStatus button {
+  min-height: 48px;
+  padding: 0 11px;
+  border: 0;
+  color: #943d2c;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.validation,
+.feedback,
+.deleteConfirm {
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.validation,
+.feedback.error,
+.deleteConfirm {
+  color: #943d2c;
+  background: #fff0ed;
+}
+
+.validation p,
+.deleteConfirm p {
+  margin: 0;
+}
+
+.validation p + p {
+  margin-top: 4px;
+}
+
+.feedback.info {
+  color: #795820;
+  background: #fff7df;
+}
+
+.feedback.success {
+  color: #397767;
+  background: var(--mint-soft, #e9f6f1);
+}
+
+.deleteConfirm strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #7d3325;
+  font-size: 12px;
+}
+
+.deleteConfirm > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.primaryButton {
+  border: 1px solid var(--orange-dark, #8f3214);
+  color: #fff;
+  background: var(--orange, #b7441e);
+  box-shadow: 0 5px 0 var(--orange-dark, #8f3214);
+}
+
+.secondaryButton {
+  border: 1px solid var(--line, #eadfd4);
+  color: var(--ink, #2f2a26);
+  background: #fff;
+}
+
+.dangerButton {
+  border: 1px solid #d57967;
+  color: #fff;
+  background: #bd5c49;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled,
+.secretStatus button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.testPrivacy {
+  margin: -4px 0 0;
+  color: var(--muted, #665f59);
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .cardToggle {
+    padding: 15px;
+  }
+
+  .cardBody {
+    padding: 15px;
+  }
+
+  .actions,
+  .deleteConfirm > div {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 350px) {
+  .cardToggle {
+    grid-template-columns: 1fr;
+  }
+
+  .statusPill {
+    justify-self: start;
+  }
+
+  .secretStatus {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

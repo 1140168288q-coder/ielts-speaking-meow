@@ -1,7 +1,7 @@
 {
   "name": "ielts-speaking-meow",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,6 +19,8 @@
     "@capacitor/android": "^8.0.0",
     "@capacitor/app": "8.1.1",
     "@capacitor/core": "^8.0.0",
+    "mammoth": "1.12.1",
+    "pdfjs-dist": "6.2.108",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^4.0.0"

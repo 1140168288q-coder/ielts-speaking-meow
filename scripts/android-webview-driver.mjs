@@ -165,6 +165,11 @@ try {
     })
     await writeFile(outputPath, Buffer.from(result.data, 'base64'))
     process.stdout.write(`${outputPath}\n`)
+  } else if (command === 'eval') {
+    const expression = args.join(' ').trim()
+    if (!expression) throw new Error('eval requires a JavaScript expression')
+    const result = await evaluate(client, expression)
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
   } else {
     throw new Error(`Unknown command: ${command}`)
   }

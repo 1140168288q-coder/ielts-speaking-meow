@@ -1,6 +1,6 @@
 # 雅思口语喵
 
-Android-first 的 IELTS Speaking 单题练习应用。V1.0 围绕一条闭环开发：
+Android-first 的 IELTS Speaking 单题练习应用。V1.1 继续围绕同一条闭环开发：
 
 > 听题 → 第一次回答 → 录音 / 转写 / 本地分析 → 少量关键反馈 → 第二次回答 → 对比 → 保存表达
 
@@ -17,9 +17,19 @@ Android-first 的 IELTS Speaking 单题练习应用。V1.0 围绕一条闭环开
 - Text AI / Voice AI / STT / 存储的独立边界；
 - Android Capacitor 工程、麦克风权限和私有数据备份排除规则。
 
-Android 16 / API 36 模拟器验收已经完成：System TTS、两次真实 WebView
-录音、原始录音回放、STT 失败后的手动转写、本地分析、两次对比、保存表达、
-进程重启恢复和 APK 覆盖安装恢复均已走通。设备端配置测试为 2/2 通过。
+V1.1 新增：
+
+- TXT、MD、DOCX、PDF、JPG、PNG 本地材料导入，所有候选题先人工确认；
+- PDF 文本层提取，以及扫描页、JPG、PNG 的 Android 本地离线 OCR；
+- 导入源文件、提取文字和题目在同一 IndexedDB 事务中保存；
+- Text AI、独立文件 STT、Voice AI 三套 OpenAI-compatible 配置；
+- 三套 API Key 使用 Android Keystore 加密存储，互不复用；
+- Voice AI 失败自动回退系统 TTS；远程 STT 始终在原录音本地保存后调用。
+
+Android 16 / API 36 模拟器验收已经完成：除原有两次回答闭环外，V1.1 已实走
+本机图片 OCR、导入确认与重启恢复、Android Keystore 密钥往返，以及从 V1.0
+覆盖升级后保留两段录音、训练记录和表达。全量 184 项测试与设备端 2/2 配置测试
+通过，详见 `docs/android-acceptance-v1.1.md`。
 
 没有 Text AI、Voice AI 或可用 STT 时，录音、回放、手动转写、本地分析、第二次回答、对比与保存仍可完成。
 
@@ -56,7 +66,7 @@ npm run android:build
 APK 输出到：
 
 ```text
-artifacts/ielts-speaking-meow-v1.0-debug.apk
+artifacts/ielts-speaking-meow-v1.1-debug.apk
 ```
 
 连接 Android 手机或启动模拟器后，可以额外运行设备端测试：
@@ -73,7 +83,7 @@ Android Studio 可以直接打开 `android/`。
 手机，允许对应文件应用“安装未知应用”后即可安装。通过 USB 调试也可执行：
 
 ```bash
-adb install -r artifacts/ielts-speaking-meow-v1.0-debug.apk
+adb install -r artifacts/ielts-speaking-meow-v1.1-debug.apk
 ```
 
 同一开发机生成且签名一致时，`-r` 会保留本地练习和录音。卸载 App 会删除其

@@ -7,13 +7,13 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --ink: #2f2a26;
-  --muted: #786f68;
+  --muted: #665f59;
   --cream: #fffaf3;
   --paper: #ffffff;
-  --orange: #f27a49;
-  --orange-dark: #ce572b;
+  --orange: #b7441e;
+  --orange-dark: #8f3214;
   --orange-soft: #fff0e6;
-  --mint: #2f8878;
+  --mint: #267564;
   --mint-soft: #e9f6f1;
   --yellow: #f3c86a;
   --line: #eadfd4;
@@ -25,13 +25,13 @@
 }
 
 html {
-  min-width: 320px;
+  min-width: 0;
   min-height: 100%;
   background: var(--cream);
 }
 
 body {
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0;
@@ -192,7 +192,7 @@ h3 {
   color: #fff8ef;
   background:
     radial-gradient(circle at 89% 14%, rgba(255,255,255,0.18), transparent 110px),
-    linear-gradient(135deg, #dd653b, #ef8a57);
+    linear-gradient(135deg, #a83b17, #b7441e);
   box-shadow: 0 20px 45px rgba(204, 86, 43, 0.2);
 }
 
@@ -222,7 +222,7 @@ h3 {
 .hero-card p:last-child {
   max-width: 500px;
   margin: 14px 0 0;
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 14px;
   line-height: 1.65;
 }
@@ -333,7 +333,7 @@ h3 {
 
 .part-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 6px;
   border: 1px solid var(--line);
@@ -386,7 +386,7 @@ h3 {
 .question-number {
   display: grid;
   place-items: center;
-  color: #9c8c7e;
+  color: #665f59;
   background: #f9f4ed;
   font-size: 11px;
   font-weight: 900;
@@ -468,7 +468,7 @@ h3 {
   width: min(100%, 860px);
   min-height: 70px;
   min-height: calc(70px + env(safe-area-inset-bottom));
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0 auto;
   padding: 7px 18px;
   padding:
@@ -488,7 +488,7 @@ h3 {
   place-content: center;
   border: 0;
   border-radius: 15px;
-  color: #8b8078;
+  color: var(--muted);
   background: transparent;
   cursor: pointer;
   font-size: 11px;
@@ -930,7 +930,7 @@ textarea {
 }
 
 textarea::placeholder {
-  color: #a89c92;
+  color: var(--muted);
 }
 
 .review-card > .secondary-button {
@@ -1003,7 +1003,7 @@ textarea::placeholder {
 
 .feedback-card small {
   margin-top: 6px;
-  color: #9a8a7d;
+  color: var(--muted);
   font-size: 9px;
 }
 

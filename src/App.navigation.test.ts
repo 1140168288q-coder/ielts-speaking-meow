@@ -1,6 +1,7 @@
 import {
   formatMicrophoneStartError,
   requestSafePracticeExit,
+  resetViewScroll,
   resolveAndroidBackAction,
 } from './App'
 import type { AudioFocusState } from './ports/speech'
@@ -89,6 +90,21 @@ describe('resolveAndroidBackAction', () => {
 
   it('exits only from the root when WebView has no history', () => {
     expect(resolveAndroidBackAction('questions', false)).toBe('exit-app')
+  })
+})
+
+describe('resetViewScroll', () => {
+  it('returns every top-level view to the top-left edge', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+
+    resetViewScroll()
+
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 0,
+      left: 0,
+      behavior: 'auto',
+    })
+    scrollTo.mockRestore()
   })
 })
 

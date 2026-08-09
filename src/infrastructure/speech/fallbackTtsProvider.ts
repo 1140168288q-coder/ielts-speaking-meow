@@ -41,8 +41,9 @@ export class FallbackTTSProvider implements TTSProvider {
   }
 
   async speak(request: TTSRequest): Promise<void> {
-    await this.stop()
     const generation = ++this.generation
+    await this.stopProviders()
+    if (generation !== this.generation) return
 
     if (this.primary.isAvailable()) {
       try {
@@ -58,6 +59,7 @@ export class FallbackTTSProvider implements TTSProvider {
         } catch {
           throw primaryError
         }
+        if (generation !== this.generation) return
 
         if (!this.fallback.isAvailable()) {
           throw primaryError
@@ -81,6 +83,10 @@ export class FallbackTTSProvider implements TTSProvider {
 
   async stop(): Promise<void> {
     this.generation += 1
+    await this.stopProviders()
+  }
+
+  private async stopProviders(): Promise<void> {
     const results = await Promise.allSettled([
       this.primary.stop(),
       this.fallback.stop(),

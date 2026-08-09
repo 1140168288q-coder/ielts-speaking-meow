@@ -1,4 +1,6 @@
 import {
+  aiFeedbackSchema,
+  type AiFeedback,
   type PracticeAttempt,
   type SavedExpression,
   type TrainingSession,
@@ -22,9 +24,15 @@ export interface PracticeServiceDependencies {
 
 export interface InitialTranscript {
   text: string
-  status: 'ready' | 'failed'
+  status: 'pending' | 'ready' | 'failed'
   source: 'stt' | 'manual' | null
   errorCode?: string | null
+}
+
+export interface FirstTranscriptSnapshot {
+  attemptId: string
+  text: string
+  updatedAt: string
 }
 
 const defaultCreateId = () => {
@@ -193,6 +201,88 @@ export class PracticeService {
     return updated
   }
 
+  async applySttTranscript(
+    sessionId: string,
+    attemptNumber: 1 | 2,
+    text: string,
+  ): Promise<TrainingSession> {
+    return this.replaceTranscript(sessionId, attemptNumber, {
+      status: 'ready',
+      text,
+      source: 'stt',
+      originalText: text,
+      errorCode: null,
+    })
+  }
+
+  async markTranscriptionFailed(
+    sessionId: string,
+    attemptNumber: 1 | 2,
+    errorCode = 'provider-failed',
+  ): Promise<TrainingSession> {
+    const session = await this.requireSession(sessionId)
+    const existing = session.attempts.find(
+      (attempt) => attempt.attemptNumber === attemptNumber,
+    )
+    if (!existing) {
+      throw new Error(`Attempt ${attemptNumber} does not exist.`)
+    }
+
+    return this.replaceTranscript(sessionId, attemptNumber, {
+      status: 'failed',
+      text: existing.transcript.text,
+      source: existing.transcript.source,
+      originalText: existing.transcript.originalText,
+      errorCode,
+    })
+  }
+
+  async applyAiFeedback(
+    sessionId: string,
+    feedback: AiFeedback,
+  ): Promise<TrainingSession> {
+    const session = await this.requireSession(sessionId)
+    return this.persistAiFeedback(session, feedback)
+  }
+
+  async applyAiFeedbackIfTranscriptCurrent(
+    sessionId: string,
+    snapshot: FirstTranscriptSnapshot,
+    feedback: AiFeedback,
+  ): Promise<TrainingSession | null> {
+    const parsedFeedback = aiFeedbackSchema.parse(feedback)
+    const session = await this.requireSession(sessionId)
+    const firstAttempt = session.attempts.find(
+      (attempt) => attempt.attemptNumber === 1,
+    )
+
+    if (
+      firstAttempt?.id !== snapshot.attemptId ||
+      firstAttempt.transcript.status !== 'ready' ||
+      firstAttempt.transcript.text !== snapshot.text ||
+      firstAttempt.transcript.updatedAt !== snapshot.updatedAt
+    ) {
+      return null
+    }
+
+    return this.persistAiFeedback(session, parsedFeedback)
+  }
+
+  private async persistAiFeedback(
+    session: TrainingSession,
+    feedback: AiFeedback,
+  ): Promise<TrainingSession> {
+    const updated = trainingSessionSchema.parse({
+      ...session,
+      aiFeedback: aiFeedbackSchema.parse(feedback),
+      status:
+        session.status === 'first-review' ? 'feedback-ready' : session.status,
+      updatedAt: this.now().toISOString(),
+    })
+    await this.localStorage.upsertSession(updated)
+    return updated
+  }
+
   async prepareSecondAttempt(sessionId: string): Promise<TrainingSession> {
     const session = await this.requireSession(sessionId)
     if (!session.attempts.some((attempt) => attempt.attemptNumber === 1)) {
@@ -248,6 +338,69 @@ export class PracticeService {
 
   getAudio(audioId: string): Promise<Blob | null> {
     return this.audioStorage.getAudio(audioId)
+  }
+
+  getSession(sessionId: string): Promise<TrainingSession | null> {
+    return this.localStorage.getSession(sessionId)
+  }
+
+  private async replaceTranscript(
+    sessionId: string,
+    attemptNumber: 1 | 2,
+    replacement: {
+      status: 'ready' | 'failed'
+      text: string
+      originalText: string | null
+      source: 'stt' | 'manual' | 'edited' | null
+      errorCode: string | null
+    },
+  ): Promise<TrainingSession> {
+    const session = await this.requireSession(sessionId)
+    const timestamp = this.now().toISOString()
+    const existing = session.attempts.find(
+      (attempt) => attempt.attemptNumber === attemptNumber,
+    )
+    if (!existing) {
+      throw new Error(`Attempt ${attemptNumber} does not exist.`)
+    }
+
+    const cleanText = replacement.text.trim()
+    const updatedAttempt: PracticeAttempt = {
+      ...existing,
+      transcript: {
+        status: replacement.status,
+        text: cleanText,
+        originalText: replacement.originalText,
+        source: replacement.source,
+        errorCode: replacement.errorCode,
+        updatedAt: timestamp,
+      },
+      metrics: analyzeSpeech({
+        transcript: cleanText,
+        durationMs: existing.audio.durationMs,
+      }),
+      updatedAt: timestamp,
+    }
+    const attempts = session.attempts.map((attempt) =>
+      attempt.attemptNumber === attemptNumber ? updatedAttempt : attempt,
+    )
+    const firstAttempt = attempts.find((attempt) => attempt.attemptNumber === 1)
+    const secondAttempt = attempts.find((attempt) => attempt.attemptNumber === 2)
+    const updated = trainingSessionSchema.parse({
+      ...session,
+      attempts,
+      localFeedback: firstAttempt
+        ? createLocalFeedback(firstAttempt.metrics)
+        : session.localFeedback,
+      comparison:
+        firstAttempt && secondAttempt
+          ? compareAttempts(firstAttempt.metrics, secondAttempt.metrics)
+          : null,
+      updatedAt: timestamp,
+    })
+
+    await this.localStorage.upsertSession(updated)
+    return updated
   }
 
   private async requireSession(sessionId: string): Promise<TrainingSession> {

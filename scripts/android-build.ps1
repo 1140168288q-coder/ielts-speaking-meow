@@ -76,7 +76,7 @@ try {
 
     $SourceApk = Join-Path $ProjectRoot 'android\app\build\outputs\apk\debug\app-debug.apk'
     $ArtifactDirectory = Join-Path $ProjectRoot 'artifacts'
-    $ArtifactApk = Join-Path $ArtifactDirectory 'ielts-speaking-meow-v1.0-debug.apk'
+    $ArtifactApk = Join-Path $ArtifactDirectory 'ielts-speaking-meow-v1.1-debug.apk'
     New-Item -ItemType Directory -Force -Path $ArtifactDirectory | Out-Null
     Copy-Item -LiteralPath $SourceApk -Destination $ArtifactApk -Force
     $Hash = (Get-FileHash -LiteralPath $ArtifactApk -Algorithm SHA256).Hash.ToLowerInvariant()

@@ -3,7 +3,7 @@
 ## Project
 
 **Name:** 雅思口语喵  
-**Version:** V1.0  
+**Version:** V1.2  
 **Platform:** Android  
 **Primary mode:** IELTS Speaking single-question practice
 
@@ -224,51 +224,21 @@ Text AI 用于：
 
 ---
 
-## Separate API Configuration
+## Cloud Backend（V1.2+）
 
-**Text AI API 与 Voice AI API 必须独立配置。**
+Text AI、远程 STT、AI 语音全部由自建 Backend 托管第三方 API，客户端不直接
+调用任何第三方服务：
 
-不要默认共用：
-
-- Provider；
-- Endpoint；
-- API Key；
-- Model。
-
-### Text AI
-
-至少支持：
-
-```text
-Provider
-Endpoint
-API Key
-Model
-```
-
-优先兼容 OpenAI-compatible API。
-
-### Voice AI
-
-至少支持：
-
-```text
-Provider
-Endpoint
-API Key
-Model
-Voice
-```
-
-Voice AI 未配置时使用 Android System TTS。
-
-### STT
-
-STT 在架构上是独立 capability。
-
-未来可以拥有独立 API 配置。
-
-即使 V1.0 暂时不暴露第三套设置，也不要把 STT 硬绑定到 Text AI 或 Voice AI。
+- Backend 用 Python + FastAPI 实现，提供 `/health`、`/v1/stt`、`/v1/feedback`、
+  `/v1/tts`、`/v1/organize`；
+- DeepSeek（Text AI）、火山引擎流式语音识别（STT，WebSocket 直传，不需要公网
+  音频地址）、火山引擎语音合成 2.0（TTS）保持三个独立 Service 与独立环境变量，
+  不共用密钥；
+- 第三方密钥只存在于 Backend 环境变量，不进入 APK、源码仓库或客户端配置；
+- 普通用户不再填写任何 API Key；设置页只展示云端连接状态与本机能力测试；
+- 客户端保持 `LLMProvider` / `TTSProvider` / `RecordedAudioSTTProvider` 边界，
+  实现为 `Backend*Provider`，以后更换 Provider 不需要大改；
+- 云端不可用时回退：系统 TTS、手动转写、本地分析继续可用。
 
 ---
 
@@ -279,19 +249,20 @@ STT 在架构上是独立 capability。
 ```text
 LLMProvider
 TTSProvider
-STTProvider
+RecordedAudioSTTProvider
+STTProvider             # 本地实时转写（降级路径）
 PronunciationProvider   # future
 LocalStorage
-SecureSecretStorage
 AudioStorage
+BackendClient           # 客户端访问自建 Backend 的唯一入口
 ```
 
 避免：
 
-- React 页面直接调用模型 API；
+- React 页面直接调用模型 API（只允许经 BackendClient 调用自建 Backend）；
 - UI 中硬编码模型名称；
 - vendor-specific response 扩散到整个项目；
-- Text AI 和 Voice AI credentials 自动绑定。
+- 客户端持有任何第三方 API Key（密钥只在 Backend）。
 
 具体目录、状态管理、数据库和组件结构由 Codex 根据仓库自行选择。
 
@@ -355,22 +326,21 @@ V1.0 只要求 Android 正常交付。
 
 # Privacy and Secrets
 
-Text AI API Key、Voice AI API Key 和未来 STT Key 都属于敏感信息。
+第三方 API Key（DeepSeek、火山引擎等）只允许保存在 Backend 环境变量中。
 
 必须：
 
-- 不写入源码；
-- 不提交 Git；
+- 不写入 APK、源码仓库或客户端配置；
+- 不提交 Git（仓库只保留 `.env.example` 占位文件）；
 - 不进入测试 fixture；
-- 不输出到普通日志；
-- 使用 Android 可用的安全存储；
-- 允许用户修改和删除。
+- 不输出到 Backend 日志（日志过滤器强制脱敏）；
+- 客户端不接触任何第三方密钥。
 
-录音、transcript、训练记录和个人语料默认视为私有数据。
+录音、transcript、训练记录和个人语料默认视为私有数据，保存在本机。
 
-除非功能明确需要，否则不要上传。
+上传到 Backend 的录音仅用于本次转写，识别完成后即删除，不做持久化。
 
-日志中不得包含 API key、Authorization header 或其他 secrets。
+日志中不得包含 API key、Access Token、Authorization header 或其他 secrets。
 
 ---
 

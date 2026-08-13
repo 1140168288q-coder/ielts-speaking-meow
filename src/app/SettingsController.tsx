@@ -1,273 +1,133 @@
-import { useRef, useState } from 'react'
-import type { ApiConfigurationService } from '../application/apiConfigurationService'
-import type {
-  ApiCapability as DomainApiCapability,
-  ApiConfiguration,
-} from '../domain'
-import {
-  ApiSettingsPanel,
-  type ApiCapability,
-  type ApiSettingsState,
-} from '../features/settings'
-import type { OpenAICompatibleSttProvider } from '../infrastructure/ai/openAiCompatibleSttProvider'
-import type { OpenAICompatibleTextProvider } from '../infrastructure/ai/openAiCompatibleTextProvider'
-import type { OpenAICompatibleTtsProvider } from '../infrastructure/speech/openAiCompatibleTtsProvider'
+import { useState } from 'react'
+import type { BackendClient, BackendHealth } from '../infrastructure/backend'
 import type { AudioFocus, STTProvider } from '../ports/speech'
 
 export interface SettingsControllerProps {
-  service: ApiConfigurationService
-  textAi: OpenAICompatibleTextProvider
-  remoteStt: OpenAICompatibleSttProvider
-  voiceAi: OpenAICompatibleTtsProvider
+  backendClient: BackendClient
   systemStt: STTProvider
   audioFocus: AudioFocus
 }
 
+type FeedbackTone = 'idle' | 'busy' | 'success' | 'error'
+
+/**
+ * 设置页:普通用户不再填写任何第三方 API Key。这里只展示云端服务状态、
+ * 本机系统能力测试,以及 Backend 地址(构建期注入,仅作展示)。
+ */
 export function SettingsController({
-  service,
-  textAi,
-  remoteStt,
-  voiceAi,
+  backendClient,
   systemStt,
   audioFocus,
 }: SettingsControllerProps) {
-  const [settings, setSettings] = useState<ApiSettingsState>(() =>
-    createSettingsState(service),
-  )
-  const activeOperations = useRef(new Set<ApiCapability>())
-  const operationTokens = useRef<Record<ApiCapability, number>>({
-    'text-ai': 0,
-    stt: 0,
-    'voice-ai': 0,
-  })
+  const [health, setHealth] = useState<BackendHealth | null>(null)
+  const [backendFeedback, setBackendFeedback] = useState<{
+    tone: FeedbackTone
+    text: string
+  } | null>(null)
+  const [ttsFeedback, setTtsFeedback] = useState<{
+    tone: FeedbackTone
+    text: string
+  } | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  const updateCapability = (
-    capability: ApiCapability,
-    update: Partial<ApiSettingsState[ApiCapability]>,
-  ) => {
-    setSettings((current) => ({
-      ...current,
-      [capability]: { ...current[capability], ...update },
-    }))
-  }
-
-  const save = async (capability: ApiCapability, operation: 'saving' | 'testing') => {
-    if (activeOperations.current.has(capability)) return
-    activeOperations.current.add(capability)
-    const token = ++operationTokens.current[capability]
-    const isCurrent = () => operationTokens.current[capability] === token
-    const state = settings[capability]
-    updateCapability(capability, { operation, feedback: null })
+  const checkBackend = async () => {
+    if (busy) return
+    setBusy(true)
+    setBackendFeedback({ tone: 'busy', text: '正在连接云端服务…' })
     try {
-      if (state.configuration.provider === '') {
-        const existing = service.getStatus(capability).configuration
-        if (existing !== null) {
-          await service.save({ ...existing, enabled: false, updatedAt: now() })
-        }
-        if (!isCurrent()) return
-        if (operation === 'testing') {
-          await testSystemCapability(capability, systemStt, audioFocus)
-          if (!isCurrent()) return
-        }
-        updateCapability(capability, {
-          operation: 'idle',
-          feedback: {
-            tone: 'success',
-            text: operation === 'testing'
-              ? '系统能力验证成功。'
-              : fallbackSavedCopy[capability],
-          },
-        })
-        return
-      }
-
-      const configuration = createConfiguration(capability, state.configuration)
-      const status = await service.save(
-        configuration,
-        state.apiKeyDraft.trim() || undefined,
-      )
-      if (!isCurrent()) return
-      updateCapability(capability, {
-        operation,
-        apiKeyDraft: '',
-        hasSavedApiKey: status.hasSecret,
-        feedback: {
-          tone: 'success',
-          text: operation === 'saving' ? '此项配置已独立保存。' : '配置已保存，正在验证连接…',
-        },
+      const result = await backendClient.getHealth()
+      setHealth(result)
+      setBackendFeedback({
+        tone: 'success',
+        text: '云端服务连接正常。',
       })
-
-      if (operation === 'testing') {
-        await testRemoteCapability(capability, textAi, remoteStt, voiceAi)
-        if (!isCurrent()) return
-        updateCapability(capability, {
-          operation: 'idle',
-          feedback: { tone: 'success', text: '连接验证成功。' },
-        })
-      } else {
-        updateCapability(capability, { operation: 'idle' })
-      }
     } catch (error) {
-      if (!isCurrent()) return
-      updateCapability(capability, {
-        operation: 'idle',
-        feedback: {
-          tone: 'error',
-          text: error instanceof Error ? error.message : '此项操作失败，请重试。',
-        },
+      setHealth(null)
+      setBackendFeedback({
+        tone: 'error',
+        text: error instanceof Error
+          ? error.message
+          : '云端服务暂不可用。',
       })
     } finally {
-      if (isCurrent()) {
-        activeOperations.current.delete(capability)
-      }
+      setBusy(false)
     }
   }
 
-  const removeApiKey = async (capability: ApiCapability) => {
-    if (activeOperations.current.has(capability)) return
-    activeOperations.current.add(capability)
-    const token = ++operationTokens.current[capability]
-    const isCurrent = () => operationTokens.current[capability] === token
-    updateCapability(capability, {
-      operation: 'deleting-key',
-      feedback: null,
-    })
-
+  const testSystemTts = async () => {
+    if (busy) return
+    setTtsFeedback({ tone: 'busy', text: '正在播放测试语音…' })
     try {
-      await service.removeSecret(capability)
-      if (!isCurrent()) return
-      updateCapability(capability, {
-        operation: 'idle',
-        apiKeyDraft: '',
-        hasSavedApiKey: false,
-        feedback: { tone: 'success', text: '仅此项 API Key 已删除。' },
-      })
+      await audioFocus.speak({ text: 'System voice is ready.', language: 'en-US' })
+      setTtsFeedback({ tone: 'success', text: '系统朗读正常。' })
     } catch (error) {
-      if (!isCurrent()) return
-      updateCapability(capability, {
-        operation: 'idle',
-        feedback: {
-          tone: 'error',
-          text: error instanceof Error ? error.message : '密钥删除失败。',
-        },
+      setTtsFeedback({
+        tone: 'error',
+        text: error instanceof Error ? error.message : '系统朗读不可用。',
       })
-    } finally {
-      if (isCurrent()) {
-        activeOperations.current.delete(capability)
-      }
     }
   }
 
   return (
-    <ApiSettingsPanel
-      settings={settings}
-      onConfigurationChange={(capability, patch) => {
-        if (activeOperations.current.has(capability)) return
-        setSettings((current) => ({
-          ...current,
-          [capability]: {
-            ...current[capability],
-            configuration: {
-              ...current[capability].configuration,
-              ...patch,
-            },
-            feedback: null,
-          },
-        }))
-      }}
-      onApiKeyDraftChange={(capability, value) => {
-        if (activeOperations.current.has(capability)) return
-        updateCapability(capability, { apiKeyDraft: value, feedback: null })
-      }}
-      onSave={(capability) => void save(capability, 'saving')}
-      onTest={(capability) => void save(capability, 'testing')}
-      onDeleteApiKey={(capability) => void removeApiKey(capability)}
-    />
+    <div className="settings-panel">
+      <section className="settings-card">
+        <h2 className="section-heading">云端服务</h2>
+        <p className="settings-note">
+          转写、Text AI 反馈与 AI 语音均由云端服务提供,无需在本机配置密钥。
+          云端不可用时,录音保存、本地反馈、系统朗读等能力仍可正常使用。
+        </p>
+        <p className="settings-meta">
+          Backend 地址:{backendClient.url}(打包时注入)
+        </p>
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void checkBackend()}
+            disabled={busy}
+          >
+            {busy ? '检查中…' : '测试云端连接'}
+          </button>
+          {backendFeedback ? (
+            <span className={`settings-feedback ${backendFeedback.tone}`}>
+              {backendFeedback.text}
+            </span>
+          ) : null}
+        </div>
+        {health ? (
+          <ul className="settings-providers">
+            <li>DeepSeek(Text AI):{providerLabel(health.providers.deepseek)}</li>
+            <li>火山流式语音识别(STT):{providerLabel(health.providers.volc_stt)}</li>
+            <li>火山语音合成(TTS):{providerLabel(health.providers.volc_tts)}</li>
+          </ul>
+        ) : null}
+      </section>
+
+      <section className="settings-card">
+        <h2 className="section-heading">本机能力</h2>
+        <p className="settings-note">
+          本机实时转写:{systemStt.isAvailable() ? '可用' : '当前 WebView 不支持,可手动输入转写。'}
+        </p>
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void testSystemTts()}
+            disabled={busy}
+          >
+            测试系统朗读
+          </button>
+          {ttsFeedback ? (
+            <span className={`settings-feedback ${ttsFeedback.tone}`}>
+              {ttsFeedback.text}
+            </span>
+          ) : null}
+        </div>
+      </section>
+    </div>
   )
 }
 
-const fallbackSavedCopy: Record<ApiCapability, string> = {
-  'text-ai': '已关闭 Text AI；本地反馈仍可使用。',
-  stt: '已关闭远程 STT；录音仍会保存并可手工转写。',
-  'voice-ai': '已关闭 Voice AI；将使用 Android 系统 TTS。',
-}
-
-function createSettingsState(service: ApiConfigurationService): ApiSettingsState {
-  const create = (capability: DomainApiCapability) => {
-    const status = service.getStatus(capability)
-    const configuration = status.configuration
-    return {
-      configuration: {
-        provider: configuration?.enabled === true ? configuration.provider : '',
-        endpoint: configuration?.endpoint ?? '',
-        model: configuration?.model ?? '',
-        voice: configuration?.id === 'voice-ai' ? configuration.voice : '',
-      },
-      apiKeyDraft: '',
-      hasSavedApiKey: status.hasSecret,
-      operation: 'idle' as const,
-      feedback: null,
-    }
-  }
-
-  return {
-    'text-ai': create('text-ai'),
-    stt: create('stt'),
-    'voice-ai': create('voice-ai'),
-  }
-}
-
-function createConfiguration(
-  capability: ApiCapability,
-  draft: ApiSettingsState[ApiCapability]['configuration'],
-): ApiConfiguration {
-  const common = {
-    provider: 'openai-compatible' as const,
-    endpoint: draft.endpoint.trim(),
-    model: draft.model.trim(),
-    enabled: true,
-    updatedAt: now(),
-  }
-  if (capability === 'text-ai') {
-    return { id: 'text-ai', ...common }
-  }
-  if (capability === 'stt') {
-    return { id: 'stt', ...common }
-  }
-  return { id: 'voice-ai', ...common, voice: draft.voice.trim() }
-}
-
-async function testRemoteCapability(
-  capability: ApiCapability,
-  textAi: OpenAICompatibleTextProvider,
-  remoteStt: OpenAICompatibleSttProvider,
-  voiceAi: OpenAICompatibleTtsProvider,
-): Promise<void> {
-  if (capability === 'text-ai') {
-    await textAi.testConnection()
-  } else if (capability === 'stt') {
-    await remoteStt.testConnection()
-  } else {
-    await voiceAi.speak({ text: 'Your voice connection is ready.' })
-  }
-}
-
-async function testSystemCapability(
-  capability: ApiCapability,
-  stt: STTProvider,
-  audioFocus: AudioFocus,
-): Promise<void> {
-  if (capability === 'stt') {
-    if (!stt.isAvailable()) {
-      throw new Error('当前 WebView 不支持系统实时转写；可手工输入。')
-    }
-    return
-  }
-  if (capability === 'voice-ai') {
-    await audioFocus.speak({ text: 'System voice is ready.', language: 'en-US' })
-  }
-}
-
-function now(): string {
-  return new Date().toISOString()
+function providerLabel(configured: boolean | undefined): string {
+  return configured ? '已配置' : '未配置'
 }

@@ -1463,3 +1463,68 @@ textarea::placeholder {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ---- 设置页(云端服务 + 本机能力)---- */
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 0 24px;
+}
+
+.settings-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--card-border, #eee3d4);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-note {
+  margin: 0;
+  color: var(--text-secondary, #7a6f5f);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.settings-meta {
+  margin: 0;
+  color: var(--text-secondary, #7a6f5f);
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-feedback {
+  font-size: 0.88rem;
+}
+
+.settings-feedback.busy {
+  color: #8a6d3b;
+}
+
+.settings-feedback.success {
+  color: #2e7d32;
+}
+
+.settings-feedback.error {
+  color: #c0392b;
+}
+
+.settings-providers {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: var(--text-primary, #4a3f33);
+}

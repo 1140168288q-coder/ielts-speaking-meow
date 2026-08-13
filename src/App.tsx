@@ -417,10 +417,7 @@ export function App() {
           />
         ) : (
           <SettingsController
-            service={runtime.apiSettings}
-            textAi={runtime.textAi}
-            remoteStt={runtime.remoteStt}
-            voiceAi={runtime.voiceAi}
+            backendClient={runtime.backendClient}
             systemStt={runtime.stt}
             audioFocus={runtime.audioFocus}
           />
@@ -771,7 +768,7 @@ function PracticeFlow({
       }
       recordingActiveRef.current = true
       if (remoteStt.isConfigured()) {
-        setSttNote('停止后会先保存原录音，再使用独立 STT API 转写。')
+        setSttNote('停止后会先保存原录音，再使用云端 STT 转写。')
       } else {
         startLiveStt()
       }
@@ -939,7 +936,7 @@ function PracticeFlow({
       return
     }
     if (!remoteStt.isConfigured()) {
-      setMessage('请先在设置中配置独立 STT API，或直接手工输入转写。')
+      setMessage('云端转写暂不可用，请直接手工输入转写。')
       return
     }
     setBusy(true)

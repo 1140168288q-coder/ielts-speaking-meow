@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backend 化后的网络策略:
+  - 默认禁止明文流量(生产 Backend 必须走 HTTPS)
+  - 仅放行模拟器宿主回环地址,供本地开发连接 http://10.0.2.2:8000
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <!-- 开发/家庭自用:仅放行本机与开发机局域网地址的明文 HTTP;生产部署请使用 HTTPS -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <!-- 开发机局域网 IP(家里同 WiFi 测试用;IP 变化需同步修改并重新打包) -->
+        <domain includeSubdomains="false">192.168.0.26</domain>
+    </domain-config>
+</network-security-config>

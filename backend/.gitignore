@@ -1,0 +1,17 @@
+# 密钥与环境配置:任何环境文件都不允许提交
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 运行时产物
+.audio_tmp/
+*.log

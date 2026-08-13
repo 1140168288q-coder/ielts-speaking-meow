@@ -1,10 +1,18 @@
 import type {
-  ApiCapability,
-  ApiConfiguration,
   ImportedQuestionRecord,
   ImportSource,
   TtsCacheEntry,
 } from '../domain'
+
+/**
+ * V1.1 遗留的用户侧 API 配置类型。自 Backend 化后不再写入,仅保留
+ * 接口与存储以兼容既有数据。
+ */
+export type ApiCapability = 'text-ai' | 'stt' | 'voice-ai'
+
+export type ApiConfiguration = {
+  id: ApiCapability
+} & Record<string, unknown>
 
 export interface ImportBundle {
   source: ImportSource
@@ -21,7 +29,7 @@ export interface ImportStorage {
   listImportedQuestions(): Promise<ImportedQuestionRecord[]>
 }
 
-/** Non-secret provider settings. API keys use SecureSecretStorage instead. */
+/** V1.1 遗留的用户侧 API 配置存储,自 Backend 化后仅用于数据兼容。 */
 export interface ApiConfigurationStorage {
   getApiConfiguration(
     capability: ApiCapability,

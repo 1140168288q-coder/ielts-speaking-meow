@@ -1,12 +1,9 @@
 import {
-  apiConfigurationSchema,
   importedQuestionRecordSchema,
   importSourceSchema,
   savedExpressionSchema,
   trainingSessionSchema,
   ttsCacheEntrySchema,
-  type ApiCapability,
-  type ApiConfiguration,
   type ImportedQuestionRecord,
   type ImportSource,
   type SavedExpression,
@@ -14,6 +11,8 @@ import {
   type TtsCacheEntry,
 } from '../../domain'
 import type {
+  ApiCapability,
+  ApiConfiguration,
   ApiConfigurationStorage,
   ImportBundle,
   ImportStorage,
@@ -36,6 +35,39 @@ const STORES = {
 } as const
 
 type StoreName = (typeof STORES)[keyof typeof STORES]
+
+/**
+ * V1.1 遗留的用户侧 API 配置(已随 Backend 化下线,不再写入)。
+ * 保留 store 与宽松校验,仅用于兼容既有用户数据,不参与任何新读写流程。
+ * 任何携带密钥类字段的记录一律不返回(密钥从不该出现在 IndexedDB)。
+ */
+const LEGACY_SECRET_KEY_PATTERN = /(api[_-]?key|access[_-]?key|token|secret)/i
+
+const legacyApiConfigurationSchema: {
+  safeParse(
+    value: unknown,
+  ): { success: true; data: ApiConfiguration } | { success: false }
+  parse(value: unknown): ApiConfiguration
+} = {
+  safeParse: (value) => {
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as { id?: unknown }).id === 'string' &&
+      !Object.keys(value).some((key) => LEGACY_SECRET_KEY_PATTERN.test(key))
+    ) {
+      return { success: true, data: value as ApiConfiguration }
+    }
+    return { success: false }
+  },
+  parse: (value) => {
+    const result = legacyApiConfigurationSchema.safeParse(value)
+    if (!result.success) {
+      throw new Error('invalid legacy api configuration record')
+    }
+    return result.data
+  },
+}
 
 interface StoredAudio {
   id: string
@@ -218,14 +250,14 @@ export class IndexedDbStorage
     return this.getParsed(
       STORES.apiConfigurations,
       capability,
-      apiConfigurationSchema,
+      legacyApiConfigurationSchema,
     )
   }
 
   async listApiConfigurations(): Promise<ApiConfiguration[]> {
     return this.getAllParsed(
       STORES.apiConfigurations,
-      apiConfigurationSchema,
+      legacyApiConfigurationSchema,
     )
   }
 
@@ -234,7 +266,7 @@ export class IndexedDbStorage
   ): Promise<void> {
     await this.put(
       STORES.apiConfigurations,
-      apiConfigurationSchema.parse(configuration),
+      legacyApiConfigurationSchema.parse(configuration),
     )
   }
 

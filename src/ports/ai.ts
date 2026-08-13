@@ -5,11 +5,6 @@ import type {
   SpeechMetrics,
 } from '../domain/models'
 import type { ImportQuestionCandidate } from '../domain/imports'
-import type {
-  SttConfiguration,
-  TextAiConfiguration,
-  VoiceAiConfiguration,
-} from '../domain/apiConfiguration'
 
 export interface LLMFeedbackRequest {
   question: Question
@@ -26,7 +21,8 @@ export interface LLMComparisonRequest {
 
 /**
  * Text AI boundary. Implementations must runtime-validate vendor responses
- * before returning them from this interface.
+ * before returning them from this interface. 密钥只在自建 Backend 侧,
+ * 客户端实现(BackendTextProvider)不接触任何第三方凭证。
  */
 export interface LLMProvider {
   readonly id: string
@@ -53,19 +49,3 @@ export interface PronunciationProvider {
   readonly id: string
   isConfigured(): boolean
 }
-
-export type SecretName =
-  | 'text-ai-api-key'
-  | 'voice-ai-api-key'
-  | 'stt-api-key'
-
-/** Sensitive credentials never belong in LocalStorage or normal logs. */
-export interface SecureSecretStorage {
-  get(name: SecretName): Promise<string | null>
-  set(name: SecretName, value: string): Promise<void>
-  remove(name: SecretName): Promise<void>
-}
-
-export type TextAIConfiguration = TextAiConfiguration
-export type VoiceAIConfiguration = VoiceAiConfiguration
-export type STTConfiguration = SttConfiguration

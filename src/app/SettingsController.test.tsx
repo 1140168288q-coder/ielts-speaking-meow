@@ -1,68 +1,105 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { OpenAICompatibleSttProvider } from '../infrastructure/ai/openAiCompatibleSttProvider'
-import type { OpenAICompatibleTextProvider } from '../infrastructure/ai/openAiCompatibleTextProvider'
-import type { OpenAICompatibleTtsProvider } from '../infrastructure/speech/openAiCompatibleTtsProvider'
+import { describe, expect, it, vi } from 'vitest'
+import type { BackendClient } from '../infrastructure/backend'
 import type { AudioFocus, STTProvider } from '../ports/speech'
-import { createConfiguredApiHarness } from '../test/fixtures/apiHarness'
 import { SettingsController } from './SettingsController'
 
-function deferred() {
-  let resolve!: () => void
-  const promise = new Promise<void>((next) => {
-    resolve = next
-  })
-  return { promise, resolve }
+function createBackendClient(health: unknown): BackendClient {
+  return {
+    url: 'http://backend.test',
+    getHealth: vi.fn().mockResolvedValue(health),
+  } as unknown as BackendClient
 }
 
-describe('SettingsController operation ordering', () => {
-  it('keeps a connection test pending until the provider result settles', async () => {
-    const user = userEvent.setup()
-    const harness = await createConfiguredApiHarness()
-    const connection = deferred()
-    const testConnection = vi.fn(() => connection.promise)
-    const textAi = { testConnection } as unknown as OpenAICompatibleTextProvider
-    const remoteStt = {} as OpenAICompatibleSttProvider
-    const voiceAi = {} as OpenAICompatibleTtsProvider
-    const systemStt = {} as STTProvider
-    const audioFocus = {} as AudioFocus
+function createHarness(health: unknown) {
+  const backendClient = createBackendClient(health)
+  const systemStt: STTProvider = {
+    id: 'system-stt',
+    isAvailable: () => true,
+    start: vi.fn(),
+  }
+  const speak = vi.fn().mockResolvedValue(undefined)
+  const audioFocus: AudioFocus = {
+    speak,
+  } as unknown as AudioFocus
+  return { backendClient, systemStt, audioFocus, speak }
+}
 
+describe('SettingsController', () => {
+  it('shows the injected backend address and no API key inputs', () => {
+    const harness = createHarness({ status: 'ok', providers: {} })
     render(
       <SettingsController
-        service={harness.service}
-        textAi={textAi}
-        remoteStt={remoteStt}
-        voiceAi={voiceAi}
+        backendClient={harness.backendClient}
+        systemStt={harness.systemStt}
+        audioFocus={harness.audioFocus}
+      />,
+    )
+    expect(screen.getByText(/http:\/\/backend\.test/)).toBeTruthy()
+    expect(screen.queryByPlaceholderText(/Key/i)).toBeNull()
+    expect(screen.queryByText(/API Key/i)).toBeNull()
+  })
+
+  it('checks the cloud backend and lists provider status', async () => {
+    const user = userEvent.setup()
+    const harness = createHarness({
+      status: 'ok',
+      providers: { deepseek: true, volc_stt: true, volc_tts: false },
+    })
+    render(
+      <SettingsController
+        backendClient={harness.backendClient}
+        systemStt={harness.systemStt}
+        audioFocus={harness.audioFocus}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: /测试云端连接/ }))
+    expect(await screen.findByText(/连接正常/)).toBeTruthy()
+    expect(screen.getAllByText(/已配置/)).toHaveLength(2)
+    expect(screen.getByText(/未配置/)).toBeTruthy()
+  })
+
+  it('surfaces backend connection failures', async () => {
+    const user = userEvent.setup()
+    const backendClient = {
+      url: 'http://backend.test',
+      getHealth: vi.fn().mockRejectedValue(new Error('网络连接失败,请检查网络后重试。')),
+    } as unknown as BackendClient
+    const systemStt: STTProvider = {
+      id: 'system-stt',
+      isAvailable: () => true,
+      start: vi.fn(),
+    }
+    const audioFocus: AudioFocus = {
+      speak: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AudioFocus
+    render(
+      <SettingsController
+        backendClient={backendClient}
         systemStt={systemStt}
         audioFocus={audioFocus}
       />,
     )
+    await user.click(screen.getByRole('button', { name: /测试云端连接/ }))
+    expect(await screen.findByText(/网络连接失败/)).toBeTruthy()
+  })
 
-    const testButton = screen.getByRole('button', { name: '测试连接' })
-    await user.click(testButton)
-    await waitFor(() => {
-      expect(testConnection).toHaveBeenCalledOnce()
+  it('tests the system TTS playback', async () => {
+    const user = userEvent.setup()
+    const harness = createHarness({ status: 'ok', providers: {} })
+    render(
+      <SettingsController
+        backendClient={harness.backendClient}
+        systemStt={harness.systemStt}
+        audioFocus={harness.audioFocus}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: /测试系统朗读/ }))
+    expect(harness.speak).toHaveBeenCalledWith({
+      text: 'System voice is ready.',
+      language: 'en-US',
     })
-
-    const endpoint = screen.getByLabelText('Text AI Endpoint')
-    expect(testButton).toBeDisabled()
-    expect(endpoint).toBeDisabled()
-    expect(screen.getByText('测试中')).toBeInTheDocument()
-    expect(screen.queryByText('连接验证成功。')).not.toBeInTheDocument()
-
-    fireEvent.change(endpoint, {
-      target: { value: 'https://newer.example.test/v1' },
-    })
-    fireEvent.click(testButton)
-    expect(endpoint).toHaveValue('https://text.example.test/v1')
-    expect(testConnection).toHaveBeenCalledOnce()
-
-    connection.resolve()
-
-    await waitFor(() => {
-      expect(screen.getByText('连接验证成功。')).toBeInTheDocument()
-    })
-    expect(testButton).toBeEnabled()
-    expect(testConnection).toHaveBeenCalledOnce()
+    expect(await screen.findByText(/系统朗读正常/)).toBeTruthy()
   })
 })

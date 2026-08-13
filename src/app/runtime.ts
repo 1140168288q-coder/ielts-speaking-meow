@@ -1,47 +1,40 @@
 import { Capacitor } from '@capacitor/core'
-import { ApiConfigurationService } from '../application/apiConfigurationService'
 import {
   ImportMaterialService,
   MaterialExtractor,
 } from '../application/imports'
 import { PracticeService } from '../application/practiceService'
-import { CapacitorApiTransport } from '../infrastructure/ai/apiTransport'
-import { OpenAICompatibleSttProvider } from '../infrastructure/ai/openAiCompatibleSttProvider'
-import { OpenAICompatibleTextProvider } from '../infrastructure/ai/openAiCompatibleTextProvider'
 import {
-  CapacitorDocumentOcr,
-  CapacitorSecureSecretStorage,
-  MemorySecureSecretStorage,
-} from '../infrastructure/platform'
+  BackendClient,
+  BackendSttProvider,
+  BackendTextProvider,
+  BackendTtsProvider,
+} from '../infrastructure/backend'
+import { CapacitorDocumentOcr } from '../infrastructure/platform'
 import { AudioCoordinator } from '../infrastructure/speech/audioCoordinator'
 import { CapacitorSystemTTS } from '../infrastructure/speech/capacitorSystemTts'
 import { FallbackTTSProvider } from '../infrastructure/speech/fallbackTtsProvider'
 import { HTMLAudioPlayback } from '../infrastructure/speech/htmlAudioPlayback'
 import { MediaRecorderAdapter } from '../infrastructure/speech/mediaRecorderAdapter'
-import { OpenAICompatibleTtsProvider } from '../infrastructure/speech/openAiCompatibleTtsProvider'
 import { SystemWebSpeechTTS } from '../infrastructure/speech/systemWebSpeechTts'
 import { WebSpeechSTT } from '../infrastructure/speech/webSpeechStt'
 import { IndexedDbStorage } from '../infrastructure/storage'
 
+/**
+ * 组合根。所有第三方 AI 能力(Text AI / 远程 STT / AI 语音)一律经由自建
+ * Backend;客户端不持有任何第三方 API Key。系统 TTS 与 Web Speech STT
+ * 保留作为本地降级能力。
+ */
 export const createBrowserRuntime = () => {
   const storage = new IndexedDbStorage()
   const systemTts = Capacitor.getPlatform() === 'android'
     ? new CapacitorSystemTTS()
     : new SystemWebSpeechTTS()
-  const secureSecrets = Capacitor.getPlatform() === 'android'
-    ? new CapacitorSecureSecretStorage()
-    : new MemorySecureSecretStorage()
-  const apiSettings = new ApiConfigurationService(storage, secureSecrets)
-  const apiTransport = new CapacitorApiTransport()
-  const textAi = new OpenAICompatibleTextProvider(apiSettings, apiTransport)
-  const remoteStt = new OpenAICompatibleSttProvider(apiSettings, apiTransport)
+  const backendClient = new BackendClient()
+  const textAi = new BackendTextProvider(backendClient)
+  const remoteStt = new BackendSttProvider(backendClient)
   const voicePlayback = new HTMLAudioPlayback()
-  const voiceAi = new OpenAICompatibleTtsProvider(
-    apiSettings,
-    apiTransport,
-    storage,
-    voicePlayback,
-  )
+  const voiceAi = new BackendTtsProvider(backendClient, storage, voicePlayback)
   const tts = new FallbackTTSProvider(voiceAi, systemTts)
   const recorder = new MediaRecorderAdapter()
   const playback = new HTMLAudioPlayback()
@@ -60,14 +53,14 @@ export const createBrowserRuntime = () => {
   })
 
   return {
-    initialize: () => apiSettings.initialize(),
+    initialize: async () => {},
     storage,
     audioFocus,
     stt,
     remoteStt,
     textAi,
     voiceAi,
-    apiSettings,
+    backendClient,
     importService,
     practiceService,
   }

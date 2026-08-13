@@ -8,7 +8,7 @@ router = APIRouter()
 async def health(request: Request) -> dict:
     return {
         "status": "ok",
-        "version": "1.0.0",
+        "version": request.app.version,
         "providers": {
             "deepseek": request.app.state.services["deepseek"].is_configured,
             "volc_stt": request.app.state.services["volc_stt"].is_configured,

@@ -5,6 +5,7 @@
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import Settings, get_settings
@@ -42,6 +43,16 @@ def create_app(
     app.state.settings = settings
     app.state.client = client
     app.state.services = services
+
+    # CORS:App 在 Capacitor WebView 里的来源是 https://localhost;浏览器开发预览
+    # 是 http://localhost:5173 等本机端口。只放行本机来源,不放行任意站点。
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["https://localhost", "http://localhost", "http://127.0.0.1"],
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.add_middleware(SlidingWindowRateLimiter, settings=settings)
 

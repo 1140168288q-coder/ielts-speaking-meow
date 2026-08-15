@@ -98,6 +98,8 @@ describe('ImportMaterialService', () => {
           part: 1,
           topic: 'Home',
           prompt: SYNTHETIC_QUESTION,
+          difficulty: 'foundation',
+          source: '用户导入材料',
         },
         sourcePage: null,
         createdAt: NOW.toISOString(),

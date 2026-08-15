@@ -17,7 +17,7 @@ echo   1. 首次启动时若 Windows 防火墙弹窗,请点"允许访问",
 echo      否则手机连不上本机。
 echo   2. 手机需要和这台电脑连接同一个 WiFi。
 echo   3. 本机局域网地址可运行 ipconfig 查看(IPv4 地址),
-echo      若地址变化需重新打包 App。
+echo      地址变化时在 App「设置 - 云端服务」里修改即可,无需重新打包。
 echo   4. 关闭本窗口即可停止后端。
 echo.
 .venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000

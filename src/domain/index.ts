@@ -1,5 +1,7 @@
+export * from './backendConfig'
 export * from './comparison'
 export * from './imports'
 export * from './models'
+export * from './progress'
 export * from './speechAnalysis'
 export * from './ttsCache'

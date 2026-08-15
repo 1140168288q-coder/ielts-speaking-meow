@@ -19,10 +19,15 @@ class Settings(BaseSettings):
     volc_access_token: str = ""
     # ---- 火山引擎通用 ----
     volc_endpoint: str = "https://openspeech.bytedance.com"
-    # 流式语音识别(豆包大模型,时长计费);备选 volc.bigasr.sauc.duration(1.0)
+    # 流式语音识别(豆包大模型,时长计费)。2.0 为当前工作默认;
+    # 账号未开通 2.0 时改用 1.0:volc.bigasr.sauc.duration
     volc_stt_stream_resource_id: str = "volc.seedasr.sauc.duration"
     volc_tts_resource_id: str = "seed-tts-2.0"  # 语音合成大模型 2.0
+    # 默认用基础 uranus 音色(实测稳定可用);控制台开通英语音色后可改
+    # en_female_anna_mars_bigtts(英语女声)等
     volc_tts_speaker: str = "zh_female_vv_uranus_bigtts"
+    # 音色展示名(可选,只出现在 /health 与设置页,便于人眼确认音色)。
+    volc_tts_speaker_name: str = ""
 
     # ---- 上传限制 ----
     max_upload_mb: int = 25

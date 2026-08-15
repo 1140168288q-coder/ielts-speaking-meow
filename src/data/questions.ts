@@ -1,6 +1,6 @@
 import { questionBankSchema } from '../domain/models'
 
-export const questionBank = questionBankSchema.parse([
+const builtInQuestions = [
   {
     id: 'p1-home-001',
     part: 1,
@@ -145,4 +145,18 @@ export const questionBank = questionBankSchema.parse([
     topic: 'Advice',
     prompt: 'When should people follow advice, and when should they ignore it?',
   },
-])
+]
+
+const difficultyByPart = {
+  1: 'foundation',
+  2: 'developing',
+  3: 'stretch',
+} as const
+
+export const questionBank = questionBankSchema.parse(
+  builtInQuestions.map((question) => ({
+    ...question,
+    difficulty: difficultyByPart[question.part as 1 | 2 | 3],
+    source: '雅思口语喵内置题库 v1.4',
+  })),
+)

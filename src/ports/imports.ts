@@ -4,16 +4,6 @@ import type {
   TtsCacheEntry,
 } from '../domain'
 
-/**
- * V1.1 遗留的用户侧 API 配置类型。自 Backend 化后不再写入,仅保留
- * 接口与存储以兼容既有数据。
- */
-export type ApiCapability = 'text-ai' | 'stt' | 'voice-ai'
-
-export type ApiConfiguration = {
-  id: ApiCapability
-} & Record<string, unknown>
-
 export interface ImportBundle {
   source: ImportSource
   originalFile: Blob
@@ -29,20 +19,16 @@ export interface ImportStorage {
   listImportedQuestions(): Promise<ImportedQuestionRecord[]>
 }
 
-/** V1.1 遗留的用户侧 API 配置存储,自 Backend 化后仅用于数据兼容。 */
-export interface ApiConfigurationStorage {
-  getApiConfiguration(
-    capability: ApiCapability,
-  ): Promise<ApiConfiguration | null>
-  listApiConfigurations(): Promise<ApiConfiguration[]>
-  upsertApiConfiguration(configuration: ApiConfiguration): Promise<void>
-  deleteApiConfiguration(capability: ApiCapability): Promise<void>
-}
-
 export interface TtsCacheStorage {
   getTtsCacheEntry(cacheId: string): Promise<{
     metadata: TtsCacheEntry
     audio: Blob
   } | null>
   putTtsCacheEntry(metadata: TtsCacheEntry, audio: Blob): Promise<void>
+  /**
+   * 已落盘的 TTS 音色配置版本。缓存键包含 voiceConfigVersion,
+   * 版本升级时清理一次旧缓存,避免换音色/改语速后仍命中旧音频。
+   */
+  getVoiceConfigVersion(): Promise<number | null>
+  setVoiceConfigVersion(version: number): Promise<void>
 }

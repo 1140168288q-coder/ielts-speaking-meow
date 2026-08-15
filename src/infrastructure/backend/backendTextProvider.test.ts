@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { questionBank } from '../../data/questions'
+import { makeBackendHealth } from '../../test/fixtures/backendHealth'
 import { BackendClient } from './backendClient'
+import { BackendHealthCache } from './backendHealth'
 import { BackendTextProvider } from './backendTextProvider'
 
 const VALID_FEEDBACK = {
@@ -63,8 +65,34 @@ function feedbackRequest() {
 }
 
 describe('BackendTextProvider', () => {
-  it('is always configured (credentials live server-side)', () => {
+  it('is optimistic about Text AI without a health cache', () => {
     const provider = createProvider({})
+    expect(provider.isConfigured()).toBe(true)
+  })
+
+  it('reflects the health cache state for Text AI', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify(makeBackendHealth({
+          deepseek: false,
+          volc_stt: true,
+          volc_tts: true,
+        })),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const client = new BackendClient({
+      baseUrl: 'http://backend.test',
+      isNative: () => false,
+      fetch,
+    })
+    const health = new BackendHealthCache(client)
+    await health.refresh()
+
+    const provider = new BackendTextProvider(client, health)
+    expect(provider.isConfigured()).toBe(false)
+
+    health.invalidate()
     expect(provider.isConfigured()).toBe(true)
   })
 

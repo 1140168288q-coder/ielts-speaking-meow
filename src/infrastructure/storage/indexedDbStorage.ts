@@ -1,28 +1,39 @@
 import {
+  backendConfigSchema,
   importedQuestionRecordSchema,
   importSourceSchema,
   savedExpressionSchema,
   trainingSessionSchema,
   ttsCacheEntrySchema,
+  type BackendConfig,
   type ImportedQuestionRecord,
   type ImportSource,
   type SavedExpression,
   type TrainingSession,
   type TtsCacheEntry,
 } from '../../domain'
+import type { BackendConfigStorage } from '../../ports/backend'
 import type {
-  ApiCapability,
-  ApiConfiguration,
-  ApiConfigurationStorage,
   ImportBundle,
   ImportStorage,
   TtsCacheStorage,
 } from '../../ports/imports'
-import type { AudioStorage, LocalStorage } from '../../ports/storage'
+import type {
+  AudioStorage,
+  LocalDataMaintenance,
+  LocalStorage,
+  StorageUsageSummary,
+} from '../../ports/storage'
 
-const DATABASE_VERSION = 2
+const DATABASE_VERSION = 4
 const DEFAULT_DATABASE_NAME = 'ielts-speaking-meow'
+const MAX_TTS_CACHE_ENTRIES = 40
+const MAX_TTS_CACHE_BYTES = 25 * 1024 * 1024
 
+/**
+ * apiConfigurations 是 V1.1 遗留 store:自 Backend 化后不再读写,但保留
+ * 建表以兼容既有用户数据(不主动删除用户历史配置)。
+ */
 const STORES = {
   sessions: 'sessions',
   expressions: 'expressions',
@@ -32,42 +43,11 @@ const STORES = {
   importedFiles: 'importedFiles',
   apiConfigurations: 'apiConfigurations',
   ttsCache: 'ttsCache',
+  backendConfig: 'backendConfig',
+  appMeta: 'appMeta',
 } as const
 
 type StoreName = (typeof STORES)[keyof typeof STORES]
-
-/**
- * V1.1 遗留的用户侧 API 配置(已随 Backend 化下线,不再写入)。
- * 保留 store 与宽松校验,仅用于兼容既有用户数据,不参与任何新读写流程。
- * 任何携带密钥类字段的记录一律不返回(密钥从不该出现在 IndexedDB)。
- */
-const LEGACY_SECRET_KEY_PATTERN = /(api[_-]?key|access[_-]?key|token|secret)/i
-
-const legacyApiConfigurationSchema: {
-  safeParse(
-    value: unknown,
-  ): { success: true; data: ApiConfiguration } | { success: false }
-  parse(value: unknown): ApiConfiguration
-} = {
-  safeParse: (value) => {
-    if (
-      typeof value === 'object' &&
-      value !== null &&
-      typeof (value as { id?: unknown }).id === 'string' &&
-      !Object.keys(value).some((key) => LEGACY_SECRET_KEY_PATTERN.test(key))
-    ) {
-      return { success: true, data: value as ApiConfiguration }
-    }
-    return { success: false }
-  },
-  parse: (value) => {
-    const result = legacyApiConfigurationSchema.safeParse(value)
-    if (!result.success) {
-      throw new Error('invalid legacy api configuration record')
-    }
-    return result.data
-  },
-}
 
 interface StoredAudio {
   id: string
@@ -100,8 +80,9 @@ export class IndexedDbStorage
     LocalStorage,
     AudioStorage,
     ImportStorage,
-    ApiConfigurationStorage,
-    TtsCacheStorage
+    TtsCacheStorage,
+    BackendConfigStorage,
+    LocalDataMaintenance
 {
   private readonly databaseName: string
   private readonly indexedDb: IDBFactory
@@ -148,6 +129,11 @@ export class IndexedDbStorage
 
   async listExpressions(): Promise<SavedExpression[]> {
     return this.getAllParsed(STORES.expressions, savedExpressionSchema)
+  }
+
+  async deleteExpression(expressionId: string): Promise<void> {
+    assertStorageKey(expressionId, 'Expression')
+    await this.delete(STORES.expressions, expressionId)
   }
 
   async saveAudio(audioId: string, audio: Blob): Promise<void> {
@@ -244,36 +230,6 @@ export class IndexedDbStorage
     )
   }
 
-  async getApiConfiguration(
-    capability: ApiCapability,
-  ): Promise<ApiConfiguration | null> {
-    return this.getParsed(
-      STORES.apiConfigurations,
-      capability,
-      legacyApiConfigurationSchema,
-    )
-  }
-
-  async listApiConfigurations(): Promise<ApiConfiguration[]> {
-    return this.getAllParsed(
-      STORES.apiConfigurations,
-      legacyApiConfigurationSchema,
-    )
-  }
-
-  async upsertApiConfiguration(
-    configuration: ApiConfiguration,
-  ): Promise<void> {
-    await this.put(
-      STORES.apiConfigurations,
-      legacyApiConfigurationSchema.parse(configuration),
-    )
-  }
-
-  async deleteApiConfiguration(capability: ApiCapability): Promise<void> {
-    await this.delete(STORES.apiConfigurations, capability)
-  }
-
   async getTtsCacheEntry(cacheId: string): Promise<{
     metadata: TtsCacheEntry
     audio: Blob
@@ -299,6 +255,132 @@ export class IndexedDbStorage
   ): Promise<void> {
     const parsed = ttsCacheEntrySchema.parse(metadata)
     await this.put(STORES.ttsCache, { ...parsed, audio })
+    await this.pruneTtsCache()
+  }
+
+  async getStorageUsage(): Promise<StorageUsageSummary> {
+    const [
+      sessions,
+      expressions,
+      audio,
+      importSources,
+      importedQuestions,
+      importedFiles,
+      ttsCache,
+    ] = await Promise.all([
+      this.getAll<unknown>(STORES.sessions),
+      this.getAll<unknown>(STORES.expressions),
+      this.getAll<StoredAudio>(STORES.audio),
+      this.getAll<unknown>(STORES.importSources),
+      this.getAll<unknown>(STORES.importedQuestions),
+      this.getAll<StoredFile>(STORES.importedFiles),
+      this.getAll<StoredTtsCache>(STORES.ttsCache),
+    ])
+    const audioBytes = audio.reduce(
+      (total, item) => total + (item.blob instanceof Blob ? item.blob.size : 0),
+      0,
+    )
+    const importedFileBytes = importedFiles.reduce(
+      (total, item) => total + (item.blob instanceof Blob ? item.blob.size : 0),
+      0,
+    )
+    const ttsCacheBytes = ttsCache.reduce(
+      (total, item) => total + (item.audio instanceof Blob ? item.audio.size : 0),
+      0,
+    )
+    const metadataBytes = estimateJsonBytes([
+      ...sessions,
+      ...expressions,
+      ...importSources,
+      ...importedQuestions,
+    ])
+
+    return {
+      sessions: sessions.length,
+      expressions: expressions.length,
+      recordings: audio.length,
+      importSources: importSources.length,
+      importedQuestions: importedQuestions.length,
+      importedFiles: importedFiles.length,
+      ttsCacheEntries: ttsCache.length,
+      audioBytes,
+      importedFileBytes,
+      ttsCacheBytes,
+      estimatedTotalBytes:
+        audioBytes + importedFileBytes + ttsCacheBytes + metadataBytes,
+    }
+  }
+
+  async deleteSessionWithAudio(
+    sessionId: string,
+  ): Promise<{ deletedAudio: number }> {
+    assertStorageKey(sessionId, 'Session')
+    const session = await this.getSession(sessionId)
+    const audioIds = [...new Set(
+      session?.attempts.map((attempt) => attempt.audio.id) ?? [],
+    )]
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [STORES.sessions, STORES.audio],
+      'readwrite',
+    )
+    const requests: Promise<unknown>[] = [
+      requestResult(transaction.objectStore(STORES.sessions).delete(sessionId)),
+      ...audioIds.map((audioId) =>
+        requestResult(transaction.objectStore(STORES.audio).delete(audioId)),
+      ),
+    ]
+    await Promise.all([...requests, transactionComplete(transaction)])
+    return { deletedAudio: audioIds.length }
+  }
+
+  async clearTtsCache(): Promise<number> {
+    const entries = await this.getAll<StoredTtsCache>(STORES.ttsCache)
+    const database = await this.getDatabase()
+    const transaction = database.transaction(STORES.ttsCache, 'readwrite')
+    const request = transaction.objectStore(STORES.ttsCache).clear()
+    await Promise.all([requestResult(request), transactionComplete(transaction)])
+    return entries.length
+  }
+
+  async getBackendConfig(): Promise<BackendConfig | null> {
+    const stored = await this.get<unknown>(STORES.backendConfig, 'backend')
+    if (stored === null || typeof stored !== 'object') return null
+    const legacy = stored as Record<string, unknown>
+    const parsed = backendConfigSchema.safeParse({
+      id: legacy.id,
+      baseUrl: legacy.baseUrl,
+      updatedAt: legacy.updatedAt,
+    })
+    if (!parsed.success) return null
+
+    // V1.4.1 移除了访问口令；读取旧记录时立即覆写，清除遗留字段。
+    if ('accessToken' in legacy) {
+      await this.saveBackendConfig(parsed.data)
+    }
+    return parsed.data
+  }
+
+  async saveBackendConfig(config: BackendConfig): Promise<void> {
+    await this.put(STORES.backendConfig, backendConfigSchema.parse(config))
+  }
+
+  async clearBackendConfig(): Promise<void> {
+    await this.delete(STORES.backendConfig, 'backend')
+  }
+
+  async getVoiceConfigVersion(): Promise<number | null> {
+    const record = await this.get<{ id: string; value: number }>(
+      STORES.appMeta,
+      'ttsVoiceConfigVersion',
+    )
+    return record === null || typeof record.value !== 'number'
+      ? null
+      : record.value
+  }
+
+  async setVoiceConfigVersion(version: number): Promise<void> {
+    await this.put(STORES.appMeta, { id: 'ttsVoiceConfigVersion', value: version })
   }
 
   /** Release this adapter's database connection without deleting any data. */
@@ -389,6 +471,27 @@ export class IndexedDbStorage
     await Promise.all([requestResult(request), transactionComplete(transaction)])
   }
 
+  private async pruneTtsCache(): Promise<void> {
+    const entries = await this.getAll<StoredTtsCache>(STORES.ttsCache)
+    entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    let retainedBytes = 0
+    const remove: StoredTtsCache[] = []
+    for (const [index, entry] of entries.entries()) {
+      const entryBytes = entry.audio instanceof Blob ? entry.audio.size : 0
+      const exceedsLimit =
+        index >= MAX_TTS_CACHE_ENTRIES ||
+        (index > 0 && retainedBytes + entryBytes > MAX_TTS_CACHE_BYTES)
+      if (exceedsLimit) {
+        remove.push(entry)
+      } else {
+        retainedBytes += entryBytes
+      }
+    }
+    for (const entry of remove) {
+      await this.delete(STORES.ttsCache, entry.id)
+    }
+  }
+
   private getDatabase(): Promise<IDBDatabase> {
     if (this.databasePromise === undefined) {
       this.databasePromise = this.openDatabase().catch((error: unknown) => {
@@ -432,6 +535,12 @@ export class IndexedDbStorage
         if (!database.objectStoreNames.contains(STORES.ttsCache)) {
           database.createObjectStore(STORES.ttsCache, { keyPath: 'id' })
         }
+        if (!database.objectStoreNames.contains(STORES.backendConfig)) {
+          database.createObjectStore(STORES.backendConfig, { keyPath: 'id' })
+        }
+        if (!database.objectStoreNames.contains(STORES.appMeta)) {
+          database.createObjectStore(STORES.appMeta, { keyPath: 'id' })
+        }
       }
 
       request.onerror = () => {
@@ -469,6 +578,15 @@ export class IndexedDbStorage
 function assertStorageKey(value: string, entityName: string): void {
   if (value.trim().length === 0) {
     throw new Error(`${entityName} id must not be empty.`)
+  }
+}
+
+function estimateJsonBytes(value: unknown): number {
+  if (Array.isArray(value) && value.length === 0) return 0
+  try {
+    return new Blob([JSON.stringify(value)]).size
+  } catch {
+    return 0
   }
 }
 

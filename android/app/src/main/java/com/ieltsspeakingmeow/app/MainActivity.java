@@ -7,7 +7,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DocumentOcrPlugin.class);
-        registerPlugin(SecureSecretsPlugin.class);
         registerPlugin(SystemTTSPlugin.class);
         super.onCreate(savedInstanceState);
     }

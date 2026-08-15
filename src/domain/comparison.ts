@@ -50,6 +50,19 @@ export const createLocalFeedback = (
     })
   }
 
+  if ((metrics.acoustic?.longPauseCount ?? 0) > 0) {
+    const longPauseCount = metrics.acoustic?.longPauseCount ?? 0
+    candidates.push({
+      category: 'fluency',
+      kind: 'focus',
+      title: 'Plan one idea before each long pause',
+      observation: `The local audio check found about ${longPauseCount} ${longPauseCount === 1 ? 'pause' : 'pauses'} lasting at least 0.8 seconds.`,
+      action:
+        'Before trying again, choose the next key word while finishing the current sentence and use shorter silent pauses.',
+      evidence: `${longPauseCount} approximate long ${longPauseCount === 1 ? 'pause' : 'pauses'}`,
+    })
+  }
+
   if (metrics.wordCount === 0) {
     candidates.push({
       category: 'coherence',
@@ -83,22 +96,48 @@ const createComparisonFeedback = (
   first: SpeechMetrics,
   second: SpeechMetrics,
 ): ActionableFeedback[] => {
-  if (first.wordCount === 0 || second.wordCount === 0) {
-    return actionableFeedbackListSchema.parse([
-      {
-        category: 'coherence',
-        kind: 'notice',
-        title: 'Complete both transcripts before comparing',
-        observation:
-          'A transcript with words is required for both attempts, so filler and repetition changes are unavailable while either one is empty.',
-        action:
-          'Retry transcription or manually complete both attempt transcripts, then compare the answers again.',
-        evidence: null,
-      },
-    ])
+  const candidates: ActionableFeedback[] = []
+  const firstAcoustic = first.acoustic
+  const secondAcoustic = second.acoustic
+
+  if (firstAcoustic && secondAcoustic) {
+    const longPauseDelta =
+      secondAcoustic.longPauseCount - firstAcoustic.longPauseCount
+    if (longPauseDelta < 0) {
+      candidates.push({
+        category: 'fluency',
+        kind: 'improvement',
+        title: 'Fewer long pauses in the second attempt',
+        observation: `Approximate long pauses fell from ${firstAcoustic.longPauseCount} to ${secondAcoustic.longPauseCount}.`,
+        action: 'Keep planning the next key word before the current phrase ends.',
+        evidence: `${longPauseDelta} long pauses`,
+      })
+    } else if (longPauseDelta > 0) {
+      candidates.push({
+        category: 'fluency',
+        kind: 'focus',
+        title: 'Long pauses increased in the second attempt',
+        observation: `Approximate long pauses rose from ${firstAcoustic.longPauseCount} to ${secondAcoustic.longPauseCount}.`,
+        action: 'Use one idea per breath and keep the planning pauses shorter.',
+        evidence: `+${longPauseDelta} long pauses`,
+      })
+    }
   }
 
-  const candidates: ActionableFeedback[] = []
+  if (first.wordCount === 0 || second.wordCount === 0) {
+    candidates.push({
+      category: 'coherence',
+      kind: 'notice',
+      title: 'Complete both transcripts before comparing',
+      observation:
+        'Filler and repetition changes are unavailable while either transcript is empty; audio pause evidence remains usable when available.',
+      action:
+        'Retry transcription or manually complete both attempt transcripts, then compare the answers again.',
+      evidence: null,
+    })
+    return actionableFeedbackListSchema.parse(candidates.slice(0, 3))
+  }
+
   const fillerDelta = second.fillerCount - first.fillerCount
   const repetitionDelta = second.repeatedWordCount - first.repeatedWordCount
 
@@ -188,6 +227,12 @@ export const compareAttempts = (
     first.wordsPerMinute === null || second.wordsPerMinute === null
       ? null
       : metricDelta(first.wordsPerMinute, second.wordsPerMinute)
+  const silenceRatio = first.acoustic && second.acoustic
+    ? metricDelta(first.acoustic.silenceRatio, second.acoustic.silenceRatio)
+    : null
+  const longPauseCount = first.acoustic && second.acoustic
+    ? metricDelta(first.acoustic.longPauseCount, second.acoustic.longPauseCount)
+    : null
 
   return attemptComparisonSchema.parse({
     durationMs: metricDelta(first.durationMs, second.durationMs),
@@ -198,6 +243,8 @@ export const compareAttempts = (
     repeatedWordCount: hasComparableTranscripts
       ? metricDelta(first.repeatedWordCount, second.repeatedWordCount)
       : null,
+    silenceRatio,
+    longPauseCount,
     feedback: createComparisonFeedback(first, second),
   })
 }

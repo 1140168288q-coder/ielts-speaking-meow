@@ -5,6 +5,7 @@
 """
 import json
 import logging
+import time
 from typing import Literal
 
 import httpx
@@ -13,6 +14,7 @@ from pydantic import BaseModel, Field
 from ..config import Settings
 from ..errors import not_configured, provider_error
 from .http_client import raise_for_upstream, timeout_guard
+from .verification import LastCallRecord
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +79,7 @@ class DeepSeekService:
     def __init__(self, client: httpx.AsyncClient, settings: Settings) -> None:
         self._client = client
         self._settings = settings
+        self.last_call = LastCallRecord()
 
     @property
     def is_configured(self) -> bool:
@@ -166,6 +169,51 @@ class DeepSeekService:
         result = await self._complete_validated(ORGANIZE_SYSTEM, user, ImportQuestionList)
         return result["questions"]
 
+    async def verify(self) -> dict:
+        """最小成本的显式验证:一次小规模补全,结果写入 last_call。
+
+        deepseek-v4-flash 是推理模型,思考过程会先消耗 token,因此这里
+        不能给 max_tokens=4(否则 content 为空);只要上游返回 200 且能解析
+        出 choices[0].message 即视为验证通过。
+        """
+        if not self.is_configured:
+            return self.last_call.snapshot()
+        started = time.perf_counter()
+        try:
+            base = self._settings.deepseek_base_url.rstrip("/")
+            run = timeout_guard("DeepSeek")
+            response = await run(
+                lambda: self._client.post(
+                    f"{base}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self._settings.deepseek_api_key}",
+                    },
+                    json={
+                        "model": self._settings.deepseek_model,
+                        "max_tokens": 32,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": "Reply with the single word: OK",
+                            }
+                        ],
+                    },
+                )
+            )
+            await raise_for_upstream(response, "DeepSeek")
+            data = response.json()
+            message = data["choices"][0]["message"]
+            content = str(message.get("content") or "").strip()
+            reasoning = str(message.get("reasoning_content") or "").strip()
+            self.last_call.record(
+                ok=True,
+                latency_ms=round((time.perf_counter() - started) * 1000),
+                result=(content or reasoning or "(empty response, upstream 200)")[:120],
+            )
+        except Exception as exc:  # noqa: BLE001 - 验证结果必须落盘
+            self.last_call.record(ok=False, message=str(exc))
+        return self.last_call.snapshot()
+
     async def _complete_validated(
         self,
         system: str,
@@ -174,7 +222,20 @@ class DeepSeekService:
     ) -> dict:
         if not self.is_configured:
             raise not_configured("DeepSeek(Text AI)")
+        try:
+            return await self._complete_checked(system, user, schema)
+        except Exception as exc:  # noqa: BLE001 - 记录最近失败后按原样抛出
+            self.last_call.record(ok=False, message=str(exc))
+            raise
+
+    async def _complete_checked(
+        self,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+    ) -> dict:
         base = self._settings.deepseek_base_url.rstrip("/")
+        started = time.perf_counter()
         run = timeout_guard("DeepSeek")
         response = await run(
             lambda: self._client.post(
@@ -203,10 +264,15 @@ class DeepSeekService:
 
         parsed = self._parse_json_content(content)
         try:
-            return schema.model_validate(parsed).model_dump(mode="json")
+            result = schema.model_validate(parsed).model_dump(mode="json")
         except Exception:
             logger.warning("DeepSeek output failed schema validation")
             raise provider_error("Text AI 返回结构不完整,已保留本地结果。")
+        self.last_call.record(
+            ok=True,
+            latency_ms=round((time.perf_counter() - started) * 1000),
+        )
+        return result
 
     @staticmethod
     def _parse_json_content(content: str) -> object:

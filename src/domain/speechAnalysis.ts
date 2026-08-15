@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import {
+  acousticSpeechMetricsSchema,
   speechMetricsSchema,
+  type AcousticSpeechMetrics,
   type SpeechMetrics,
 } from './models'
 
@@ -8,6 +10,7 @@ const speechAnalysisInputSchema = z
   .object({
     transcript: z.string(),
     durationMs: z.number().finite().nonnegative(),
+    acoustic: acousticSpeechMetricsSchema.nullable().optional(),
   })
   .strict()
 
@@ -62,6 +65,7 @@ const countRepeatedWords = (words: readonly string[]) => {
 export const analyzeSpeech = (input: {
   transcript: string
   durationMs: number
+  acoustic?: AcousticSpeechMetrics | null
 }): SpeechMetrics => {
   const parsedInput = speechAnalysisInputSchema.parse(input)
   const words = tokenize(parsedInput.transcript)
@@ -90,6 +94,12 @@ export const analyzeSpeech = (input: {
     )
   }
 
+  if (parsedInput.acoustic !== undefined && parsedInput.acoustic !== null) {
+    caveats.push(
+      'Pause and silence values are approximate local audio signals, not pronunciation or band scores.',
+    )
+  }
+
   return speechMetricsSchema.parse({
     durationMs: parsedInput.durationMs,
     wordCount: words.length,
@@ -98,6 +108,7 @@ export const analyzeSpeech = (input: {
     fillerCount,
     repeatedWords,
     repeatedWordCount,
+    acoustic: parsedInput.acoustic ?? null,
     caveats,
   })
 }

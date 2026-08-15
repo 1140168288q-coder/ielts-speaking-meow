@@ -6,6 +6,7 @@ import type {
 import { ApiProviderError } from '../ai/providerErrors'
 import { blobToWav16kMono } from '../speech/audioToWav'
 import type { BackendClient } from './backendClient'
+import type { BackendHealthCache } from './backendHealth'
 
 const transcriptionResponseSchema = z
   .object({
@@ -18,6 +19,9 @@ const STT_TIMEOUT_MS = 180_000
 /**
  * 录音转写通过自建 Backend 调用(Backend 内部再调火山流式语音识别)。
  * 上传前先把 webm/mp4 录音转成 16kHz WAV;失败时原录音已保存在本机。
+ *
+ * 配置状态由 BackendHealthCache 驱动:后端已确认未配置 STT 时不再发起
+ * 云端请求,改用本地实时转写;状态未知时仍尝试云端,同时保留本地转写兜底。
  */
 export class BackendSttProvider implements RecordedAudioSTTProvider {
   readonly id = 'backend-stt'
@@ -25,10 +29,19 @@ export class BackendSttProvider implements RecordedAudioSTTProvider {
   constructor(
     private readonly client: BackendClient,
     private readonly toWav: (blob: Blob) => Promise<Blob> = blobToWav16kMono,
+    private readonly health?: BackendHealthCache,
   ) {}
 
   isConfigured(): boolean {
-    return true
+    return this.health
+      ? this.health.statusOf('volc_stt') !== 'unconfigured'
+      : true
+  }
+
+  isDefinitelyConfigured(): boolean {
+    return this.health
+      ? this.health.statusOf('volc_stt') === 'configured'
+      : true
   }
 
   async transcribe(request: RecordedAudioSTTRequest): Promise<string> {

@@ -9,11 +9,42 @@ import {
   mapTransportFailure,
 } from '../ai/providerErrors'
 import { resolveBackendUrl } from './backendConfig'
+import { z } from 'zod'
 
-export interface BackendHealth {
-  status: string
-  providers: Record<string, boolean>
-}
+const providerVerificationSchema = z
+  .object({
+    status: z.enum(['unverified', 'verified', 'failed']),
+    checkedAt: z.iso.datetime({ offset: true }).nullable(),
+    latencyMs: z.number().nullable(),
+    lastError: z.string().nullable(),
+    lastResult: z.string().nullable(),
+  })
+  .passthrough()
+
+const providerHealthSchema = z
+  .object({
+    kind: z.string().optional(),
+    configured: z.boolean(),
+    model: z.string().optional(),
+    resourceId: z.string().optional(),
+    speaker: z
+      .object({ id: z.string(), name: z.string().nullable() })
+      .optional(),
+    verification: providerVerificationSchema.optional(),
+  })
+  .passthrough()
+
+const backendHealthSchema = z
+  .object({
+    status: z.literal('ok'),
+    version: z.string().trim().min(1).optional(),
+    providers: z.record(z.string(), providerHealthSchema),
+  })
+  .passthrough()
+
+export type BackendHealth = z.infer<typeof backendHealthSchema>
+export type BackendProviderHealth = z.infer<typeof providerHealthSchema>
+export type BackendProviderVerification = z.infer<typeof providerVerificationSchema>
 
 export interface BackendMultipartFile {
   fieldName: string
@@ -31,6 +62,11 @@ interface BackendErrorEnvelope {
 
 export interface BackendClientOptions {
   baseUrl?: string
+  /**
+   * 动态 Backend 地址(运行时设置)。返回空字符串时回退到 baseUrl 或
+   * 构建期默认值。
+   */
+  getBaseUrl?: () => string
   isNative?: () => boolean
   fetch?: typeof fetch
   nativeRequest?: (options: HttpOptions) => Promise<HttpResponse>
@@ -42,12 +78,14 @@ export interface BackendClientOptions {
  */
 export class BackendClient {
   private readonly baseUrl: string
+  private readonly getBaseUrl: () => string
   private readonly isNative: () => boolean
   private readonly fetchImplementation: typeof fetch
   private readonly nativeRequest: (options: HttpOptions) => Promise<HttpResponse>
 
   constructor(options: BackendClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? resolveBackendUrl()).replace(/\/+$/, '')
+    this.getBaseUrl = options.getBaseUrl ?? (() => '')
     this.isNative = options.isNative ?? (() => Capacitor.isNativePlatform())
     this.fetchImplementation = options.fetch ?? globalThis.fetch.bind(globalThis)
     this.nativeRequest =
@@ -55,11 +93,67 @@ export class BackendClient {
   }
 
   get url(): string {
-    return this.baseUrl
+    return this.resolveBaseUrl()
   }
 
   async getHealth(timeoutMs = 8_000): Promise<BackendHealth> {
-    return mapTransportFailure(() => this.getJson<BackendHealth>('/health', timeoutMs))
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await mapTransportFailure(async () => {
+          const payload = await this.getJson<unknown>('/health', timeoutMs)
+          const parsed = backendHealthSchema.safeParse(payload)
+          if (!parsed.success) {
+            throw new ApiProviderError(
+              'invalid-response',
+              '云端健康检查返回了无法识别的数据。',
+              true,
+            )
+          }
+          return parsed.data
+        })
+      } catch (error) {
+        const shouldRetry =
+          attempt === 0 &&
+          error instanceof ApiProviderError &&
+          ['network', 'timeout', 'server'].includes(error.code)
+        if (!shouldRetry) throw error
+        await delay(200)
+      }
+    }
+    throw new ApiProviderError('network', '云端健康检查失败。', true)
+  }
+
+  /**
+   * 请求 Backend 对上游做一次真实小规模验证(DeepSeek 一次 4 token
+   * 补全、TTS 合成一句 "Hello."),返回各供应商的最新验证状态。
+   */
+  async verifyProviders(
+    timeoutMs = 45_000,
+  ): Promise<Record<string, BackendProviderVerification>> {
+    const payload = await this.postJson<unknown>(
+      '/health/verify',
+      {},
+      timeoutMs,
+    )
+    const envelope = z
+      .object({ providers: z.record(z.string(), z.record(z.string(), z.unknown())) })
+      .passthrough()
+      .safeParse(payload)
+    if (!envelope.success) {
+      throw new ApiProviderError(
+        'invalid-response',
+        '云端验证返回了无法识别的数据。',
+        true,
+      )
+    }
+    const verified: Record<string, BackendProviderVerification> = {}
+    for (const [name, raw] of Object.entries(envelope.data.providers)) {
+      const parsed = providerVerificationSchema.safeParse(raw)
+      if (parsed.success) {
+        verified[name] = parsed.data
+      }
+    }
+    return verified
   }
 
   async postJson<T>(path: string, body: unknown, timeoutMs: number): Promise<T> {
@@ -130,7 +224,7 @@ export class BackendClient {
         const response = await this.nativeRequest({
           url: this.buildUrl(path),
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: this.withRequestHeaders({ 'Content-Type': 'application/json' }),
           data: body,
           responseType: 'arraybuffer',
           connectTimeout: timeoutMs,
@@ -159,6 +253,7 @@ export class BackendClient {
       const response = await this.nativeRequest({
         url: this.buildUrl(path),
         method: 'GET',
+        headers: this.withRequestHeaders({}),
         responseType: 'json',
         connectTimeout: timeoutMs,
         readTimeout: timeoutMs,
@@ -189,7 +284,7 @@ export class BackendClient {
       const response = await this.nativeRequest({
         url: this.buildUrl(path),
         method: options.method,
-        headers: options.headers,
+        headers: this.withRequestHeaders(options.headers),
         data: options.nativeBody,
         ...(options.nativeDataType !== undefined
           ? { dataType: options.nativeDataType }
@@ -226,8 +321,11 @@ export class BackendClient {
     const controller = new AbortController()
     const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs)
     try {
+      const headers = new Headers(init.headers)
+      headers.set('X-Request-ID', createRequestId())
       const response = await this.fetchImplementation(this.buildUrl(path), {
         ...init,
+        headers,
         signal: controller.signal,
       })
       return await read(response)
@@ -236,8 +334,17 @@ export class BackendClient {
     }
   }
 
+  private resolveBaseUrl(): string {
+    const dynamic = this.getBaseUrl().trim()
+    return (dynamic.length > 0 ? dynamic : this.baseUrl).replace(/\/+$/, '')
+  }
+
   private buildUrl(path: string): string {
-    return `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`
+    return `${this.resolveBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`
+  }
+
+  private withRequestHeaders(headers: Record<string, string>): Record<string, string> {
+    return { ...headers, 'X-Request-ID': createRequestId() }
   }
 
   private assertSuccess(status: number, data: unknown): void {
@@ -332,4 +439,13 @@ function blobToBase64(blob: Blob): Promise<string> {
     reader.onerror = () => reject(new Error('Unable to read the audio file.'))
     reader.readAsDataURL(blob)
   })
+}
+
+function createRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ??
+    `client-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds))
 }

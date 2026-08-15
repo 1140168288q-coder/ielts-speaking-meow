@@ -1,5 +1,6 @@
 export * from './backendClient'
 export * from './backendConfig'
+export * from './backendHealth'
 export * from './backendSttProvider'
 export * from './backendTextProvider'
 export * from './backendTtsProvider'

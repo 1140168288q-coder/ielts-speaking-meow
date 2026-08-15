@@ -85,6 +85,9 @@ describe('IndexedDbStorage', () => {
     expect(await reopenedStorage.listExpressions()).toEqual([
       updatedExpression,
     ])
+
+    await reopenedStorage.deleteExpression(expressionFixture.id)
+    expect(await reopenedStorage.getExpression(expressionFixture.id)).toBeNull()
   })
 
   it('persists original audio blobs until an explicit delete', async () => {
@@ -170,6 +173,73 @@ describe('IndexedDbStorage', () => {
     expect(await storage.hasAudio('protected-audio')).toBe(true)
     const committedAudio = await storage.getAudio('protected-audio')
     expect(await committedAudio?.text()).toBe('committed recording')
+  })
+
+  it('reports usage and deletes a session with only its referenced audio', async () => {
+    const storage = createAdapter()
+    const audioId = 'audio-session-1'
+    await storage.saveAudio(
+      audioId,
+      new Blob(['private recording'], { type: 'audio/webm' }),
+    )
+    await storage.upsertSession({
+      ...sessionFixture,
+      status: 'first-review',
+      attempts: [
+        {
+          id: 'attempt-session-1',
+          attemptNumber: 1,
+          audio: {
+            id: audioId,
+            relativePath: `indexeddb://audio/${audioId}`,
+            mimeType: 'audio/webm',
+            durationMs: 2_000,
+            createdAt: CREATED_AT,
+          },
+          transcript: {
+            status: 'ready',
+            text: 'I like my home.',
+            originalText: null,
+            source: 'manual',
+            errorCode: null,
+            updatedAt: CREATED_AT,
+          },
+          metrics: {
+            durationMs: 2_000,
+            wordCount: 4,
+            wordsPerMinute: 120,
+            fillerWords: [],
+            fillerCount: 0,
+            repeatedWords: [],
+            repeatedWordCount: 0,
+            acoustic: null,
+            caveats: ['Approximate transcript metrics.'],
+          },
+          createdAt: CREATED_AT,
+          updatedAt: CREATED_AT,
+        },
+      ],
+    })
+    await storage.putTtsCacheEntry(
+      { id: 'tts-1', mimeType: 'audio/mpeg', createdAt: CREATED_AT },
+      new Blob(['voice'], { type: 'audio/mpeg' }),
+    )
+
+    const before = await storage.getStorageUsage()
+    expect(before).toMatchObject({
+      sessions: 1,
+      recordings: 1,
+      ttsCacheEntries: 1,
+    })
+    expect(before.audioBytes).toBeGreaterThan(0)
+
+    await expect(storage.deleteSessionWithAudio(sessionFixture.id)).resolves.toEqual({
+      deletedAudio: 1,
+    })
+    expect(await storage.getSession(sessionFixture.id)).toBeNull()
+    expect(await storage.getAudio(audioId)).toBeNull()
+    await expect(storage.clearTtsCache()).resolves.toBe(1)
+    expect((await storage.getStorageUsage()).ttsCacheEntries).toBe(0)
   })
 })
 

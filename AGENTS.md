@@ -3,7 +3,7 @@
 ## Project
 
 **Name:** 雅思口语喵  
-**Version:** V1.2  
+**Version:** V1.5  
 **Platform:** Android  
 **Primary mode:** IELTS Speaking single-question practice
 
@@ -235,10 +235,22 @@ Text AI、远程 STT、AI 语音全部由自建 Backend 托管第三方 API，�
   音频地址）、火山引擎语音合成 2.0（TTS）保持三个独立 Service 与独立环境变量，
   不共用密钥；
 - 第三方密钥只存在于 Backend 环境变量，不进入 APK、源码仓库或客户端配置；
-- 普通用户不再填写任何 API Key；设置页只展示云端连接状态与本机能力测试；
+- 普通用户不再填写任何 API Key 或访问口令；设置页展示云端连接状态、Backend
+  地址配置与本机能力测试；
 - 客户端保持 `LLMProvider` / `TTSProvider` / `RecordedAudioSTTProvider` 边界，
   实现为 `Backend*Provider`，以后更换 Provider 不需要大改；
 - 云端不可用时回退：系统 TTS、手动转写、本地分析继续可用。
+- Backend 不实现客户端访问口令鉴权；公网部署必须在反向代理、VPN 或网关层提供
+  认证与访问控制。
+- App 启动时拉取 `/health` 并缓存，三个 `Backend*Provider` 的配置状态由真实
+  健康状态驱动；云端 STT 状态未知或不可用时保留本机实时转写作为兜底。
+- `/health` 必须区分三个信号：密钥是否配置、Backend 是否可达、上游是否已
+  真实验证（verified / unverified / failed 及最近调用时间）；设置页不得把
+  “有密钥”显示成“已连接”。
+- 正式构建（`VITE_LOCK_BACKEND_URL=true`）内置 Backend 地址且设置页
+  只读，构建时缺少地址必须失败；默认强制 HTTPS，家庭 Backend 的私有
+  局域网 HTTP 例外需显式开启 `-AllowLanHttp`；升级后清除旧设备保存的
+  运行时地址。
 
 ---
 

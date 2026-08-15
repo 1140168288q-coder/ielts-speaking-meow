@@ -78,6 +78,12 @@ class MemoryPersistence implements LocalStorage, AudioStorage {
     )
   }
 
+  deleteExpression(expressionId: string): Promise<void> {
+    this.operations.push(`expression:delete:${expressionId}`)
+    this.backing.expressions.delete(expressionId)
+    return Promise.resolve()
+  }
+
   saveAudio(audioId: string, audio: Blob): Promise<void> {
     this.operations.push(`audio:put:${audioId}`)
 
@@ -135,6 +141,43 @@ const createService = (
 }
 
 describe('PracticeService durability and offline flow', () => {
+  it('supports editing, review check-ins, and explicit deletion of saved expressions', async () => {
+    const persistence = new MemoryPersistence()
+    const service = createService(persistence, 'expression')
+    const session = await service.createSession('p1-home-001')
+    const saved = await service.saveExpression(
+      session.id,
+      'It helps me relax.',
+      'Home',
+      1,
+    )
+
+    expect(saved.expression).toMatchObject({
+      reviewCount: 0,
+      lastReviewedAt: null,
+      updatedAt: NOW.toISOString(),
+    })
+
+    const edited = await service.updateExpression(saved.expression.id, {
+      text: 'It helps me unwind after a busy day.',
+      topic: 'Home life',
+    })
+    expect(edited).toMatchObject({
+      text: 'It helps me unwind after a busy day.',
+      topic: 'Home life',
+    })
+
+    const reviewed = await service.markExpressionReviewed(saved.expression.id)
+    expect(reviewed.reviewCount).toBe(1)
+    expect(reviewed.lastReviewedAt).toBe(NOW.toISOString())
+
+    await service.deleteExpression(saved.expression.id)
+    expect(await service.listExpressions()).toEqual([])
+    await expect(service.deleteExpression(saved.expression.id)).rejects.toThrow(
+      'Saved expression not found.',
+    )
+  })
+
   it('commits original audio before writing attempt metadata', async () => {
     const persistence = new MemoryPersistence()
     const service = createService(persistence)
@@ -468,6 +511,73 @@ describe('PracticeService deferred STT and AI enrichment', () => {
     expect(enriched.attempts[0]?.audio.id).toBe(audioId)
     expect(await persistence.hasAudio(audioId ?? '')).toBe(true)
     expect(persistence.deletedAudioIds).toEqual([])
+  })
+
+  it('stores AI comparison only while both attempt transcripts still match', async () => {
+    const persistence = new MemoryPersistence()
+    const service = createService(persistence, 'ai-comparison')
+    const created = await service.createSession('p1-home-001')
+    await service.saveAttempt(
+      created.id,
+      1,
+      recording('first comparison audio'),
+      { status: 'ready', text: 'Um I like reading.', source: 'stt' },
+    )
+    const twoAttempts = await service.saveAttempt(
+      created.id,
+      2,
+      recording('second comparison audio'),
+      { status: 'ready', text: 'I like reading because it helps me relax.', source: 'stt' },
+    )
+    const first = twoAttempts.attempts.find((item) => item.attemptNumber === 1)!
+    const second = twoAttempts.attempts.find((item) => item.attemptNumber === 2)!
+    const feedback: AiFeedback = {
+      keyIssues: [
+        {
+          category: 'fluency',
+          kind: 'improvement',
+          title: 'Clearer opening',
+          observation: 'The second answer starts directly.',
+          action: 'Keep the direct opening.',
+          evidence: 'I like reading',
+        },
+      ],
+      secondAttemptTips: ['Keep the direct opening.'],
+      revisions: {
+        minimalFix: 'I like reading because it helps me relax.',
+        naturalVersion: null,
+        stretchVersion: null,
+      },
+    }
+    const snapshot = {
+      first: {
+        attemptId: first.id,
+        text: first.transcript.text,
+        updatedAt: first.transcript.updatedAt,
+      },
+      second: {
+        attemptId: second.id,
+        text: second.transcript.text,
+        updatedAt: second.transcript.updatedAt,
+      },
+    }
+
+    const enriched = await service.applyAiComparisonIfTranscriptsCurrent(
+      created.id,
+      snapshot,
+      feedback,
+    )
+    expect(enriched?.aiComparison).toEqual(feedback)
+
+    const edited = await service.updateTranscript(
+      created.id,
+      2,
+      'I like reading at home because it helps me relax.',
+    )
+    expect(edited.aiComparison).toBeNull()
+    await expect(
+      service.applyAiComparisonIfTranscriptsCurrent(created.id, snapshot, feedback),
+    ).resolves.toBeNull()
   })
 
   it('discards AI feedback generated for a transcript that has since changed', async () => {

@@ -1,8 +1,9 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import {
   SpeechCapabilityUnavailableError,
+  type SystemTTSProvider,
+  type SystemTtsStatus,
   type TTSCapabilities,
-  type TTSProvider,
   type TTSRequest,
 } from '../../ports/speech'
 
@@ -14,6 +15,12 @@ interface NativeSystemTTSPlugin {
     pitch: number
   }): Promise<void>
   stop(): Promise<void>
+  status(): Promise<{
+    available: boolean
+    engine: string | null
+    engines: Array<{ name: string; label: string | null }>
+    englishAvailable: boolean
+  }>
 }
 
 const NativeSystemTTS = registerPlugin<NativeSystemTTSPlugin>('SystemTTS')
@@ -26,8 +33,15 @@ const capabilities: TTSCapabilities = {
   style: false,
 }
 
+const UNAVAILABLE_STATUS: SystemTtsStatus = {
+  available: false,
+  engine: null,
+  engines: [],
+  englishAvailable: false,
+}
+
 /** Android's local TextToSpeech engine exposed through a tiny app-local plugin. */
-export class CapacitorSystemTTS implements TTSProvider {
+export class CapacitorSystemTTS implements SystemTTSProvider {
   readonly id = 'android-system-tts'
   readonly capabilities = capabilities
 
@@ -39,6 +53,27 @@ export class CapacitorSystemTTS implements TTSProvider {
 
   isAvailable(): boolean {
     return this.isAndroid()
+  }
+
+  /**
+   * 读取本机 TTS 引擎与英语语音包状态,用于设置页展示与测试。
+   * 插件不可用时返回全 false,绝不抛出。
+   */
+  async getStatus(): Promise<SystemTtsStatus> {
+    if (!this.isAvailable()) {
+      return UNAVAILABLE_STATUS
+    }
+    try {
+      const status = await this.plugin.status()
+      return {
+        available: status.available === true,
+        engine: status.engine ?? null,
+        engines: Array.isArray(status.engines) ? status.engines : [],
+        englishAvailable: status.englishAvailable === true,
+      }
+    } catch {
+      return UNAVAILABLE_STATUS
+    }
   }
 
   async speak(request: TTSRequest): Promise<void> {

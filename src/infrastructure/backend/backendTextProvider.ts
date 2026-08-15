@@ -14,20 +14,27 @@ import type {
 } from '../../ports/ai'
 import { ApiProviderError } from '../ai/providerErrors'
 import type { BackendClient } from './backendClient'
+import type { BackendHealthCache } from './backendHealth'
 
 const TEXT_TIMEOUT_MS = 45_000
 
 /**
  * Text AI 通过自建 Backend 调用(Backend 内部再调 DeepSeek)。
  * 客户端不接触 DeepSeek Key;提示词与输出校验分别在 Backend 与本端各做一次。
+ * 配置状态由 BackendHealthCache 驱动,状态未知时保持乐观(失败时本地反馈兜底)。
  */
 export class BackendTextProvider implements LLMProvider, MaterialQuestionOrganizer {
   readonly id = 'backend-text'
 
-  constructor(private readonly client: BackendClient) {}
+  constructor(
+    private readonly client: BackendClient,
+    private readonly health?: BackendHealthCache,
+  ) {}
 
   isConfigured(): boolean {
-    return true
+    return this.health
+      ? this.health.statusOf('deepseek') !== 'unconfigured'
+      : true
   }
 
   async getFeedback(request: LLMFeedbackRequest): Promise<AiFeedback> {

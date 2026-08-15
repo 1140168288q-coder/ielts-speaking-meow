@@ -78,7 +78,7 @@ describe('ImportController AI failure recovery', () => {
       await screen.findByRole('heading', { name: '确认后再加入题库' }),
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '用 Text AI 重新整理' }))
+    await user.click(screen.getByRole('button', { name: '用 DeepSeek 智能整理' }))
     expect(
       await screen.findByRole('heading', { name: 'Text AI 没有完成整理' }),
     ).toBeInTheDocument()
@@ -96,5 +96,53 @@ describe('ImportController AI failure recovery', () => {
       screen.getByText('What do you like most about your home?'),
     ).toBeInTheDocument()
     expect(extractQuestions).toHaveBeenCalledOnce()
+  })
+
+  it('keeps local candidates when DeepSeek returns an empty question list', async () => {
+    const user = userEvent.setup()
+    const service = {
+      prepare: vi.fn((file: File) => Promise.resolve(createDraft(file))),
+      commit: vi.fn(),
+    } as unknown as ImportMaterialService
+    const extractQuestions = vi.fn(() => Promise.resolve([]))
+    const organizer: MaterialQuestionOrganizer = {
+      isConfigured: () => true,
+      extractQuestions,
+    }
+    const { container } = render(
+      <ImportController
+        service={service}
+        organizer={organizer}
+        existingQuestions={[]}
+        onImported={vi.fn()}
+        onStartQuestion={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    expect(input).not.toBeNull()
+
+    await user.upload(
+      input as HTMLInputElement,
+      new File([extractedText], 'questions.txt', { type: 'text/plain' }),
+    )
+    await screen.findByRole('heading', { name: '确认后再加入题库' })
+
+    await user.click(screen.getByRole('button', { name: '用 DeepSeek 智能整理' }))
+    expect(
+      await screen.findByText(/DeepSeek 没有整理出题目/),
+    ).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: '继续使用本地候选题' }),
+    )
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: '确认后再加入题库' }),
+      ).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText('What do you like most about your home?'),
+    ).toBeInTheDocument()
   })
 })

@@ -324,6 +324,7 @@ h3 {
 .next-attempt-card h2,
 .focus-reminder h2,
 .delta-card h2,
+.ai-comparison-card h2,
 .save-expression-card h2,
 .comparison-intro h2 {
   margin: 0;
@@ -468,7 +469,7 @@ h3 {
   width: min(100%, 860px);
   min-height: 70px;
   min-height: calc(70px + env(safe-area-inset-bottom));
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin: 0 auto;
   padding: 7px 18px;
   padding:
@@ -627,6 +628,7 @@ h3 {
 .next-attempt-card,
 .focus-reminder,
 .delta-card,
+.ai-comparison-card,
 .save-expression-card,
 .comparison-intro {
   padding: 24px;
@@ -865,7 +867,7 @@ h3 {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 8px;
   margin: 0 0 18px;
 }
@@ -1145,7 +1147,7 @@ textarea::placeholder {
 
 .delta-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
   gap: 9px;
   margin-top: 17px;
 }
@@ -1194,6 +1196,18 @@ textarea::placeholder {
   font-size: 12px;
 }
 
+.comparison-feedback em {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-style: normal;
+}
+
+.ai-comparison-card {
+  border-color: #cfe6dd;
+  background: linear-gradient(145deg, #fff, #f3fbf7);
+}
+
 .save-expression-card {
   border-color: #e6be70;
   background: linear-gradient(145deg, #fff, #fff9e8);
@@ -1214,18 +1228,38 @@ textarea::placeholder {
   font-size: clamp(28px, 7vw, 42px);
 }
 
-.history-list button {
+.history-list article {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: white;
+}
+
+.history-list .history-open {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 13px;
   width: 100%;
   padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
+  border: 0;
+  border-radius: 0;
   background: white;
   cursor: pointer;
   text-align: left;
+}
+
+.history-list .history-delete {
+  width: 100%;
+  padding: 9px 16px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  color: #9b4c43;
+  background: #fffaf7;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: right;
 }
 
 .part-chip {
@@ -1305,6 +1339,160 @@ textarea::placeholder {
   cursor: pointer;
   font-size: 10px;
   font-weight: 900;
+}
+
+.question-recommendation {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  padding: 17px 19px;
+  border: 1px solid #d5e8df;
+  border-radius: 19px;
+  color: var(--ink);
+  background: linear-gradient(145deg, #fff, #f2fbf7);
+  cursor: pointer;
+  text-align: left;
+}
+
+.question-recommendation span,
+.question-recommendation small,
+.question-recommendation strong,
+.question-recommendation em {
+  display: block;
+}
+
+.question-recommendation small {
+  color: #267564;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.question-recommendation strong {
+  margin: 5px 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.question-recommendation em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.question-recommendation b {
+  color: #267564;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.expression-review-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid #d5e8df;
+  border-radius: 19px;
+  background: linear-gradient(145deg, #fff, #f2fbf7);
+}
+
+.expression-review-card h2 {
+  margin: 3px 0;
+  font-size: 18px;
+}
+
+.expression-review-card p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.expression-review-card > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 14px;
+  color: #267564;
+  background: var(--mint-soft);
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.expression-search {
+  display: grid;
+  gap: 6px;
+}
+
+.expression-search span,
+.expression-edit-form label > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.expression-search input,
+.expression-edit-form input,
+.expression-edit-form textarea {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+}
+
+.expression-list article > .expression-edit-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 13px;
+}
+
+.expression-edit-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.expression-edit-form textarea {
+  min-height: 105px;
+  resize: vertical;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.5;
+}
+
+.expression-edit-form > div,
+.expression-list article > .expression-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 7px;
+}
+
+.expression-list .review-count {
+  display: block;
+  margin: -6px 0 12px;
+}
+
+.expression-list button.expression-muted-action {
+  border-color: var(--line);
+  color: var(--muted);
+  background: white;
+}
+
+.expression-list button.expression-delete-action {
+  border-color: #f0d4ce;
+  color: #9b4c43;
+  background: #fff7f5;
+}
+
+.expression-list button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .empty-state {
@@ -1393,6 +1581,7 @@ textarea::placeholder {
   .next-attempt-card,
   .focus-reminder,
   .delta-card,
+  .ai-comparison-card,
   .save-expression-card,
   .comparison-intro {
     padding: 19px;
@@ -1527,4 +1716,74 @@ textarea::placeholder {
   gap: 4px;
   font-size: 0.9rem;
   color: var(--text-primary, #4a3f33);
+}
+
+.storage-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.storage-summary > div {
+  display: grid;
+  gap: 3px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  background: #f8f3ed;
+  text-align: center;
+}
+
+.storage-summary small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.storage-summary strong {
+  font-size: 15px;
+}
+
+.file-button {
+  position: relative;
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border: 1px solid #d9cec2;
+  border-radius: 13px;
+  color: var(--ink);
+  background: white;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.file-button.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 520px) {
+  .storage-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 390px) {
+  .bottom-nav {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .bottom-nav button {
+    font-size: 10px;
+  }
 }

@@ -1,8 +1,10 @@
-"""基础限流:内存滑动窗口,默认关闭。
+"""基础安全:请求关联 ID + 内存滑动窗口限流(默认关闭)。
 
 预留接口:将来需要更强限流(多实例/持久化)时替换此类即可,路由不用改。
 """
 import time
+import re
+import uuid
 from collections import defaultdict, deque
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -10,6 +12,20 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .config import Settings
+
+_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """Adds a safe correlation id without logging request bodies or secrets."""
+
+    async def dispatch(self, request: Request, call_next):
+        incoming = request.headers.get("X-Request-ID", "")
+        request_id = incoming if _REQUEST_ID.fullmatch(incoming) else uuid.uuid4().hex
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 
 class SlidingWindowRateLimiter(BaseHTTPMiddleware):

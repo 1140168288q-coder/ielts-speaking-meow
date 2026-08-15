@@ -109,7 +109,7 @@ describe('AttemptReview deferred transcription', () => {
     render(review(attemptWithTranscript(pendingTranscript), retry))
 
     const button = screen.getByRole('button', {
-      name: '重新发起独立 STT 转写',
+      name: '重新发起云端 STT 转写',
     })
     expect(button).toBeEnabled()
     await user.click(button)

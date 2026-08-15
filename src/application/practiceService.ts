@@ -12,12 +12,13 @@ import {
   createLocalFeedback,
 } from '../domain/comparison'
 import { analyzeSpeech } from '../domain/speechAnalysis'
-import type { AudioRecording } from '../ports/speech'
+import type { AudioRecording, RecordedAudioAnalyzer } from '../ports/speech'
 import type { AudioStorage, LocalStorage } from '../ports/storage'
 
 export interface PracticeServiceDependencies {
   localStorage: LocalStorage
   audioStorage: AudioStorage
+  audioAnalyzer?: RecordedAudioAnalyzer
   now?: () => Date
   createId?: () => string
 }
@@ -35,6 +36,11 @@ export interface FirstTranscriptSnapshot {
   updatedAt: string
 }
 
+export interface ComparisonTranscriptSnapshot {
+  first: FirstTranscriptSnapshot
+  second: FirstTranscriptSnapshot
+}
+
 const defaultCreateId = () => {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID()
@@ -50,12 +56,14 @@ const defaultCreateId = () => {
 export class PracticeService {
   private readonly localStorage: LocalStorage
   private readonly audioStorage: AudioStorage
+  private readonly audioAnalyzer: RecordedAudioAnalyzer | null
   private readonly now: () => Date
   private readonly createId: () => string
 
   constructor(dependencies: PracticeServiceDependencies) {
     this.localStorage = dependencies.localStorage
     this.audioStorage = dependencies.audioStorage
+    this.audioAnalyzer = dependencies.audioAnalyzer ?? null
     this.now = dependencies.now ?? (() => new Date())
     this.createId = dependencies.createId ?? defaultCreateId
   }
@@ -69,6 +77,7 @@ export class PracticeService {
       attempts: [],
       localFeedback: [],
       aiFeedback: null,
+      aiComparison: null,
       comparison: null,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -96,6 +105,7 @@ export class PracticeService {
 
     // Critical durability order: audio first, session metadata second.
     await this.audioStorage.saveAudio(audioId, recording.blob)
+    const acoustic = await this.analyzeAudio(recording.blob)
 
     const transcriptText = transcriptInput.text.trim()
     const attempt: PracticeAttempt = {
@@ -116,7 +126,7 @@ export class PracticeService {
         errorCode: transcriptInput.errorCode ?? null,
         updatedAt: timestamp,
       },
-      metrics: analyzeSpeech({ transcript: transcriptText, durationMs }),
+      metrics: analyzeSpeech({ transcript: transcriptText, durationMs, acoustic }),
       createdAt: timestamp,
       updatedAt: timestamp,
     }
@@ -141,6 +151,7 @@ export class PracticeService {
         firstAttempt && secondAttempt
           ? compareAttempts(firstAttempt.metrics, secondAttempt.metrics)
           : null,
+      aiComparison: null,
       updatedAt: timestamp,
     })
 
@@ -176,6 +187,7 @@ export class PracticeService {
       metrics: analyzeSpeech({
         transcript: cleanText,
         durationMs: existing.audio.durationMs,
+        acoustic: existing.metrics.acoustic ?? null,
       }),
       updatedAt: timestamp,
     }
@@ -194,6 +206,9 @@ export class PracticeService {
         firstAttempt && secondAttempt
           ? compareAttempts(firstAttempt.metrics, secondAttempt.metrics)
           : null,
+      aiFeedback:
+        attemptNumber === 1 ? null : session.aiFeedback,
+      aiComparison: null,
       updatedAt: timestamp,
     })
 
@@ -268,6 +283,36 @@ export class PracticeService {
     return this.persistAiFeedback(session, parsedFeedback)
   }
 
+  async applyAiComparisonIfTranscriptsCurrent(
+    sessionId: string,
+    snapshot: ComparisonTranscriptSnapshot,
+    feedback: AiFeedback,
+  ): Promise<TrainingSession | null> {
+    const parsedFeedback = aiFeedbackSchema.parse(feedback)
+    const session = await this.requireSession(sessionId)
+    const firstAttempt = session.attempts.find(
+      (attempt) => attempt.attemptNumber === 1,
+    )
+    const secondAttempt = session.attempts.find(
+      (attempt) => attempt.attemptNumber === 2,
+    )
+
+    if (
+      !this.transcriptMatches(firstAttempt, snapshot.first) ||
+      !this.transcriptMatches(secondAttempt, snapshot.second)
+    ) {
+      return null
+    }
+
+    const updated = trainingSessionSchema.parse({
+      ...session,
+      aiComparison: parsedFeedback,
+      updatedAt: this.now().toISOString(),
+    })
+    await this.localStorage.upsertSession(updated)
+    return updated
+  }
+
   private async persistAiFeedback(
     session: TrainingSession,
     feedback: AiFeedback,
@@ -314,6 +359,9 @@ export class PracticeService {
       sessionId,
       sourceAttempt,
       createdAt: timestamp,
+      updatedAt: timestamp,
+      reviewCount: 0,
+      lastReviewedAt: null,
     })
 
     await this.localStorage.upsertExpression(expression)
@@ -333,7 +381,45 @@ export class PracticeService {
 
   async listExpressions(): Promise<SavedExpression[]> {
     const expressions = await this.localStorage.listExpressions()
-    return expressions.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return expressions.sort((a, b) =>
+      (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt),
+    )
+  }
+
+  async updateExpression(
+    expressionId: string,
+    changes: Pick<SavedExpression, 'text' | 'topic'>,
+  ): Promise<SavedExpression> {
+    const existing = await this.requireExpression(expressionId)
+    const updated = savedExpressionSchema.parse({
+      ...existing,
+      text: changes.text,
+      topic: changes.topic,
+      updatedAt: this.now().toISOString(),
+    })
+    await this.localStorage.upsertExpression(updated)
+    return updated
+  }
+
+  async markExpressionReviewed(expressionId: string): Promise<SavedExpression> {
+    const existing = await this.requireExpression(expressionId)
+    const timestamp = this.now().toISOString()
+    const updated = savedExpressionSchema.parse({
+      ...existing,
+      reviewCount: (existing.reviewCount ?? 0) + 1,
+      lastReviewedAt: timestamp,
+      updatedAt: timestamp,
+    })
+    await this.localStorage.upsertExpression(updated)
+    return updated
+  }
+
+  async deleteExpression(expressionId: string): Promise<void> {
+    const existing = await this.localStorage.getExpression(expressionId)
+    if (!existing) {
+      throw new Error('Saved expression not found.')
+    }
+    await this.localStorage.deleteExpression(expressionId)
   }
 
   getAudio(audioId: string): Promise<Blob | null> {
@@ -342,6 +428,14 @@ export class PracticeService {
 
   getSession(sessionId: string): Promise<TrainingSession | null> {
     return this.localStorage.getSession(sessionId)
+  }
+
+  private async requireExpression(expressionId: string): Promise<SavedExpression> {
+    const expression = await this.localStorage.getExpression(expressionId)
+    if (!expression) {
+      throw new Error('Saved expression not found.')
+    }
+    return expression
   }
 
   private async replaceTranscript(
@@ -378,6 +472,7 @@ export class PracticeService {
       metrics: analyzeSpeech({
         transcript: cleanText,
         durationMs: existing.audio.durationMs,
+        acoustic: existing.metrics.acoustic ?? null,
       }),
       updatedAt: timestamp,
     }
@@ -396,6 +491,9 @@ export class PracticeService {
         firstAttempt && secondAttempt
           ? compareAttempts(firstAttempt.metrics, secondAttempt.metrics)
           : null,
+      aiFeedback:
+        attemptNumber === 1 ? null : session.aiFeedback,
+      aiComparison: null,
       updatedAt: timestamp,
     })
 
@@ -409,5 +507,25 @@ export class PracticeService {
       throw new Error('The practice session could not be found.')
     }
     return session
+  }
+
+  private transcriptMatches(
+    attempt: PracticeAttempt | undefined,
+    snapshot: FirstTranscriptSnapshot,
+  ): boolean {
+    return attempt?.id === snapshot.attemptId &&
+      attempt.transcript.status === 'ready' &&
+      attempt.transcript.text === snapshot.text &&
+      attempt.transcript.updatedAt === snapshot.updatedAt
+  }
+
+  private async analyzeAudio(audio: Blob) {
+    if (this.audioAnalyzer === null) return null
+    try {
+      return await this.audioAnalyzer.analyze(audio)
+    } catch {
+      // Acoustic enrichment must never block saving the original recording.
+      return null
+    }
   }
 }

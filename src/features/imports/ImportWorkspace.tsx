@@ -449,16 +449,21 @@ function ReviewStep({ props }: { props: ImportWorkspaceProps }) {
           找到 {props.candidates.length} 道候选题。请检查 Part、主题和题目；Part 2 还需要 2–5 条提示点。
         </p>
         {props.file ? <FileSummary file={props.file} /> : null}
-        {props.textAiAvailable && props.onOrganizeWithTextAi ? (
+        {props.onOrganizeWithTextAi ? (
           <div className={styles.aiOrganizeRow}>
             <button
               type="button"
               className={styles.secondaryButton}
+              disabled={!props.textAiAvailable}
               onClick={props.onOrganizeWithTextAi}
             >
-              用 Text AI 重新整理
+              用 DeepSeek 智能整理
             </button>
-            <small>仅点击后才会把提取文字发送到已配置的 Text AI。</small>
+            <small>
+              {props.textAiAvailable
+                ? '仅点击后才会把提取文字发送到 DeepSeek；失败时本地候选题不丢失。'
+                : '需要已配置的云端 Text AI；当前仍可继续使用本地候选题。'}
+            </small>
           </div>
         ) : null}
       </section>
@@ -586,7 +591,7 @@ function ErrorStep({ props }: { props: ImportWorkspaceProps }) {
               className={styles.secondaryButton}
               onClick={props.onOrganizeWithTextAi}
             >
-              用 Text AI 整理候选题
+              用 DeepSeek 智能整理
             </button>
             <small>这是一次明确上传操作；原文件和图片不会上传。</small>
           </div>

@@ -1,6 +1,5 @@
 export type ApiProviderErrorCode =
   | 'not-configured'
-  | 'unauthorized'
   | 'not-found'
   | 'rate-limited'
   | 'timeout'
@@ -18,25 +17,6 @@ export class ApiProviderError extends Error {
     super(message)
     this.name = 'ApiProviderError'
   }
-}
-
-export function assertSuccessfulStatus(status: number): void {
-  if (status >= 200 && status < 300) {
-    return
-  }
-  if (status === 401 || status === 403) {
-    throw new ApiProviderError('unauthorized', 'API Key 无效或没有权限。', false)
-  }
-  if (status === 404) {
-    throw new ApiProviderError('not-found', 'API Endpoint 或模型不存在。', false)
-  }
-  if (status === 429) {
-    throw new ApiProviderError('rate-limited', 'API 请求过于频繁，请稍后重试。', true)
-  }
-  if (status >= 500) {
-    throw new ApiProviderError('server', 'API 服务暂时不可用，请稍后重试。', true)
-  }
-  throw new ApiProviderError('request-failed', `API 请求失败（${status}）。`, false)
 }
 
 export async function mapTransportFailure<T>(

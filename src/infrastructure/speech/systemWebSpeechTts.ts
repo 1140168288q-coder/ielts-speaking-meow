@@ -1,7 +1,8 @@
 import {
   SpeechCapabilityUnavailableError,
+  type SystemTTSProvider,
+  type SystemTtsStatus,
   type TTSCapabilities,
-  type TTSProvider,
   type TTSRequest,
 } from '../../ports/speech'
 
@@ -74,7 +75,7 @@ function findBrowserDependencies(): Required<SystemWebSpeechTTSDependencies> | n
   }
 }
 
-export class SystemWebSpeechTTS implements TTSProvider {
+export class SystemWebSpeechTTS implements SystemTTSProvider {
   readonly id = 'system-web-speech'
   readonly capabilities = capabilities
 
@@ -102,6 +103,17 @@ export class SystemWebSpeechTTS implements TTSProvider {
 
   isAvailable(): boolean {
     return Boolean(this.synthesis && this.createUtterance)
+  }
+
+  /** 浏览器端没有独立引擎概念:可用即视为内置英文语音可用。 */
+  getStatus(): Promise<SystemTtsStatus> {
+    const available = this.isAvailable()
+    return Promise.resolve({
+      available,
+      engine: available ? 'Web Speech API' : null,
+      engines: [],
+      englishAvailable: available,
+    })
   }
 
   async speak(request: TTSRequest): Promise<void> {

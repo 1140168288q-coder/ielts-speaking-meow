@@ -13,6 +13,7 @@ import asyncio
 import gzip
 import json
 import struct
+import time
 import uuid
 
 from websockets.asyncio.client import connect
@@ -26,6 +27,7 @@ from ..errors import (
     provider_error,
     upstream_timeout,
 )
+from .verification import LastCallRecord
 
 # ---- SAUC 二进制协议常量(与官方 SDK internal/protocol/binary.go 一致)----
 MSG_FULL_CLIENT = 0x1
@@ -170,6 +172,7 @@ class VolcengineStreamingSTTService:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        self.last_call = LastCallRecord()
 
     @property
     def is_configured(self) -> bool:
@@ -178,6 +181,20 @@ class VolcengineStreamingSTTService:
     async def transcribe(self, wav_bytes: bytes) -> str:
         if not self.is_configured:
             raise not_configured("火山引擎 STT")
+        started = time.perf_counter()
+        try:
+            text = await self._transcribe_checked(wav_bytes)
+        except BackendError as exc:
+            self.last_call.record(ok=False, message=str(exc))
+            raise
+        self.last_call.record(
+            ok=True,
+            latency_ms=round((time.perf_counter() - started) * 1000),
+            result=text,
+        )
+        return text
+
+    async def _transcribe_checked(self, wav_bytes: bytes) -> str:
         pcm = _wav_to_pcm16(wav_bytes)
         if not pcm:
             raise provider_error("转写未识别到语音内容,请重试或手动输入。")

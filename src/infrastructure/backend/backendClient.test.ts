@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { installFakeFormData } from '../../test/fixtures/fakeFormData'
+import { makeBackendHealth } from '../../test/fixtures/backendHealth'
 import { BackendClient } from './backendClient'
 
 afterEach(() => {
@@ -22,16 +23,59 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('BackendClient (web transport)', () => {
-  it('parses /health response', async () => {
+  it('parses /health response with provider details', async () => {
     const fetch = vi.fn().mockResolvedValue(
-      jsonResponse({ status: 'ok', providers: { deepseek: true } }),
+      jsonResponse(makeBackendHealth({ deepseek: true })),
     )
     const client = createClient(fetch)
     const health = await client.getHealth()
     expect(health.status).toBe('ok')
+    expect(health.providers.deepseek?.configured).toBe(true)
     expect(fetch).toHaveBeenCalledWith(
       'http://backend.test/health',
       expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
+  it('rejects malformed /health responses at the provider boundary', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({ status: 'ok', providers: { deepseek: 'yes' } }),
+    )
+    const client = createClient(fetch)
+    await expect(client.getHealth()).rejects.toMatchObject({
+      code: 'invalid-response',
+      retryable: true,
+    })
+  })
+
+  it('posts to /health/verify and returns parsed verification states', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        providers: {
+          deepseek: {
+            status: 'verified',
+            checkedAt: '2026-08-15T08:00:00.000Z',
+            latencyMs: 200,
+            lastError: null,
+            lastResult: 'OK',
+          },
+          volc_tts: {
+            status: 'failed',
+            checkedAt: '2026-08-15T08:00:01.000Z',
+            latencyMs: null,
+            lastError: '火山 TTS:凭证无效(401)。',
+            lastResult: null,
+          },
+        },
+      }),
+    )
+    const client = createClient(fetch)
+    const verified = await client.verifyProviders()
+    expect(verified.deepseek?.status).toBe('verified')
+    expect(verified.volc_tts?.status).toBe('failed')
+    expect(fetch).toHaveBeenCalledWith(
+      'http://backend.test/health/verify',
+      expect.objectContaining({ method: 'POST' }),
     )
   })
 
@@ -96,4 +140,23 @@ describe('BackendClient (web transport)', () => {
     expect(formData.get('language')).toBe('en')
     expect(formData.get('file')).toBeInstanceOf(Blob)
   })
+
+  it('uses the dynamic base URL getter when provided', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({ status: 'ok', providers: {} }),
+    )
+    const client = new BackendClient({
+      baseUrl: 'http://fallback.test',
+      isNative: () => false,
+      fetch,
+      getBaseUrl: () => 'http://192.168.1.50:8000',
+    })
+    await client.getHealth()
+    expect(fetch).toHaveBeenCalledWith(
+      'http://192.168.1.50:8000/health',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(client.url).toBe('http://192.168.1.50:8000')
+  })
+
 })

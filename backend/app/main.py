@@ -12,7 +12,7 @@ from .config import Settings, get_settings
 from .errors import BackendError
 from .logging_setup import configure_logging
 from .routers import feedback, health, stt, tts
-from .security import SlidingWindowRateLimiter
+from .security import RequestIdMiddleware, SlidingWindowRateLimiter
 from .services.deepseek_service import DeepSeekService
 from .services.http_client import build_http_client
 from .services.volcengine_streaming_stt_service import VolcengineStreamingSTTService
@@ -39,7 +39,7 @@ def create_app(
         "volc_tts": VolcengineTTSService(client, settings),
     }
 
-    app = FastAPI(title="雅思口语喵 Backend", version="1.2.0")
+    app = FastAPI(title="雅思口语喵 Backend", version="1.5.0")
     app.state.settings = settings
     app.state.client = client
     app.state.services = services
@@ -55,6 +55,8 @@ def create_app(
     )
 
     app.add_middleware(SlidingWindowRateLimiter, settings=settings)
+    # 最外层关联 ID 覆盖正常与限流响应，便于排查且不记录请求正文。
+    app.add_middleware(RequestIdMiddleware)
 
     app.include_router(health.router)
     app.include_router(stt.router, tags=["stt"])

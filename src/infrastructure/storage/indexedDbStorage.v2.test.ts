@@ -71,11 +71,13 @@ describe('IndexedDbStorage v1 to v2 migration', () => {
 
     await storage.close()
     const database = await openDatabase(databaseName)
-    expect(database.version).toBe(2)
+    expect(database.version).toBe(4)
     expect(Array.from(database.objectStoreNames).sort()).toEqual(
       [
         'apiConfigurations',
+        'appMeta',
         'audio',
+        'backendConfig',
         'expressions',
         'importSources',
         'importedFiles',
@@ -208,8 +210,8 @@ describe('IndexedDbStorage v2 import integrity', () => {
     expect(await reopened.getImportSource('corrupt-source')).toBeNull()
     expect(await reopened.listImportedQuestions()).toEqual(bundle.questions)
     expect(await reopened.getImportedFile('corrupt-file')).toBeNull()
-    expect(await reopened.listApiConfigurations()).toEqual([])
-
+    // V1.1 遗留的 apiConfigurations store 自 Backend 化后不再读写:
+    // 即使其中有疑似密钥字段的历史记录,也不参与任何读取路径,原样保留。
     await reopened.close()
     const rawDatabase = await openDatabase(databaseName)
     expect(await countRecords(rawDatabase, 'importSources')).toBe(2)

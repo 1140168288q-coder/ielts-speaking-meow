@@ -11,11 +11,19 @@ export const ieltsPartSchema = z.union([
   z.literal(3),
 ])
 
+export const questionDifficultySchema = z.enum([
+  'foundation',
+  'developing',
+  'stretch',
+])
+
 const questionBaseSchema = z
   .object({
     id: z.string().regex(/^p[123]-[a-z0-9-]+$/),
     topic: nonEmptyText(80),
     prompt: nonEmptyText(500),
+    difficulty: questionDifficultySchema.optional(),
+    source: nonEmptyText(160).optional(),
   })
   .strict()
 
@@ -66,6 +74,7 @@ export const questionBankSchema = z
   })
 
 export type IeltsPart = z.infer<typeof ieltsPartSchema>
+export type QuestionDifficulty = z.infer<typeof questionDifficultySchema>
 export type Question = z.infer<typeof questionSchema>
 
 export const feedbackCategorySchema = z.enum([
@@ -113,6 +122,20 @@ export type FeedbackKind = z.infer<typeof feedbackKindSchema>
 export type ActionableFeedback = z.infer<typeof actionableFeedbackSchema>
 export type AiFeedback = z.infer<typeof aiFeedbackSchema>
 
+export const acousticSpeechMetricsSchema = z
+  .object({
+    analysisVersion: z.literal(1),
+    analyzedDurationMs: z.number().finite().positive(),
+    activeSpeechMs: z.number().finite().nonnegative(),
+    silenceRatio: z.number().finite().min(0).max(1),
+    pauseCount: z.number().int().nonnegative(),
+    longPauseCount: z.number().int().nonnegative(),
+    averagePauseMs: z.number().finite().nonnegative().nullable(),
+  })
+  .strict()
+
+export type AcousticSpeechMetrics = z.infer<typeof acousticSpeechMetricsSchema>
+
 export const fillerCountSchema = z
   .object({
     phrase: nonEmptyText(40),
@@ -136,6 +159,7 @@ export const speechMetricsSchema = z
     fillerCount: z.number().int().nonnegative(),
     repeatedWords: z.array(repeatedWordSchema),
     repeatedWordCount: z.number().int().nonnegative(),
+    acoustic: acousticSpeechMetricsSchema.nullable().optional(),
     caveats: z.array(nonEmptyText(240)).max(5),
   })
   .strict()
@@ -193,6 +217,8 @@ export const attemptComparisonSchema = z
     wordsPerMinute: metricDeltaSchema.nullable(),
     fillerCount: metricDeltaSchema.nullable(),
     repeatedWordCount: metricDeltaSchema.nullable(),
+    silenceRatio: metricDeltaSchema.nullable().optional(),
+    longPauseCount: metricDeltaSchema.nullable().optional(),
     feedback: actionableFeedbackListSchema,
   })
   .strict()
@@ -217,6 +243,7 @@ export const trainingSessionSchema = z
     attempts: z.array(practiceAttemptSchema).max(2),
     localFeedback: actionableFeedbackListSchema,
     aiFeedback: aiFeedbackSchema.nullable(),
+    aiComparison: aiFeedbackSchema.nullable().optional(),
     comparison: attemptComparisonSchema.nullable(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
@@ -250,6 +277,9 @@ export const savedExpressionSchema = z
     sessionId: nonEmptyText(120),
     sourceAttempt: z.union([z.literal(1), z.literal(2)]).nullable(),
     createdAt: isoDateTimeSchema,
+    updatedAt: isoDateTimeSchema.optional(),
+    reviewCount: z.number().int().nonnegative().optional(),
+    lastReviewedAt: isoDateTimeSchema.nullable().optional(),
   })
   .strict()
 

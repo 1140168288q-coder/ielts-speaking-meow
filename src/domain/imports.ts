@@ -97,6 +97,13 @@ export function candidateToQuestion(
     part: candidate.part,
     topic: candidate.topic,
     prompt: candidate.prompt,
+    difficulty:
+      candidate.part === 1
+        ? ('foundation' as const)
+        : candidate.part === 2
+          ? ('developing' as const)
+          : ('stretch' as const),
+    source: '用户导入材料',
   }
 
   if (candidate.part === 2) {

@@ -4,10 +4,14 @@ import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
+import com.getcapacitor.JSArray;
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 @CapacitorPlugin(name = "SystemTTS")
@@ -27,6 +31,7 @@ public class SystemTTSPlugin extends Plugin {
     private PendingSpeech pendingSpeech;
     private PluginCall activeCall;
     private String activeUtteranceId;
+    private PendingStatus pendingStatus;
 
     private static final class PendingSpeech {
         final PluginCall call;
@@ -50,6 +55,16 @@ public class SystemTTSPlugin extends Plugin {
             this.language = language;
             this.rate = rate;
             this.pitch = pitch;
+        }
+    }
+
+    private static final class PendingStatus {
+        final PluginCall call;
+        final int initializationToken;
+
+        PendingStatus(PluginCall call, int initializationToken) {
+            this.call = call;
+            this.initializationToken = initializationToken;
         }
     }
 
@@ -106,11 +121,37 @@ public class SystemTTSPlugin extends Plugin {
         });
     }
 
+    /**
+     * 设置页「本机能力」读取:TTS 引擎、已装引擎列表、英语语音包是否可用。
+     * 与 speak 共用同一个引擎初始化流程,初始化完成后立即回填结果。
+     */
+    @PluginMethod
+    public void status(PluginCall call) {
+        synchronized (this) {
+            if (engineState == EngineState.DESTROYED) {
+                call.reject("Android System TTS is no longer available");
+                return;
+            }
+            if (engineState == EngineState.READY && engine != null) {
+                resolveStatusNow(call);
+                return;
+            }
+            if (engineState == EngineState.INITIALIZING) {
+                pendingStatus = new PendingStatus(call, engineToken);
+                return;
+            }
+            engineState = EngineState.INITIALIZING;
+            engineToken += 1;
+            pendingStatus = new PendingStatus(call, engineToken);
+            initializeEngine(engineToken);
+        }
+    }
+
     private void ensureEngineAndSpeak() {
-        int initializationToken;
         synchronized (this) {
             if (engineState == EngineState.DESTROYED) {
                 rejectActiveCall("Android System TTS is no longer available");
+                rejectPendingStatus("Android System TTS is no longer available");
                 return;
             }
             if (engineState == EngineState.READY && engine != null) {
@@ -123,9 +164,11 @@ public class SystemTTSPlugin extends Plugin {
 
             engineState = EngineState.INITIALIZING;
             engineToken += 1;
-            initializationToken = engineToken;
+            initializeEngine(engineToken);
         }
+    }
 
+    private void initializeEngine(int initializationToken) {
         try {
             TextToSpeech createdEngine = new TextToSpeech(
                 getContext(),
@@ -149,6 +192,7 @@ public class SystemTTSPlugin extends Plugin {
                     engineState = EngineState.IDLE;
                     engine = null;
                     rejectActiveCall("Android System TTS could not be initialized");
+                    rejectPendingStatus("Android System TTS could not be initialized");
                 }
             }
         }
@@ -168,6 +212,7 @@ public class SystemTTSPlugin extends Plugin {
                 engine = null;
                 engineState = EngineState.IDLE;
                 rejectActiveCall("Android System TTS could not be initialized");
+                rejectPendingStatus("Android System TTS could not be initialized");
             } else {
                 engineState = EngineState.READY;
             }
@@ -220,6 +265,73 @@ public class SystemTTSPlugin extends Plugin {
             }
         );
         speakPending();
+        resolveStatusPending(null);
+    }
+
+    /** 主线程读取当前引擎信息并回填 status() 调用。 */
+    private void resolveStatusNow(PluginCall call) {
+        TextToSpeech currentEngine;
+        synchronized (this) {
+            currentEngine = engine;
+        }
+        if (currentEngine == null) {
+            call.reject("Android System TTS is not initialized");
+            return;
+        }
+
+        JSObject result = new JSObject();
+        result.put("available", true);
+        result.put("engine", currentEngine.getDefaultEngine());
+
+        JSArray enginesArray = new JSArray();
+        for (TextToSpeech.EngineInfo info : currentEngine.getEngines()) {
+            JSObject entry = new JSObject();
+            entry.put("name", info.name);
+            entry.put("label", info.label);
+            enginesArray.put(entry);
+        }
+        result.put("engines", enginesArray);
+
+        // 英语语音包:先看 setLanguage(en-US) 的结果,再看已加载的 voices
+        int languageResult = currentEngine.setLanguage(Locale.US);
+        boolean englishAvailable =
+            languageResult != TextToSpeech.LANG_MISSING_DATA &&
+            languageResult != TextToSpeech.LANG_NOT_SUPPORTED;
+        if (!englishAvailable) {
+            for (android.speech.tts.Voice voice : currentEngine.getVoices()) {
+                Locale voiceLocale = voice.getLocale();
+                if (
+                    voiceLocale != null &&
+                    "en".equalsIgnoreCase(voiceLocale.getLanguage())
+                ) {
+                    englishAvailable = true;
+                    break;
+                }
+            }
+        }
+        result.put("englishAvailable", englishAvailable);
+        call.resolve(result);
+    }
+
+    private synchronized void resolveStatusPending(String error) {
+        PendingStatus pending = pendingStatus;
+        pendingStatus = null;
+        if (pending == null) {
+            return;
+        }
+        if (error == null) {
+            resolveStatusNow(pending.call);
+        } else {
+            pending.call.reject(error);
+        }
+    }
+
+    private synchronized void rejectPendingStatus(String message) {
+        PendingStatus pending = pendingStatus;
+        pendingStatus = null;
+        if (pending != null) {
+            pending.call.reject(message);
+        }
     }
 
     private void speakPending() {
@@ -336,6 +448,7 @@ public class SystemTTSPlugin extends Plugin {
             engineToken += 1;
             pendingSpeech = null;
             rejectActiveCall("Android System TTS was destroyed");
+            rejectPendingStatus("Android System TTS was destroyed");
             engineState = EngineState.DESTROYED;
             engineToDestroy = engine;
             engine = null;

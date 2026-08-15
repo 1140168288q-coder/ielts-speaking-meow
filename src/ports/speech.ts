@@ -1,3 +1,5 @@
+import type { AcousticSpeechMetrics } from '../domain/models'
+
 export type SpeechCapability = 'tts' | 'stt' | 'recording'
 
 export class SpeechCapabilityUnavailableError extends Error {
@@ -37,6 +39,25 @@ export interface TTSProvider {
   isAvailable(): boolean
   speak(request: TTSRequest): Promise<void>
   stop(): Promise<void>
+}
+
+/** 本机系统 TTS 的状态:引擎、英语语音包与实际可用性。 */
+export interface SystemTtsStatus {
+  available: boolean
+  /** 当前默认引擎名(如 com.google.android.tts);未知时为 null。 */
+  engine: string | null
+  /** 已安装的引擎列表(名称 + 显示名)。 */
+  engines: Array<{ name: string; label: string | null }>
+  /** 是否检测到可用的英语语音包(决定 en-US 播报能否出声)。 */
+  englishAvailable: boolean
+}
+
+/**
+ * 本机系统 TTS(Android 或浏览器)。设置页的「测试系统朗读」必须直接
+ * 调用它,不能走 AI 优先的 FallbackTTSProvider,否则测不出真实降级路径。
+ */
+export interface SystemTTSProvider extends TTSProvider {
+  getStatus(): Promise<SystemTtsStatus>
 }
 
 export interface STTRequest {
@@ -101,6 +122,12 @@ export interface RecordedAudioSTTRequest {
 export interface RecordedAudioSTTProvider {
   readonly id: string
   isConfigured(): boolean
+  /**
+   * 云端 STT 是否已确认可用。只有为 true 时才应跳过本地实时转写;
+   * 状态未知(isConfigured() 为 true 但本方法为 false)时应同时保留本地
+   * 实时转写作为云端失败时的回退。
+   */
+  isDefinitelyConfigured(): boolean
   transcribe(request: RecordedAudioSTTRequest): Promise<string>
 }
 
@@ -110,6 +137,14 @@ export interface AudioRecording {
   durationMs: number
   startedAt: number
   endedAt: number
+}
+
+export interface RecordedAudioAnalyzer {
+  /**
+   * Returns simple local timing evidence, never pronunciation or IELTS scores.
+   * Unsupported/undecodable audio resolves to null so saving can continue.
+   */
+  analyze(audio: Blob): Promise<AcousticSpeechMetrics | null>
 }
 
 export interface RecordingOptions {

@@ -128,7 +128,7 @@ export function ImportController({
     setProgress({
       stage: 'finding-questions',
       percent: null,
-      detail: '仅将提取后的文字发送给 Text AI；原文件和图片不会上传。',
+      detail: '仅将提取后的文字发送给 DeepSeek；原文件和图片不会上传。',
     })
     try {
       const organized = await organizer.extractQuestions({
@@ -136,6 +136,15 @@ export function ImportController({
         extractedText: draft.extraction.text,
       })
       if (token !== operation.current) return
+      // DeepSeek 失败或没整理出题目时,本地候选题必须原样保留
+      if (organized.length === 0) {
+        setFailure({
+          code: 'ai-failed',
+          detail: 'DeepSeek 没有整理出题目；本地候选题仍保留在预览中。',
+        })
+        setPhase('error')
+        return
+      }
       const nextCandidates = toViewCandidates(
         organized,
         existingQuestions,
@@ -148,7 +157,7 @@ export function ImportController({
       if (token !== operation.current) return
       setFailure({
         code: 'ai-failed',
-        detail: error instanceof Error ? error.message : 'Text AI 请求失败。',
+        detail: error instanceof Error ? error.message : 'DeepSeek 请求失败。',
       })
       setPhase('error')
     }

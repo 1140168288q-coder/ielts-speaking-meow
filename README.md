@@ -1,6 +1,6 @@
 # 雅思口语喵
 
-Android-first 的 IELTS Speaking 单题练习应用。V1.2 继续围绕同一条闭环开发：
+Android-first 的 IELTS Speaking 单题练习应用。V1.5（release）围绕同一条闭环：
 
 > 听题 → 第一次回答 → 录音 / 转写 / 本地分析 → 少量关键反馈 → 第二次回答 → 对比 → 保存表达
 
@@ -33,14 +33,25 @@ Android 16 / API 36 模拟器验收已经完成：除原有两次回答闭环外
 V1.2 新增（云端 Backend 化）：
 
 - 新增自建 Backend（Python + FastAPI，见 `backend/`），Android 客户端只调用自己的 Backend；
-- Text AI → DeepSeek，STT → 火山引擎「流式语音识别」（WebSocket 直传，无需公网地址，本地即可全链路），TTS → 火山引擎「语音合成 2.0」；
+- Text AI → DeepSeek，STT → 火山引擎「流式语音识别 2.0」（WebSocket 直传，无需公网地址，本地即可全链路），TTS → 火山引擎「语音合成 2.0」（默认 `zh_female_vv_uranus_bigtts`；控制台开通英语音色后可切换 `en_female_anna_mars_bigtts` 做考官式英文播报）；
 - 第三方密钥只保存在 Backend 环境变量（`backend/.env.example` 提供占位清单），不进入 APK、源码仓库或客户端配置；
-- 客户端移除普通用户的第三方 API Key 配置界面，设置页改为云端连接状态与本机能力测试；
+- 客户端移除普通用户的第三方 API Key 配置界面；设置页改为云端状态与本机能力测试；
 - 录音上传前在本机转为 16kHz WAV（火山流式 STT 要求 PCM16）；云端转写与 AI 语音失败时自动回退手动转写 / 系统 TTS；
+- Backend 地址可在 App「设置 → 云端服务」运行时配置；客户端不保存或发送 Backend 访问口令；
+- App 启动时自动拉取 `/health` 并缓存，三个 Backend provider 的配置状态由真实健康状态驱动：后端未配置 STT 时恢复本机实时转写，状态未知时云端与本地转写互为兜底；
 - 后端跑在家庭电脑上即可（手机与电脑同一 WiFi），部署服务器为可选进阶项；
 - `LLMProvider` / `RecordedAudioSTTProvider` / `TTSProvider` 端口保持不变，实现替换为 `Backend*Provider`。
 
 没有云端或云端不可用时，录音、回放、手动转写、本地分析、第二次回答、对比与保存仍可完成。
+
+V1.5 新增（可靠性与状态透明化）：
+
+- 正式构建内置并锁定 HTTPS Backend 地址（`VITE_LOCK_BACKEND_URL=true`），设置页只读；缺少或非 HTTPS 地址时构建直接失败；升级后自动清除旧设备保存的运行时地址；
+- `/health` 返回每个供应商的模型、资源 ID、音色与最近一次真实调用结果（verified / unverified / failed + 时间），并提供 `/health/verify` 做 DeepSeek / TTS 的真实小规模验证；设置页不再把“有密钥”显示成“已连接”；
+- 云端 TTS 状态未知（Backend 不可达）时立即使用系统 TTS，云端失败后 60 秒熔断；「测试系统朗读」直连 Android 系统 TTS，并检测引擎与英语语音包，缺失时明确提示而不是无声；
+- `/v1/tts` 支持 language / rate / pitch（映射火山 speed_ratio / pitch_ratio）；AI TTS 缓存键扩展为 text + provider + model + speaker + language + rate + pitch + voiceConfigVersion，换音色不再命中旧音频，升级时清理一次旧缓存；
+- 移除“进步”独立导航与 Dashboard（练习记录与个人语料全部保留，首页推荐与轻复习继续可用）；
+- 导入预览中“用 DeepSeek 智能整理”常驻可选，AI 失败或返回空结果时本地候选题不丢失。
 
 ## 技术方案
 
@@ -74,10 +85,18 @@ Capacitor 同步、Android 单元测试、Android Lint 和 Debug 打包：
 npm run android:build
 ```
 
+产出正式签名 Release 包（要求本机存在 `android/keystore.properties`，见
+`docs/android-acceptance-v1.2.md`）：
+
+```bash
+npm run android:release
+```
+
 APK 输出到：
 
 ```text
-artifacts/ielts-speaking-meow-v1.2-debug.apk
+artifacts/ielts-speaking-meow-v1.2-debug.apk    # 开发调试
+artifacts/ielts-speaking-meow-v1.2-release.apk  # 正式签名（v1.2 release）
 ```
 
 连接 Android 手机或启动模拟器后，可以额外运行设备端测试：
@@ -90,16 +109,19 @@ Android Studio 可以直接打开 `android/`。
 
 ## 安装到手机
 
-这是便于当前开发和后续能力接入的 Debug APK。把 APK 复制或发送到 Android
-手机，允许对应文件应用“安装未知应用”后即可安装。通过 USB 调试也可执行：
+正式包是 `artifacts/ielts-speaking-meow-v1.2-release.apk`。把 APK 复制或
+发送到 Android 手机，允许对应文件应用“安装未知应用”后即可安装。通过 USB
+调试也可执行：
 
 ```bash
-adb install -r artifacts/ielts-speaking-meow-v1.2-debug.apk
+adb install artifacts/ielts-speaking-meow-v1.2-release.apk
 ```
 
-同一开发机生成且签名一致时，`-r` 会保留本地练习和录音。卸载 App 会删除其
-本地私有数据，这是 `allowBackup=false` 的预期行为。正式分发前仍需配置独立的
-Release 签名；不要把 Debug APK 当作应用商店发布包。
+**注意**：Release 与早期 Debug 包签名不同，Android 不允许互相覆盖安装；
+从旧 Debug 包升级需先卸载（本地数据会清除），此后所有更新都用同一 Release
+签名，覆盖安装（`-r`）会保留练习、录音和表达。卸载 App 会删除其本地私有
+数据，这是 `allowBackup=false` 的预期行为。请备份
+`artifacts/ielts-speaking-meow-release.keystore` 与签名口令（均不入 git）。
 
 模拟器中的 Web Speech STT 可能因系统服务或网络不可用而失败。V1.0 已按产品
 规范保留原录音并提供手动转写；最终仍建议在一台实体 Android 手机上复测真实
@@ -110,8 +132,10 @@ Release 签名；不要把 Debug APK 当作应用商店发布包。
 ```text
 src/
   application/       核心训练写入顺序与流程服务
+  app/               组合根、设置/导入控制器
   data/              静态题库
   domain/            领域模型、本地分析、两次对比
+  features/          按功能拆分的 UI(practice 练习流、imports 导入、settings)
   infrastructure/    浏览器/Android 语音、Backend 客户端、IndexedDB
   ports/             LLM、TTS、STT、录音与存储边界
 android/              Capacitor Android 工程与本地 System TTS / OCR 插件

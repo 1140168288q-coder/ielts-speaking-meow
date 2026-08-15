@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeFormData } from '../../test/fixtures/fakeFormData'
+import { makeBackendHealth } from '../../test/fixtures/backendHealth'
 import { BackendClient } from './backendClient'
+import { BackendHealthCache } from './backendHealth'
 import { BackendSttProvider } from './backendSttProvider'
 
 beforeEach(() => {
@@ -74,8 +76,46 @@ describe('BackendSttProvider', () => {
     ).rejects.toMatchObject({ code: 'invalid-response' })
   })
 
-  it('is always configured (credentials live server-side)', () => {
+  it('is optimistic about remote STT without a health cache', () => {
     const { provider } = createProvider({})
     expect(provider.isConfigured()).toBe(true)
+    expect(provider.isDefinitelyConfigured()).toBe(true)
+  })
+
+  it('reflects the health cache state for remote STT decisions', async () => {
+    const client = new BackendClient({
+      baseUrl: 'http://backend.test',
+      isNative: () => false,
+      fetch: vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify(makeBackendHealth({
+            deepseek: true,
+            volc_stt: false,
+            volc_tts: true,
+          })),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    })
+    const health = new BackendHealthCache(client)
+    await health.refresh()
+
+    const provider = new BackendSttProvider(client, undefined, health)
+    expect(provider.isConfigured()).toBe(false)
+    expect(provider.isDefinitelyConfigured()).toBe(false)
+  })
+
+  it('keeps remote attempts enabled but not definite when the health is unknown', async () => {
+    const client = new BackendClient({
+      baseUrl: 'http://backend.test',
+      isNative: () => false,
+      fetch: vi.fn().mockRejectedValue(new TypeError('Failed to fetch')),
+    })
+    const health = new BackendHealthCache(client)
+    await health.refresh()
+
+    const provider = new BackendSttProvider(client, undefined, health)
+    expect(provider.isConfigured()).toBe(true)
+    expect(provider.isDefinitelyConfigured()).toBe(false)
   })
 })

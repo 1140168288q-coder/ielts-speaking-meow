@@ -5,7 +5,18 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'android', 'coverage'] },
+  {
+    ignores: [
+      'dist',
+      'android',
+      'coverage',
+      'backend/.venv',
+      '**/.pytest_cache',
+      'backend/.pytest_cache',
+      'backend/**/__pycache__',
+      'artifacts',
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
     files: ['**/*.{ts,tsx}'],

@@ -10,23 +10,34 @@
 import base64
 import json
 import logging
+import time
 
 import httpx
 
 from ..config import Settings
 from ..errors import BackendError, invalid_request, not_configured, provider_error
 from .http_client import raise_for_upstream
+from .verification import LastCallRecord
 
 logger = logging.getLogger(__name__)
 
 STREAM_END_CODE = 20000000
 MAX_TEXT_CHARACTERS = 2000
+# 火山 TTS 2.0 的 speed_ratio / pitch_ratio 允许范围
+_RATIO_MIN = 0.5
+_RATIO_MAX = 2.0
+VERIFY_TEXT = "Hello."
+
+
+def _clamp_ratio(value: float) -> float:
+    return max(_RATIO_MIN, min(_RATIO_MAX, value))
 
 
 class VolcengineTTSService:
     def __init__(self, client: httpx.AsyncClient, settings: Settings) -> None:
         self._client = client
         self._settings = settings
+        self.last_call = LastCallRecord()
 
     @property
     def is_configured(self) -> bool:
@@ -35,7 +46,15 @@ class VolcengineTTSService:
             or (self._settings.volc_app_id and self._settings.volc_access_token)
         )
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(
+        self,
+        text: str,
+        language: str | None = None,
+        rate: float | None = None,
+        pitch: float | None = None,
+    ) -> bytes:
+        """合成一段语音。language 保留兼容(2.0 自动识别中英);
+        rate/pitch 映射为火山 speed_ratio/pitch_ratio。"""
         if not self.is_configured:
             raise not_configured("火山引擎 TTS")
         text = text.strip()
@@ -43,6 +62,55 @@ class VolcengineTTSService:
             raise invalid_request("合成文本不能为空。")
         if len(text) > MAX_TEXT_CHARACTERS:
             raise invalid_request(f"合成文本过长(最多 {MAX_TEXT_CHARACTERS} 字符)。")
+        started = time.perf_counter()
+        try:
+            audio = await self._synthesize_checked(
+                text,
+                rate=rate,
+                pitch=pitch,
+                language=language,
+            )
+        except Exception as exc:  # noqa: BLE001 - 记录最近失败后按原样抛出
+            self.last_call.record(ok=False, message=str(exc))
+            raise
+        self.last_call.record(
+            ok=True,
+            latency_ms=round((time.perf_counter() - started) * 1000),
+            result=f"synthesized {len(audio)} bytes",
+        )
+        return audio
+
+    async def verify(self) -> dict:
+        """最小成本的显式验证:合成一句 "Hello.",结果写入 last_call。"""
+        if not self.is_configured:
+            return self.last_call.snapshot()
+        try:
+            await self.synthesize(VERIFY_TEXT)
+        except BackendError:
+            pass  # synthesize 已把失败写入 last_call
+        return self.last_call.snapshot()
+
+    async def _synthesize_checked(
+        self,
+        text: str,
+        *,
+        language: str | None,
+        rate: float | None,
+        pitch: float | None,
+    ) -> bytes:
+        del language  # TTS 2.0 自动识别中英文,不需要指定
+        req_params: dict = {
+            "text": text,
+            "speaker": self._settings.volc_tts_speaker,
+            "audio_params": {
+                "format": "mp3",
+                "sample_rate": 24000,
+            },
+        }
+        if rate is not None:
+            req_params["speed_ratio"] = _clamp_ratio(rate)
+        if pitch is not None:
+            req_params["pitch_ratio"] = _clamp_ratio(pitch)
 
         async with self._client.stream(
             "POST",
@@ -53,16 +121,7 @@ class VolcengineTTSService:
                 "Content-Type": "application/json",
                 "Connection": "keep-alive",
             },
-            json={
-                "req_params": {
-                    "text": text,
-                    "speaker": self._settings.volc_tts_speaker,
-                    "audio_params": {
-                        "format": "mp3",
-                        "sample_rate": 24000,
-                    },
-                }
-            },
+            json={"req_params": req_params},
         ) as response:
             await raise_for_upstream(response, "火山 TTS")
             audio = await self._collect_audio(response)

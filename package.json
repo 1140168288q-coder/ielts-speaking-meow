@@ -1,18 +1,21 @@
 {
   "name": "ielts-speaking-meow",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:backend": "backend\\.venv\\Scripts\\python.exe -m pytest -q -p no:cacheprovider -c backend/pytest.ini backend/tests",
     "test:watch": "vitest",
     "build": "npm run typecheck && vite build",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run test:backend && npm run build",
     "preview": "vite preview",
     "android:sync": "npm run build && cap sync android",
     "android:build": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/android-build.ps1",
+    "android:release": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/android-build.ps1 -Release",
     "android:test:device": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/android-build.ps1 -RunDeviceTests"
   },
   "dependencies": {

@@ -1,7 +1,7 @@
 """POST /v1/stt:上传 WAV → 火山流式语音识别(WebSocket 直传)→ 转写文本。
 
-流式识别不需要公网可拉取的音频地址,音频全程在内存中直传火山,
-识别完成后不落盘、无残留。
+流式识别不需要公网可拉取的音频地址。FastAPI multipart 解析可能使用短期
+spooled 临时文件；路由不创建持久文件，读取后只把受限字节流传给火山。
 """
 import io
 import logging

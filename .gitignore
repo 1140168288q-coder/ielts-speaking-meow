@@ -4,6 +4,8 @@ node_modules.previous/
 dist/
 .vite/
 coverage/
+.playwright-cli/
+**/.pytest_cache/
 *.log
 .idea/
 .vscode/
@@ -15,6 +17,7 @@ android/build/
 android/capacitor-cordova-android-plugins/build/
 *.jks
 *.keystore
+android/keystore.properties
 *.apk
 artifacts/*.wav
 artifacts/*.mp3

@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 FEEDBACK_SYSTEM = (
     "You are a concise IELTS speaking coach. Return JSON only. "
     "Never give an IELTS band score or pronunciation score. "
-    "Identify 1 to 3 high-impact, actionable issues. "
     "Prefer natural, speakable English and do not replace the learner "
     "with a full model answer."
 )
@@ -63,6 +62,26 @@ class AiFeedback(BaseModel):
     revisions: Revisions = Revisions()
 
 
+class FeedbackSummary(BaseModel):
+    """一行问题 + 一行建议,必须使用中文。"""
+
+    problem: str = Field(min_length=1, max_length=200)
+    suggestion: str = Field(min_length=1, max_length=200)
+
+
+class AnswerVersion(BaseModel):
+    """一个可试听的回答版本。text 正常语速朗读约 15-20 秒。"""
+
+    style: str = Field(min_length=1, max_length=40)
+    text: str = Field(min_length=1, max_length=1_500)
+    hint: str = Field(min_length=1, max_length=500)
+
+
+class FirstAttemptFeedback(BaseModel):
+    summary: FeedbackSummary
+    versions: list[AnswerVersion] = Field(min_length=3, max_length=3)
+
+
 class ImportQuestion(BaseModel):
     part: Literal[1, 2, 3]
     topic: str = Field(min_length=1, max_length=80)
@@ -90,30 +109,35 @@ class DeepSeekService:
             {
                 "task": "feedback-after-first-attempt",
                 "requiredShape": {
-                    "keyIssues": [
+                    "summary": {
+                        "problem": "用中文写一行，只指出这次回答最值得改的一个问题",
+                        "suggestion": "用中文写一行，给出针对这个问题的可执行建议",
+                    },
+                    "versions": [
                         {
-                            "category": "fluency | grammar | vocabulary | coherence",
-                            "kind": "focus | improvement | notice",
-                            "title": "short title",
-                            "observation": "what happened",
-                            "action": "one concrete action",
-                            "evidence": "short quote or null",
+                            "style": "简短的中文风格标签(如:基础稳妥/自然均衡/略加挑战)",
+                            "text": "英文回答文本,严格控制在40-55个单词(正常语速朗读约15-20秒)",
+                            "hint": "该版本的关键内容或关键句式提示(英文短语即可)",
                         }
                     ],
-                    "secondAttemptTips": ["maximum 3 short tips"],
-                    "revisions": {
-                        "minimalFix": "string or null",
-                        "naturalVersion": "string or null",
-                        "stretchVersion": "string or null",
-                    },
                 },
+                "rules": [
+                    "给出恰好3个版本,风格和难度略有差异,但都要贴近用户当前水平,不要明显超出",
+                    "每个版本的text必须严格控制在40-55个单词,正常语速朗读约15-20秒,不要更长",
+                    "每个版本的text必须保持用户原有想法,只修正语言表达",
+                    "如果用户原录音内容过短,在40-55个单词内适当补充;如果过长,简化为40-55个单词",
+                    "hint只写关键内容或关键句式,方便用户第二次回答时参考",
+                    "不要给IELTS分数或发音分数",
+                ],
                 "question": payload.get("question"),
                 "transcript": payload.get("transcript"),
                 "localMetrics": payload.get("metrics"),
             },
             ensure_ascii=False,
         )
-        return await self._complete_validated(FEEDBACK_SYSTEM, user, AiFeedback)
+        return await self._complete_validated(
+            FEEDBACK_SYSTEM, user, FirstAttemptFeedback
+        )
 
     async def compare_attempts(self, payload: dict) -> dict:
         user = json.dumps(

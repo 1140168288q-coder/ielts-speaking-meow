@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import {
   backendConfigSchema,
   type BackendConfig,
@@ -7,13 +8,15 @@ import type { BackendConfigStorage } from '../../ports/backend'
 /**
  * Backend 地址解析。构建期通过 VITE_BACKEND_URL 注入:
  * - Android 模拟器开发:默认 http://10.0.2.2:8000(宿主机的 localhost)
+ * - 网页开发(桌面浏览器直接打开):默认 http://127.0.0.1:8000(与后端同机)
  * - 正式构建:VITE_LOCK_BACKEND_URL=true 且 VITE_BACKEND_URL=https://...
  *   构建脚本会在缺少或非 HTTPS 地址时直接失败(见 vite.config.ts)。
  *
  * 正式构建锁定地址后,设置页只展示状态、不允许编辑;升级时旧版本
  * 保存在设备上的地址会被忽略并清除,不可能覆盖内置地址。
  */
-const DEFAULT_BACKEND_URL = 'http://10.0.2.2:8000'
+const ANDROID_EMULATOR_DEFAULT_BACKEND_URL = 'http://10.0.2.2:8000'
+const WEB_DEFAULT_BACKEND_URL = 'http://127.0.0.1:8000'
 
 /** 正式构建是否锁定 Backend 地址(设置页只读)。 */
 export function isBackendUrlLocked(): boolean {
@@ -41,7 +44,14 @@ export function normalizeBackendBaseUrl(value: string): string {
 
 export function resolveBackendUrl(): string {
   const configured = import.meta.env.VITE_BACKEND_URL as string | undefined
-  const resolved = normalizeBackendBaseUrl(configured ?? DEFAULT_BACKEND_URL)
+  const hasConfigured = (configured ?? '').trim().length > 0
+  const platformDefault =
+    Capacitor.getPlatform() === 'android'
+      ? ANDROID_EMULATOR_DEFAULT_BACKEND_URL
+      : WEB_DEFAULT_BACKEND_URL
+  const resolved = normalizeBackendBaseUrl(
+    hasConfigured ? (configured as string) : platformDefault,
+  )
   if (isBackendUrlLocked()) {
     assertLockedBackendUrl(resolved)
   }

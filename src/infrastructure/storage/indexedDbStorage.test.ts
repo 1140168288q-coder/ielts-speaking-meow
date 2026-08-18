@@ -48,6 +48,30 @@ afterEach(async () => {
 })
 
 describe('IndexedDbStorage', () => {
+  it('round-trips practice texts including blank lines', async () => {
+    const storage = createAdapter()
+
+    expect(await storage.getPracticeTexts()).toBeNull()
+
+    await storage.savePracticeTexts({
+      top: '口语目标分：7.0',
+      middle: '',
+      bottom: '请输入文本',
+    })
+    expect(await storage.getPracticeTexts()).toEqual({
+      top: '口语目标分：7.0',
+      middle: '',
+      bottom: '请输入文本',
+    })
+
+    const reopened = createAdapter()
+    expect(await reopened.getPracticeTexts()).toEqual({
+      top: '口语目标分：7.0',
+      middle: '',
+      bottom: '请输入文本',
+    })
+  })
+
   it('upserts sessions and expressions and restores them after reopening', async () => {
     const storage = createAdapter()
 

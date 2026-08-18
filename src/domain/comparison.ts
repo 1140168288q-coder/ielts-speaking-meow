@@ -3,6 +3,7 @@ import {
   attemptComparisonSchema,
   type ActionableFeedback,
   type AttemptComparison,
+  type FeedbackSummary,
   type MetricDelta,
   type SpeechMetrics,
 } from './models'
@@ -17,6 +18,67 @@ const evidenceForRepeatedWords = (metrics: SpeechMetrics) =>
   metrics.repeatedWords
     .map(({ word, count }) => `${word} ×${count + 1}`)
     .join(', ')
+
+/**
+ * 一行问题 + 一行建议的中文本地摘要。AI 不可用或未返回结果时的降级反馈,
+ * 只挑当前最值得改的一件高置信度的事。
+ */
+export const createLocalSummary = (metrics: SpeechMetrics): FeedbackSummary => {
+  if (metrics.wordCount === 0) {
+    return {
+      problem: '暂时没有可分析的转写文本。',
+      suggestion: '请先补充转写或重试转写，再查看反馈。',
+    }
+  }
+
+  if (metrics.fillerCount > 0) {
+    const sample = metrics.fillerWords
+      .slice(0, 2)
+      .map(({ phrase }) => `“${phrase}”`)
+      .join('、')
+    return {
+      problem: `回答中出现了 ${metrics.fillerCount} 次${sample}等口头填充词。`,
+      suggestion: '试着用短暂的停顿代替填充词，想好再开口。',
+    }
+  }
+
+  if (metrics.repeatedWordCount > 0) {
+    const sample = metrics.repeatedWords
+      .slice(0, 2)
+      .map(({ word }) => `“${word}”`)
+      .join('、')
+    return {
+      problem: `${sample}等单词出现了卡顿式重复。`,
+      suggestion: '说错时先停一下，再把当前短语完整说一遍。',
+    }
+  }
+
+  if ((metrics.acoustic?.longPauseCount ?? 0) > 0) {
+    return {
+      problem: `出现了约 ${metrics.acoustic?.longPauseCount ?? 0} 次 0.8 秒以上的长停顿。`,
+      suggestion: '每句话开口前先想好一个关键词，让停顿更短更自然。',
+    }
+  }
+
+  if (metrics.wordsPerMinute !== null && metrics.wordsPerMinute > 200) {
+    return {
+      problem: `语速约为 ${metrics.wordsPerMinute} 词/分钟，偏快。`,
+      suggestion: '回听录音，把语速放慢到容易听清的程度。',
+    }
+  }
+
+  if (metrics.wordsPerMinute !== null && metrics.wordsPerMinute < 80) {
+    return {
+      problem: `语速约为 ${metrics.wordsPerMinute} 词/分钟，偏慢。`,
+      suggestion: '回听录音，试着把语速提起来一些，让表达更连贯。',
+    }
+  }
+
+  return {
+    problem: '这次回答的语音指标比较平稳。',
+    suggestion: '选一个最想改进的点，带到第二次回答里。',
+  }
+}
 
 /** Returns no more than three concrete prompts for the next attempt. */
 export const createLocalFeedback = (

@@ -109,11 +109,41 @@ export const answerRevisionSchema = z
   })
   .strict()
 
+/** 一行问题 + 一行建议的中文反馈摘要。 */
+export const feedbackSummarySchema = z
+  .object({
+    problem: nonEmptyText(200),
+    suggestion: nonEmptyText(200),
+  })
+  .strict()
+
+/** AI 给出的一个可选回答版本(风格/难度略有差异)。 */
+export const answerVersionOptionSchema = z
+  .object({
+    style: nonEmptyText(40),
+    text: nonEmptyText(1_500),
+    hint: nonEmptyText(500),
+  })
+  .strict()
+
+/**
+ * 跟读复盘中的一条疑似发音问题。仅来自 STT 转写与范本的逐词比对,
+ * 不是发音评分或 ground truth。
+ */
+export const pronunciationIssueSchema = z
+  .object({
+    word: nonEmptyText(80),
+    heardAs: z.string().trim().max(80).nullable(),
+  })
+  .strict()
+
 export const aiFeedbackSchema = z
   .object({
-    keyIssues: actionableFeedbackListSchema,
-    secondAttemptTips: z.array(nonEmptyText(320)).max(3),
-    revisions: answerRevisionSchema,
+    keyIssues: actionableFeedbackListSchema.optional(),
+    secondAttemptTips: z.array(nonEmptyText(320)).max(3).optional(),
+    revisions: answerRevisionSchema.optional(),
+    summary: feedbackSummarySchema.optional(),
+    versions: z.array(answerVersionOptionSchema).max(3).optional(),
   })
   .strict()
 
@@ -121,6 +151,10 @@ export type FeedbackCategory = z.infer<typeof feedbackCategorySchema>
 export type FeedbackKind = z.infer<typeof feedbackKindSchema>
 export type ActionableFeedback = z.infer<typeof actionableFeedbackSchema>
 export type AiFeedback = z.infer<typeof aiFeedbackSchema>
+export type FeedbackSummary = z.infer<typeof feedbackSummarySchema>
+export type AnswerVersionOption = z.infer<typeof answerVersionOptionSchema>
+export type PronunciationIssue = z.infer<typeof pronunciationIssueSchema>
+export type ReadAloudRecord = z.infer<typeof readAloudRecordSchema>
 
 export const acousticSpeechMetricsSchema = z
   .object({
@@ -203,6 +237,15 @@ export type Transcript = z.infer<typeof transcriptSchema>
 export type AudioAsset = z.infer<typeof audioAssetSchema>
 export type PracticeAttempt = z.infer<typeof practiceAttemptSchema>
 
+export const readAloudRecordSchema = z
+  .object({
+    audio: audioAssetSchema,
+    transcript: transcriptSchema,
+    targetVersionIndex: z.number().int().min(0).max(2),
+    issues: z.array(pronunciationIssueSchema).max(30),
+  })
+  .strict()
+
 export const metricDeltaSchema = z
   .object({
     first: z.number().finite().nonnegative(),
@@ -245,6 +288,8 @@ export const trainingSessionSchema = z
     aiFeedback: aiFeedbackSchema.nullable(),
     aiComparison: aiFeedbackSchema.nullable().optional(),
     comparison: attemptComparisonSchema.nullable(),
+    selectedVersionIndex: z.number().int().min(0).max(2).nullable().optional(),
+    readAloud: readAloudRecordSchema.nullable().optional(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
   })
@@ -284,3 +329,20 @@ export const savedExpressionSchema = z
   .strict()
 
 export type SavedExpression = z.infer<typeof savedExpressionSchema>
+
+/** 练习页顶部三行自定义文字,任意一行均可留白。 */
+export const practiceTextsSchema = z
+  .object({
+    top: z.string().trim().max(200),
+    middle: z.string().trim().max(200),
+    bottom: z.string().trim().max(200),
+  })
+  .strict()
+
+export type PracticeTexts = z.infer<typeof practiceTextsSchema>
+
+export const DEFAULT_PRACTICE_TEXTS: PracticeTexts = {
+  top: '口语目标分：6.0',
+  middle: '旅途的意义在于旅途本身',
+  bottom: '请输入文本',
+}

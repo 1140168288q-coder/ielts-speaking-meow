@@ -29,8 +29,8 @@ export const audioExtension = (mimeType: string) => {
 export const statusLabel: Record<TrainingSession['status'], string> = {
   'first-ready': '等待第一次回答',
   'first-review': '查看第一次反馈',
-  'feedback-ready': '查看反馈',
+  'feedback-ready': '选择建议版本',
   'second-ready': '等待第二次回答',
-  'comparison-ready': '查看两次对比',
+  'comparison-ready': '修改并收录第二次回答',
   completed: '已完成',
 }

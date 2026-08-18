@@ -1,4 +1,8 @@
-import type { SavedExpression, TrainingSession } from '../domain/models'
+import type {
+  PracticeTexts,
+  SavedExpression,
+  TrainingSession,
+} from '../domain/models'
 
 /**
  * Durable, non-secret application data.
@@ -15,6 +19,10 @@ export interface LocalStorage {
   getExpression(expressionId: string): Promise<SavedExpression | null>
   listExpressions(): Promise<SavedExpression[]>
   deleteExpression(expressionId: string): Promise<void>
+
+  /** 练习页顶部三行自定义文字;未保存过时返回 null(使用默认值)。 */
+  getPracticeTexts(): Promise<PracticeTexts | null>
+  savePracticeTexts(texts: PracticeTexts): Promise<void>
 }
 
 /**

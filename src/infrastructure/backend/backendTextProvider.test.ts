@@ -22,6 +22,27 @@ const VALID_FEEDBACK = {
     naturalVersion: 'I usually read novels.',
     stretchVersion: null,
   },
+  summary: {
+    problem: '回答中长停顿较多。',
+    suggestion: '用连接短语把句子串起来。',
+  },
+  versions: [
+    {
+      style: '基础稳妥',
+      text: 'I like reading books in my free time because they help me relax.',
+      hint: 'opening: I like ... because ...',
+    },
+    {
+      style: '自然均衡',
+      text: 'In my free time, I enjoy reading books since they let me unwind.',
+      hint: 'opening: In my free time, I enjoy ...',
+    },
+    {
+      style: '略加挑战',
+      text: 'Reading is my favourite way to relax and learn something new.',
+      hint: '... is my favourite way to ...',
+    },
+  ],
 }
 
 function createProvider(responseBody: unknown, status = 200): BackendTextProvider {
@@ -99,8 +120,9 @@ describe('BackendTextProvider', () => {
   it('returns validated feedback for getFeedback', async () => {
     const provider = createProvider(VALID_FEEDBACK)
     const feedback = await provider.getFeedback(feedbackRequest())
-    expect(feedback.keyIssues).toHaveLength(1)
-    expect(feedback.keyIssues[0]?.category).toBe('fluency')
+    expect(feedback.summary?.problem).toBe('回答中长停顿较多。')
+    expect(feedback.summary?.suggestion).toBe('用连接短语把句子串起来。')
+    expect(feedback.versions).toHaveLength(3)
   })
 
   it('rejects malformed feedback shapes', async () => {
@@ -127,7 +149,7 @@ describe('BackendTextProvider', () => {
         feedback: [],
       },
     })
-    expect(result.keyIssues).toHaveLength(1)
+    expect(result.keyIssues ?? []).toHaveLength(1)
   })
 
   it('maps organized questions into import candidates', async () => {

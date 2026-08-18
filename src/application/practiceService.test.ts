@@ -1,5 +1,6 @@
 import type {
   AiFeedback,
+  PracticeTexts,
   SavedExpression,
   TrainingSession,
 } from '../domain/models'
@@ -26,6 +27,7 @@ class MemoryPersistence implements LocalStorage, AudioStorage {
   readonly deletedAudioIds: string[] = []
   failNextSessionWrite: Error | null = null
   failNextAudioWrite: Error | null = null
+  texts: PracticeTexts | null = null
 
   constructor(private readonly backing: MemoryBacking = createBacking()) {}
 
@@ -81,6 +83,15 @@ class MemoryPersistence implements LocalStorage, AudioStorage {
   deleteExpression(expressionId: string): Promise<void> {
     this.operations.push(`expression:delete:${expressionId}`)
     this.backing.expressions.delete(expressionId)
+    return Promise.resolve()
+  }
+
+  getPracticeTexts(): Promise<PracticeTexts | null> {
+    return Promise.resolve(this.texts)
+  }
+
+  savePracticeTexts(texts: PracticeTexts): Promise<void> {
+    this.texts = texts
     return Promise.resolve()
   }
 
@@ -145,17 +156,31 @@ describe('PracticeService durability and offline flow', () => {
     const persistence = new MemoryPersistence()
     const service = createService(persistence, 'expression')
     const session = await service.createSession('p1-home-001')
-    const saved = await service.saveExpression(
+    await service.saveAttempt(
+      session.id,
+      1,
+      recording('first original recording'),
+      { status: 'ready', text: 'I like reading at home.', source: 'stt' },
+    )
+    await service.saveAttempt(
+      session.id,
+      2,
+      recording('second original recording'),
+      { status: 'ready', text: 'It helps me relax.', source: 'stt' },
+    )
+    const saved = await service.submitSecondAnswerToCorpus(
       session.id,
       'It helps me relax.',
       'Home',
-      1,
     )
 
     expect(saved.expression).toMatchObject({
       reviewCount: 0,
       lastReviewedAt: null,
       updatedAt: NOW.toISOString(),
+      text: 'It helps me relax.',
+      topic: 'Home',
+      sourceAttempt: 2,
     })
 
     const edited = await service.updateExpression(saved.expression.id, {
@@ -366,11 +391,10 @@ describe('PracticeService durability and offline flow', () => {
     })
     expect(afterSecond.comparison?.repeatedWordCount?.delta).toBe(-1)
 
-    const completed = await service.saveExpression(
+    const completed = await service.submitSecondAnswerToCorpus(
       session.id,
       'It helps me unwind after a busy day.',
       'Home',
-      2,
     )
     expect(completed.session.status).toBe('completed')
 
@@ -669,5 +693,218 @@ describe('PracticeService deferred STT and AI enrichment', () => {
     const audioId = restored?.attempts[0]?.audio.id
     expect(await persistence.hasAudio(audioId ?? '')).toBe(true)
     expect(persistence.deletedAudioIds).toEqual([])
+  })
+})
+
+describe('PracticeService version selection and read-aloud flow', () => {
+  const versionFeedback: AiFeedback = {
+    summary: { problem: '填充词较多。', suggestion: '用停顿代替填充词。' },
+    versions: [
+      {
+        style: '基础稳妥',
+        text: 'I like reading at home because it helps me relax.',
+        hint: 'opening: I like ... because ...',
+      },
+      {
+        style: '自然均衡',
+        text: 'In my free time I enjoy reading since it helps me unwind.',
+        hint: 'opening: In my free time ...',
+      },
+      {
+        style: '略加挑战',
+        text: 'Reading is my favourite way to relax and broaden my view.',
+        hint: '... is my favourite way to ...',
+      },
+    ],
+  }
+
+  const sessionWithFirstAttempt = async (
+    service: PracticeService,
+    text = 'I like reading at home.',
+  ) => {
+    const session = await service.createSession('p1-home-001')
+    await service.saveAttempt(
+      session.id,
+      1,
+      recording('first original recording'),
+      { status: 'ready', text, source: 'stt' },
+    )
+    return service.applyAiFeedback(session.id, versionFeedback)
+  }
+
+  it('selects a version and rejects an out-of-range index', async () => {
+    const service = createService(new MemoryPersistence(), 'version')
+    const enriched = await sessionWithFirstAttempt(service)
+
+    const selected = await service.selectVersion(enriched.id, 1)
+    expect(selected.selectedVersionIndex).toBe(1)
+
+    await expect(service.selectVersion(enriched.id, 5)).rejects.toThrow(
+      '所选回答版本不存在',
+    )
+  })
+
+  it('saves a read-aloud and computes pronunciation issues from the transcript', async () => {
+    const persistence = new MemoryPersistence()
+    const service = createService(persistence, 'read-aloud')
+    const enriched = await sessionWithFirstAttempt(service)
+    const selected = await service.selectVersion(enriched.id, 0)
+
+    const saved = await service.saveReadAloud(
+      selected.id,
+      recording('read-aloud original recording'),
+      {
+        status: 'ready',
+        text: 'I like read at home.',
+        source: 'stt',
+      },
+    )
+
+    expect(saved.readAloud?.targetVersionIndex).toBe(0)
+    expect(saved.readAloud?.transcript).toMatchObject({
+      status: 'ready',
+      text: 'I like read at home.',
+      source: 'stt',
+    })
+    const issueWords = saved.readAloud?.issues.map((issue) => issue.word) ?? []
+    expect(issueWords).toContain('reading')
+    expect(
+      saved.readAloud?.issues.find((issue) => issue.word === 'reading')
+        ?.heardAs,
+    ).toBe('read')
+    expect(await persistence.hasAudio(saved.readAloud?.audio.id ?? '')).toBe(
+      true,
+    )
+    expect(persistence.deletedAudioIds).toEqual([])
+  })
+
+  it('re-diffs issues when a remote transcript arrives after the recording', async () => {
+    const service = createService(new MemoryPersistence(), 'read-aloud-remote')
+    const enriched = await sessionWithFirstAttempt(service)
+    const selected = await service.selectVersion(enriched.id, 0)
+
+    const pending = await service.saveReadAloud(
+      selected.id,
+      recording('read-aloud before remote STT'),
+      { status: 'pending', text: '', source: null },
+    )
+    expect(pending.readAloud?.issues).toEqual([])
+
+    const transcribed = await service.applyReadAloudTranscript(
+      selected.id,
+      'I like reading at home because it helps me relax.',
+    )
+    expect(transcribed.readAloud?.transcript.status).toBe('ready')
+    expect(transcribed.readAloud?.issues).toEqual([])
+  })
+
+  it('keeps the read-aloud audio when transcription fails', async () => {
+    const persistence = new MemoryPersistence()
+    const service = createService(persistence, 'read-aloud-failed')
+    const enriched = await sessionWithFirstAttempt(service)
+    const selected = await service.selectVersion(enriched.id, 2)
+    const saved = await service.saveReadAloud(
+      selected.id,
+      recording('read-aloud kept after STT failure'),
+      { status: 'pending', text: '', source: null },
+    )
+
+    const failed = await service.markReadAloudTranscriptionFailed(
+      selected.id,
+      'remote-stt-failed',
+    )
+    expect(failed.readAloud?.transcript.status).toBe('failed')
+    expect(failed.readAloud?.issues).toEqual([])
+    expect(await persistence.hasAudio(saved.readAloud?.audio.id ?? '')).toBe(
+      true,
+    )
+    expect(persistence.deletedAudioIds).toEqual([])
+  })
+
+  it('clears the chosen version and read-aloud when the first transcript changes', async () => {
+    const service = createService(new MemoryPersistence(), 'reset-on-edit')
+    const enriched = await sessionWithFirstAttempt(service)
+    const selected = await service.selectVersion(enriched.id, 0)
+    const withReadAloud = await service.saveReadAloud(
+      selected.id,
+      recording('read-aloud before transcript edit'),
+      { status: 'ready', text: 'I like reading at home.', source: 'stt' },
+    )
+
+    const edited = await service.updateTranscript(
+      withReadAloud.id,
+      1,
+      'I like reading at home because it helps me relax.',
+    )
+    expect(edited.aiFeedback).toBeNull()
+    expect(edited.selectedVersionIndex).toBeNull()
+    expect(edited.readAloud).toBeNull()
+  })
+})
+
+describe('PracticeService second answer corpus submission', () => {
+  it('updates the second transcript, saves the corpus entry and completes the session', async () => {
+    const persistence = new MemoryPersistence()
+    const service = createService(persistence, 'corpus')
+    const session = await service.createSession('p1-home-001')
+    await service.saveAttempt(
+      session.id,
+      1,
+      recording('first original recording'),
+      { status: 'ready', text: 'I like reading.', source: 'stt' },
+    )
+    const withSecond = await service.saveAttempt(
+      session.id,
+      2,
+      recording('second original recording'),
+      { status: 'ready', text: 'I like reading because it help me relax.', source: 'stt' },
+    )
+    const audioId = withSecond.attempts.find((item) => item.attemptNumber === 2)
+      ?.audio.id
+
+    const result = await service.submitSecondAnswerToCorpus(
+      session.id,
+      'I like reading because it helps me relax.',
+      'Home',
+    )
+
+    expect(result.session.status).toBe('completed')
+    expect(
+      result.session.attempts.find((item) => item.attemptNumber === 2)
+        ?.transcript.text,
+    ).toBe('I like reading because it helps me relax.')
+    expect(result.expression).toMatchObject({
+      text: 'I like reading because it helps me relax.',
+      topic: 'Home',
+      sourceAttempt: 2,
+    })
+    expect(await service.listExpressions()).toEqual([result.expression])
+    expect(await persistence.hasAudio(audioId ?? '')).toBe(true)
+    expect(persistence.deletedAudioIds).toEqual([])
+  })
+
+  it('rejects an empty corpus submission without touching the session', async () => {
+    const service = createService(new MemoryPersistence(), 'corpus-empty')
+    const session = await service.createSession('p1-home-001')
+    await service.saveAttempt(
+      session.id,
+      1,
+      recording('first original recording'),
+      { status: 'ready', text: 'I like reading.', source: 'stt' },
+    )
+    await service.saveAttempt(
+      session.id,
+      2,
+      recording('second original recording'),
+      { status: 'ready', text: 'Reading is my hobby.', source: 'stt' },
+    )
+
+    await expect(
+      service.submitSecondAnswerToCorpus(session.id, '   ', 'Home'),
+    ).rejects.toThrow('请先填写第二次回答的文本。')
+    expect(await service.listExpressions()).toEqual([])
+    expect((await service.getSession(session.id))?.status).toBe(
+      'comparison-ready',
+    )
   })
 })

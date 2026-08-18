@@ -2,12 +2,14 @@ import {
   backendConfigSchema,
   importedQuestionRecordSchema,
   importSourceSchema,
+  practiceTextsSchema,
   savedExpressionSchema,
   trainingSessionSchema,
   ttsCacheEntrySchema,
   type BackendConfig,
   type ImportedQuestionRecord,
   type ImportSource,
+  type PracticeTexts,
   type SavedExpression,
   type TrainingSession,
   type TtsCacheEntry,
@@ -134,6 +136,26 @@ export class IndexedDbStorage
   async deleteExpression(expressionId: string): Promise<void> {
     assertStorageKey(expressionId, 'Expression')
     await this.delete(STORES.expressions, expressionId)
+  }
+
+  async getPracticeTexts(): Promise<PracticeTexts | null> {
+    const record = await this.get<unknown>(STORES.appMeta, 'practiceTexts')
+    if (record === null || typeof record !== 'object') {
+      return null
+    }
+    // appMeta 记录自带 keyPath 的 id 字段,解析前剥离,避免 strict schema 拒绝。
+    const stored = record as Record<string, unknown>
+    const parsed = practiceTextsSchema.safeParse({
+      top: stored.top,
+      middle: stored.middle,
+      bottom: stored.bottom,
+    })
+    return parsed.success ? parsed.data : null
+  }
+
+  async savePracticeTexts(texts: PracticeTexts): Promise<void> {
+    const parsed = practiceTextsSchema.parse(texts)
+    await this.put(STORES.appMeta, { id: 'practiceTexts', ...parsed })
   }
 
   async saveAudio(audioId: string, audio: Blob): Promise<void> {

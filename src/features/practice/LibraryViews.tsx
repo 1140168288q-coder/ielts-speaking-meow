@@ -213,7 +213,7 @@ export function ExpressionLibrary({
                     已跟读 {item.reviewCount ?? 0} 次{item.lastReviewedAt ? ` · 最近 ${formatDate(item.lastReviewedAt)}` : ''}
                   </small>
                   <div className="expression-item-actions">
-                    <button type="button" onClick={() => void speak(item.text)}>▶ 播放</button>
+                    <button type="button" onClick={() => void speak(item.text)}>▶ 试听</button>
                     <button type="button" disabled={busyId === item.id} onClick={() => markReviewed(item)}>✓ 已跟读</button>
                     <button type="button" onClick={() => onPractice(item.questionId)}>用原题再练</button>
                     <button type="button" onClick={() => beginEdit(item)}>编辑</button>

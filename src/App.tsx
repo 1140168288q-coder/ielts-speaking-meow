@@ -19,10 +19,12 @@ import {
   statusLabel,
 } from './features/practice/format'
 import { questionBank } from './data/questions'
-import type {
-  Question,
-  SavedExpression,
-  TrainingSession,
+import {
+  DEFAULT_PRACTICE_TEXTS,
+  type PracticeTexts,
+  type Question,
+  type SavedExpression,
+  type TrainingSession,
 } from './domain/models'
 import { recommendQuestion } from './domain/progress'
 import type { ImportedQuestionRecord } from './domain/imports'
@@ -102,6 +104,10 @@ export function App() {
   const [storageError, setStorageError] = useState<string | null>(null)
   const [navigationNotice, setNavigationNotice] = useState<string | null>(null)
   const [practiceExitGuardActive, setPracticeExitGuardActive] = useState(false)
+  const [practiceTexts, setPracticeTexts] = useState<PracticeTexts>(
+    DEFAULT_PRACTICE_TEXTS,
+  )
+  const [apiConnected, setApiConnected] = useState(false)
 
   const refreshLibrary = useCallback(async () => {
     const [nextSessions, nextExpressions, nextImportedQuestions] = await Promise.all([
@@ -119,6 +125,10 @@ export function App() {
     const load = async () => {
       try {
         await runtime.initialize()
+        const storedTexts = await runtime.storage.getPracticeTexts()
+        if (active && storedTexts !== null) {
+          setPracticeTexts(storedTexts)
+        }
         await refreshLibrary()
       } catch (error) {
         if (active) {
@@ -141,6 +151,23 @@ export function App() {
       void runtime.storage.close()
     }
   }, [refreshLibrary, runtime])
+
+  // 右上角 API 状态由 /health 真实可达性驱动,定期重新检查保持新鲜。
+  useEffect(() => {
+    const check = () => {
+      void runtime.healthCache.refresh().then((snapshot) => {
+        setApiConnected(snapshot.health !== null)
+      })
+    }
+    check()
+    const interval = window.setInterval(check, 15_000)
+    return () => window.clearInterval(interval)
+  }, [runtime.healthCache])
+
+  const updatePracticeTexts = (texts: PracticeTexts) => {
+    setPracticeTexts(texts)
+    void runtime.storage.savePracticeTexts(texts).catch(() => undefined)
+  }
 
   const openSession = (nextSession: TrainingSession) => {
     setPracticeExitGuardActive(false)
@@ -313,7 +340,9 @@ export function App() {
             <small>两次开口，看见进步</small>
           </span>
         </button>
-        <span className="offline-badge">本地优先</span>
+        <span className={apiConnected ? 'api-badge ok' : 'api-badge down'}>
+          {apiConnected ? 'API连接成功' : 'API未连接'}
+        </span>
       </header>
 
       {storageError ? (
@@ -341,6 +370,8 @@ export function App() {
           <QuestionLibrary
             questions={allQuestions}
             sessions={sessions}
+            practiceTexts={practiceTexts}
+            onPracticeTextsChange={updatePracticeTexts}
             onStart={(question) => void startQuestion(question)}
             onResume={openSession}
             onImport={() => navigateSafely('imports')}
@@ -465,12 +496,16 @@ function BottomNavigation({
 function QuestionLibrary({
   questions,
   sessions,
+  practiceTexts,
+  onPracticeTextsChange,
   onStart,
   onResume,
   onImport,
 }: {
   questions: Question[]
   sessions: TrainingSession[]
+  practiceTexts: PracticeTexts
+  onPracticeTextsChange: (texts: PracticeTexts) => void
   onStart: (question: Question) => void
   onResume: (session: TrainingSession) => void
   onImport: () => void
@@ -491,13 +526,38 @@ function QuestionLibrary({
     }
   }
 
+  const setText = (field: keyof PracticeTexts, value: string) => {
+    onPracticeTextsChange({ ...practiceTexts, [field]: value })
+  }
+
   return (
     <section className="page-stack">
       <div className="hero-card">
-        <div>
-          <p className="eyebrow">今天就练一道</p>
-          <h1>先自然回答，再带着重点说得更好。</h1>
-          <p>不打虚假的总分，只给这一次最值得改的 2–3 件事。</p>
+        <div className="hero-lines">
+          <input
+            className="hero-line hero-line-top"
+            type="text"
+            value={practiceTexts.top}
+            placeholder={DEFAULT_PRACTICE_TEXTS.top}
+            maxLength={200}
+            onChange={(event) => setText('top', event.target.value)}
+          />
+          <input
+            className="hero-line hero-line-middle"
+            type="text"
+            value={practiceTexts.middle}
+            placeholder={DEFAULT_PRACTICE_TEXTS.middle}
+            maxLength={200}
+            onChange={(event) => setText('middle', event.target.value)}
+          />
+          <input
+            className="hero-line hero-line-bottom"
+            type="text"
+            value={practiceTexts.bottom}
+            placeholder={DEFAULT_PRACTICE_TEXTS.bottom}
+            maxLength={200}
+            onChange={(event) => setText('bottom', event.target.value)}
+          />
         </div>
         <div className="hero-cat" aria-hidden="true">
           <span>◕ᴗ◕</span>

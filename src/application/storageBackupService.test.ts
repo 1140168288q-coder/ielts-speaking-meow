@@ -1,4 +1,8 @@
-import type { SavedExpression, TrainingSession } from '../domain/models'
+import type {
+  PracticeTexts,
+  SavedExpression,
+  TrainingSession,
+} from '../domain/models'
 import type { AudioStorage, LocalStorage } from '../ports/storage'
 import { StorageBackupService } from './storageBackupService'
 
@@ -32,6 +36,12 @@ class MemoryStorage implements LocalStorage, AudioStorage {
 
   deleteExpression(expressionId: string): Promise<void> {
     this.expressions.delete(expressionId)
+    return Promise.resolve()
+  }
+  getPracticeTexts(): Promise<PracticeTexts | null> {
+    return Promise.resolve(null)
+  }
+  savePracticeTexts(): Promise<void> {
     return Promise.resolve()
   }
   saveAudio(id: string, audio: Blob): Promise<void> {

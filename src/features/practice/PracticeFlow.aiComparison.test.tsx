@@ -1,13 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { PracticeService } from '../../application/practiceService'
 import { questionBank } from '../../data/questions'
-import {
-  compareAttempts,
-  type AiFeedback,
-  type PracticeAttempt,
-  type SpeechMetrics,
-  type TrainingSession,
+import type {
+  AiFeedback,
+  PracticeAttempt,
+  TrainingSession,
 } from '../../domain'
 import type { LLMProvider } from '../../ports/ai'
 import type {
@@ -19,21 +17,28 @@ import { PracticeFlow } from './PracticeFlow'
 
 const NOW = '2026-08-14T08:00:00.000Z'
 
-function metrics(fillerCount: number): SpeechMetrics {
-  return {
-    durationMs: 30_000,
-    wordCount: 8,
-    wordsPerMinute: 16,
-    fillerWords: fillerCount > 0 ? [{ phrase: 'um', count: fillerCount }] : [],
-    fillerCount,
-    repeatedWords: [],
-    repeatedWordCount: 0,
-    acoustic: null,
-    caveats: ['Approximate transcript metrics.'],
-  }
+const versionFeedback: AiFeedback = {
+  summary: { problem: '回答中填充词较多。', suggestion: '用短暂停顿代替填充词。' },
+  versions: [
+    {
+      style: '基础稳妥',
+      text: 'I like reading at home because it helps me relax.',
+      hint: 'opening: I like ... because ...',
+    },
+    {
+      style: '自然均衡',
+      text: 'In my free time I enjoy reading since it helps me unwind.',
+      hint: 'opening: In my free time ...',
+    },
+    {
+      style: '略加挑战',
+      text: 'Reading is my favourite way to relax and broaden my view.',
+      hint: '... is my favourite way to ...',
+    },
+  ],
 }
 
-function attempt(number: 1 | 2, text: string, value: SpeechMetrics): PracticeAttempt {
+function attempt(number: 1 | 2, text: string): PracticeAttempt {
   return {
     id: `attempt-${number}`,
     attemptNumber: number,
@@ -41,7 +46,7 @@ function attempt(number: 1 | 2, text: string, value: SpeechMetrics): PracticeAtt
       id: `audio-${number}`,
       relativePath: `indexeddb://audio/audio-${number}`,
       mimeType: 'audio/webm',
-      durationMs: value.durationMs,
+      durationMs: 30_000,
       createdAt: NOW,
     },
     transcript: {
@@ -52,74 +57,157 @@ function attempt(number: 1 | 2, text: string, value: SpeechMetrics): PracticeAtt
       errorCode: null,
       updatedAt: NOW,
     },
-    metrics: value,
+    metrics: {
+      durationMs: 30_000,
+      wordCount: 8,
+      wordsPerMinute: 16,
+      fillerWords: text.toLocaleLowerCase().includes('um')
+        ? [{ phrase: 'um', count: 1 }]
+        : [],
+      fillerCount: text.toLocaleLowerCase().includes('um') ? 1 : 0,
+      repeatedWords: [],
+      repeatedWordCount: 0,
+      caveats: ['Approximate transcript metrics.'],
+    },
     createdAt: NOW,
     updatedAt: NOW,
   }
 }
 
-const first = attempt(1, 'Um I like reading at home.', metrics(1))
-const second = attempt(2, 'I like reading at home because it helps me relax.', metrics(0))
-const session: TrainingSession = {
-  id: 'comparison-session',
-  questionId: 'p1-home-001',
-  status: 'comparison-ready',
-  attempts: [first, second],
-  localFeedback: [],
-  aiFeedback: null,
-  aiComparison: null,
-  comparison: compareAttempts(first.metrics, second.metrics),
-  createdAt: NOW,
-  updatedAt: NOW,
+function makeSession(overrides: Partial<TrainingSession>): TrainingSession {
+  return {
+    id: 'feedback-session',
+    questionId: 'p1-home-001',
+    status: 'feedback-ready',
+    attempts: [attempt(1, 'Um I like reading at home.')],
+    localFeedback: [],
+    aiFeedback: versionFeedback,
+    comparison: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides,
+  }
 }
 
-const feedback: AiFeedback = {
-  keyIssues: [
-    {
-      category: 'fluency',
-      kind: 'improvement',
-      title: 'More direct opening',
-      observation: 'The second answer removes the opening filler.',
-      action: 'Keep starting with the main idea.',
-      evidence: 'I like reading',
-    },
-  ],
-  secondAttemptTips: ['Keep starting with the main idea.'],
-  revisions: {
-    minimalFix: 'I like reading at home because it helps me relax.',
-    naturalVersion: null,
-    stretchVersion: null,
-  },
+function makeAudioFocus(): AudioFocus {
+  return {
+    state: 'idle',
+    subscribe: () => () => undefined,
+    speak: vi.fn(() => Promise.resolve()),
+    stopTTS: vi.fn(() => Promise.resolve()),
+    stopAllPlayback: vi.fn(() => Promise.resolve()),
+    cancelRecording: vi.fn(() => Promise.resolve()),
+    startRecording: vi.fn(() => Promise.resolve()),
+    stopRecording: vi.fn(() =>
+      Promise.resolve({
+        blob: new Blob(['audio'], { type: 'audio/webm' }),
+        mimeType: 'audio/webm',
+        durationMs: 4_000,
+        startedAt: 1_000,
+        endedAt: 5_000,
+      }),
+    ),
+    playRecording: vi.fn(() => Promise.resolve()),
+    stopRecordingPlayback: vi.fn(() => Promise.resolve()),
+  } as unknown as AudioFocus
 }
 
-describe('PracticeFlow AI comparison', () => {
-  it('requests and stores a transcript-snapshot-safe comparison', async () => {
+const unavailableStt: STTProvider = {
+  id: 'unavailable-stt',
+  isAvailable: () => false,
+  start: () => Promise.reject(new Error('unavailable')),
+}
+
+const unavailableRemoteStt: RecordedAudioSTTProvider = {
+  id: 'unavailable-remote-stt',
+  isConfigured: () => false,
+  isDefinitelyConfigured: () => false,
+  transcribe: () => Promise.reject(new Error('unavailable')),
+}
+
+const configuredTextAi: LLMProvider = {
+  id: 'fake-text-ai',
+  isConfigured: () => true,
+  getFeedback: vi.fn(),
+  compareAttempts: vi.fn(),
+}
+
+function renderFlow({
+  session,
+  service = {} as unknown as PracticeService,
+  textAi = configuredTextAi,
+}: {
+  session: TrainingSession
+  service?: PracticeService
+  textAi?: LLMProvider
+}) {
+  return render(
+    <PracticeFlow
+      question={questionBank[0]!}
+      session={session}
+      service={service}
+      audioFocus={makeAudioFocus()}
+      stt={unavailableStt}
+      remoteStt={unavailableRemoteStt}
+      textAi={textAi}
+      onExitGuardChange={vi.fn()}
+      onChange={vi.fn()}
+      onBack={vi.fn()}
+    />,
+  )
+}
+
+describe('PracticeFlow first-attempt feedback', () => {
+  it('shows one Chinese problem line and one suggestion line from the AI summary', () => {
+    renderFlow({ session: makeSession({}) })
+
+    expect(
+      screen.getByText('回答中填充词较多。'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('用短暂停顿代替填充词。'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('问题')).toBeInTheDocument()
+    expect(screen.getByText('建议')).toBeInTheDocument()
+    expect(screen.queryByText('本地反馈 · 最多 3 条')).not.toBeInTheDocument()
+  })
+
+  it('falls back to a local Chinese summary when AI is unavailable', async () => {
     const user = userEvent.setup()
-    const compare = vi.fn().mockResolvedValue(feedback)
-    const textAi = {
-      id: 'fake-text-ai',
-      isConfigured: () => true,
-      getFeedback: vi.fn(),
-      compareAttempts: compare,
-    } as unknown as LLMProvider
-    const updated = { ...session, aiComparison: feedback }
-    const apply = vi.fn().mockResolvedValue(updated)
+    const prepareSecond = vi.fn().mockResolvedValue(
+      makeSession({ status: 'second-ready', aiFeedback: null }),
+    )
     const service = {
-      applyAiComparisonIfTranscriptsCurrent: apply,
+      prepareSecondAttempt: prepareSecond,
     } as unknown as PracticeService
+    const session = makeSession({ aiFeedback: null, status: 'first-review' })
+
+    renderFlow({
+      session,
+      service,
+      textAi: {
+        id: 'unavailable-text-ai',
+        isConfigured: () => false,
+        getFeedback: vi.fn(),
+        compareAttempts: vi.fn(),
+      },
+    })
+
+    expect(screen.getByText(/口头填充词/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '进入第二次回答' }))
+    expect(prepareSecond).toHaveBeenCalledWith(session.id)
+  })
+
+  it('previews and selects one of the three AI versions', async () => {
+    const user = userEvent.setup()
     const onChange = vi.fn()
-    const audioFocus = {
-      state: 'idle',
-      subscribe: () => () => undefined,
-      stopAllPlayback: vi.fn().mockResolvedValue(undefined),
-      cancelRecording: vi.fn().mockResolvedValue(undefined),
-    } as unknown as AudioFocus
-    const stt = { id: 'stt', isAvailable: () => false } as unknown as STTProvider
-    const remoteStt = {
-      id: 'remote-stt',
-      isConfigured: () => false,
-      isDefinitelyConfigured: () => false,
-    } as unknown as RecordedAudioSTTProvider
+    const selectVersion = vi.fn().mockResolvedValue(
+      makeSession({ selectedVersionIndex: 0 }),
+    )
+    const service = { selectVersion } as unknown as PracticeService
+    const session = makeSession({})
+    const speakSpy = vi.fn(() => Promise.resolve())
+    const audioFocus = { ...makeAudioFocus(), speak: speakSpy }
 
     render(
       <PracticeFlow
@@ -127,39 +215,96 @@ describe('PracticeFlow AI comparison', () => {
         session={session}
         service={service}
         audioFocus={audioFocus}
-        stt={stt}
-        remoteStt={remoteStt}
-        textAi={textAi}
+        stt={unavailableStt}
+        remoteStt={unavailableRemoteStt}
+        textAi={configuredTextAi}
         onExitGuardChange={vi.fn()}
         onChange={onChange}
         onBack={vi.fn()}
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: '获取 / 重试 AI 对比' }))
-    await waitFor(() => expect(compare).toHaveBeenCalledOnce())
-    expect(compare).toHaveBeenCalledWith({
-      question: questionBank[0],
-      firstTranscript: first.transcript.text,
-      secondTranscript: second.transcript.text,
-      localComparison: session.comparison,
-    })
-    expect(apply).toHaveBeenCalledWith(
-      session.id,
-      {
-        first: {
-          attemptId: first.id,
-          text: first.transcript.text,
-          updatedAt: first.transcript.updatedAt,
-        },
-        second: {
-          attemptId: second.id,
-          text: second.transcript.text,
-          updatedAt: second.transcript.updatedAt,
-        },
-      },
-      feedback,
+    const previewButtons = screen.getAllByRole('button', { name: '▶ 试听' })
+    expect(previewButtons).toHaveLength(3)
+    await user.click(previewButtons[0]!)
+    expect(speakSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ text: versionFeedback.versions?.[0]?.text }),
     )
-    expect(onChange).toHaveBeenCalledWith(updated)
+
+    await user.click(screen.getAllByRole('button', { name: '选择这个版本' })[0]!)
+    expect(selectVersion).toHaveBeenCalledWith(session.id, 0)
+  })
+})
+
+describe('PracticeFlow read-aloud review', () => {
+  it('lists suspected pronunciation issues with relisten buttons and continues', async () => {
+    const user = userEvent.setup()
+    const prepareSecond = vi.fn().mockResolvedValue(
+      makeSession({ status: 'second-ready' }),
+    )
+    const service = {
+      prepareSecondAttempt: prepareSecond,
+    } as unknown as PracticeService
+    const session = makeSession({
+      selectedVersionIndex: 0,
+      readAloud: {
+        audio: {
+          id: 'audio-read-aloud',
+          relativePath: 'indexeddb://audio/audio-read-aloud',
+          mimeType: 'audio/webm',
+          durationMs: 12_000,
+          createdAt: NOW,
+        },
+        transcript: {
+          status: 'ready',
+          text: 'I like read at home.',
+          originalText: 'I like read at home.',
+          source: 'stt',
+          errorCode: null,
+          updatedAt: NOW,
+        },
+        targetVersionIndex: 0,
+        issues: [{ word: 'reading', heardAs: 'read' }],
+      },
+    })
+
+    renderFlow({ session, service })
+
+    expect(screen.getByText('reading', { selector: 'strong' })).toBeInTheDocument()
+    expect(screen.getByText(/可能发音不准/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '▶ 重新试听示范' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /回放我的跟读/ }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '进入第二次回答' }))
+    expect(prepareSecond).toHaveBeenCalledWith(session.id)
+  })
+})
+
+describe('PracticeFlow second-attempt hint', () => {
+  it('reveals the hint only while the button is held', () => {
+    const session = makeSession({
+      status: 'second-ready',
+      selectedVersionIndex: 0,
+    })
+    renderFlow({ session })
+
+    const hold = screen.getByRole('button', { name: '按住查看提示' })
+    expect(
+      screen.queryByText('opening: I like ... because ...'),
+    ).not.toBeInTheDocument()
+
+    fireEvent.pointerDown(hold)
+    expect(
+      screen.getByText('opening: I like ... because ...'),
+    ).toBeInTheDocument()
+
+    fireEvent.pointerUp(hold)
+    expect(
+      screen.queryByText('opening: I like ... because ...'),
+    ).not.toBeInTheDocument()
   })
 })

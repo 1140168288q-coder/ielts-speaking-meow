@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   aiFeedbackSchema,
+  feedbackSummarySchema,
+  practiceTextsSchema,
   questionBankSchema,
   questionSchema,
   savedExpressionSchema,
@@ -128,5 +130,40 @@ describe('saved expression schema', () => {
     })
 
     expect(expression.sourceAttempt).toBe(2)
+  })
+})
+
+describe('feedback summary and answer version schemas', () => {
+  it('accepts a Chinese summary with a problem and a suggestion', () => {
+    const result = feedbackSummarySchema.safeParse({
+      problem: '回答中填充词较多。',
+      suggestion: '用短暂停顿代替填充词。',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts at most three answer versions', () => {
+    const versions = [
+      { style: '基础稳妥', text: 'I like reading at home.', hint: 'I like ...' },
+      { style: '自然均衡', text: 'In my free time I enjoy reading.', hint: 'In my free time ...' },
+      { style: '略加挑战', text: 'Reading is my favourite way to relax.', hint: '... is my favourite way to ...' },
+      { style: '超出', text: 'A fourth version.', hint: 'fourth' },
+    ]
+    const result = aiFeedbackSchema.safeParse({
+      summary: { problem: '问题。', suggestion: '建议。' },
+      versions,
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('practice texts schema', () => {
+  it('allows each line to be left blank', () => {
+    const result = practiceTextsSchema.safeParse({
+      top: '',
+      middle: '',
+      bottom: '',
+    })
+    expect(result.success).toBe(true)
   })
 })

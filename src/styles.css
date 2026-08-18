@@ -132,7 +132,7 @@ button:disabled {
   font-size: 11px;
 }
 
-.offline-badge {
+.api-badge {
   padding: 6px 10px;
   border: 1px solid #cfe6dd;
   border-radius: 999px;
@@ -140,6 +140,13 @@ button:disabled {
   background: var(--mint-soft);
   font-size: 11px;
   font-weight: 800;
+  white-space: nowrap;
+}
+
+.api-badge.down {
+  border-color: #ecd2c9;
+  color: #b04a2e;
+  background: #fbeae3;
 }
 
 .app-main {
@@ -1617,10 +1624,6 @@ textarea::placeholder {
 }
 
 @media (max-width: 390px) {
-  .offline-badge {
-    display: none;
-  }
-
   .hero-card {
     grid-template-columns: 1fr;
   }
@@ -1786,4 +1789,336 @@ textarea::placeholder {
   .bottom-nav button {
     font-size: 10px;
   }
+}
+
+/* ---- 练习页可编辑三行文字(问题 5)---- */
+.hero-lines {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hero-line {
+  width: 100%;
+  border: none;
+  border-bottom: 1px dashed rgba(255, 248, 239, 0.45);
+  outline: none;
+  color: #fff8ef;
+  background: transparent;
+  font-family: inherit;
+}
+
+.hero-line:focus {
+  border-bottom-color: #fff8ef;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+.hero-line::placeholder {
+  color: rgba(255, 248, 239, 0.65);
+}
+
+.hero-line-top {
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.hero-line-middle {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(24px, 5vw, 32px);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.hero-line-bottom {
+  font-size: 14px;
+  opacity: 0.95;
+}
+
+/* ---- 精简反馈卡(问题 1)---- */
+.summary-feedback-card {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.summary-line {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 15px;
+}
+
+.summary-line small {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.summary-line p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.summary-line.problem {
+  background: #fdf0ea;
+  color: #8a3d22;
+}
+
+.summary-line.problem small {
+  color: var(--orange-dark);
+}
+
+.summary-line.suggestion {
+  margin-top: 10px;
+  background: var(--mint-soft);
+  color: #1f5f52;
+}
+
+.summary-line.suggestion small {
+  color: #267564;
+}
+
+/* ---- AI 三个建议版本(问题 2)---- */
+.versions-card {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.versions-card h2 {
+  margin: 0;
+}
+
+.version-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.version-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid #eadfce;
+  border-radius: 18px;
+  background: #fffaf4;
+}
+
+.version-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.version-head strong {
+  color: var(--orange-dark);
+  font-size: 15px;
+}
+
+.version-head span {
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: #f3eee8;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.version-card > p {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---- 已选版本 + 跟读 ---- */
+.chosen-version-card {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.chosen-version-card .version-quote {
+  margin: 16px 0 0;
+  padding: 16px 18px;
+  border-radius: 15px;
+  background: #fff6ec;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+/* ---- 跟读复盘(问题 2)---- */
+.review-aloud-card {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.review-aloud-card h2 {
+  margin: 0;
+}
+
+.issue-list {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  background: #fdf0ea;
+  color: #8a3d22;
+}
+
+.issue-list li > span {
+  color: var(--orange);
+  font-weight: 900;
+}
+
+.issue-list li p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.issue-list li strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* ---- 第二次回答长按提示(问题 2)---- */
+.hint-card {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: white;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.hint-card .section-heading {
+  width: 100%;
+}
+
+.hint-hold-button {
+  min-width: 210px;
+  min-height: 52px;
+  padding: 12px 26px;
+  border: 2px dashed #e0b49d;
+  border-radius: 999px;
+  color: var(--orange-dark);
+  background: #fff3ec;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 900;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hint-hold-button.holding {
+  border-style: solid;
+  border-color: var(--orange);
+  color: white;
+  background: var(--orange);
+}
+
+.hint-hold-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.hint-overlay {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 15px;
+  color: #1f5f52;
+  background: var(--mint-soft);
+  text-align: left;
+}
+
+.hint-overlay small {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.hint-overlay p {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ---- 第二次回答提交收录(问题 2)---- */
+.submit-corpus-card {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.submit-corpus-card .primary-button {
+  justify-self: start;
+}
+
+/* ---- 完成卡片(问题 2)---- */
+.completed-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 40px 24px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: white;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.completed-card h2 {
+  margin: 0;
+}
+
+.completed-card p {
+  color: var(--muted);
 }

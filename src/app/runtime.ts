@@ -10,7 +10,6 @@ import {
   BackendClient,
   BackendConfigStore,
   BackendHealthCache,
-  BackendSttProvider,
   BackendTextProvider,
   BackendTtsProvider,
 } from '../infrastructure/backend'
@@ -21,15 +20,13 @@ import { FallbackTTSProvider } from '../infrastructure/speech/fallbackTtsProvide
 import { HTMLAudioPlayback } from '../infrastructure/speech/htmlAudioPlayback'
 import { MediaRecorderAdapter } from '../infrastructure/speech/mediaRecorderAdapter'
 import { SystemWebSpeechTTS } from '../infrastructure/speech/systemWebSpeechTts'
-import { WebSpeechSTT } from '../infrastructure/speech/webSpeechStt'
-import { WebAudioSignalAnalyzer } from '../infrastructure/speech/webAudioSignalAnalyzer'
 import { IndexedDbStorage } from '../infrastructure/storage'
 
 /**
- * 组合根。所有第三方 AI 能力(Text AI / 远程 STT / AI 语音)一律经由自建
- * Backend;客户端不持有任何第三方 API Key。系统 TTS 与 Web Speech STT
- * 保留作为本地降级能力。Backend 地址可运行时配置,各 provider
- * 的配置状态由 BackendHealthCache(启动时拉取 /health)驱动。
+ * 组合根。所有第三方 AI 能力(Text AI / AI 语音)一律经由自建 Backend;
+ * 客户端不持有任何第三方 API Key。系统 TTS 保留作为本地降级能力。
+ * Backend 地址可运行时配置,各 provider 的配置状态由
+ * BackendHealthCache(启动时拉取 /health)驱动。
  */
 export const createBrowserRuntime = () => {
   const storage = new IndexedDbStorage()
@@ -42,7 +39,6 @@ export const createBrowserRuntime = () => {
   })
   const healthCache = new BackendHealthCache(backendClient)
   const textAi = new BackendTextProvider(backendClient, healthCache)
-  const remoteStt = new BackendSttProvider(backendClient, undefined, healthCache)
   const voicePlayback = new HTMLAudioPlayback()
   const voiceAi = new BackendTtsProvider(
     backendClient,
@@ -52,10 +48,8 @@ export const createBrowserRuntime = () => {
   )
   const tts = new FallbackTTSProvider(voiceAi, systemTts)
   const recorder = new MediaRecorderAdapter()
-  const audioAnalyzer = new WebAudioSignalAnalyzer()
   const playback = new HTMLAudioPlayback()
   const audioFocus = new AudioCoordinator(tts, recorder, playback)
-  const stt = new WebSpeechSTT()
   const documentOcr = Capacitor.getPlatform() === 'android'
     ? new CapacitorDocumentOcr()
     : null
@@ -65,8 +59,6 @@ export const createBrowserRuntime = () => {
   })
   const practiceService = new PracticeService({
     localStorage: storage,
-    audioStorage: storage,
-    audioAnalyzer,
   })
   const backupService = new StorageBackupService(storage, storage)
 
@@ -90,8 +82,6 @@ export const createBrowserRuntime = () => {
     configStore,
     healthCache,
     audioFocus,
-    stt,
-    remoteStt,
     textAi,
     voiceAi,
     systemTts,

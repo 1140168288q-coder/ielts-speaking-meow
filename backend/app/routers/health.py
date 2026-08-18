@@ -41,13 +41,6 @@ async def health(request: Request) -> dict:
                 "model": settings.deepseek_model,
                 "verification": services["deepseek"].last_call.snapshot(),
             },
-            "volc_stt": {
-                "kind": "stt",
-                "configured": services["volc_stt"].is_configured,
-                "model": "bigmodel",
-                "resourceId": settings.volc_stt_stream_resource_id,
-                "verification": services["volc_stt"].last_call.snapshot(),
-            },
             "volc_tts": {
                 "kind": "tts",
                 "configured": services["volc_tts"].is_configured,
@@ -66,8 +59,7 @@ async def health(request: Request) -> dict:
 @router.post("/health/verify")
 async def verify_providers(request: Request) -> dict:
     """显式验证上游:DeepSeek 一次 32 token 的小规模补全(推理模型需要
-    token 余量),TTS 合成一句 "Hello."。STT 需要真实音频,不做探针,
-    只返回最近一次真实转写的结果。"""
+    token 余量),TTS 合成一句 "Hello."。"""
     services = request.app.state.services
     deepseek_task = services["deepseek"].verify()
     tts_task = services["volc_tts"].verify()
@@ -77,7 +69,6 @@ async def verify_providers(request: Request) -> dict:
     return {
         "providers": {
             "deepseek": deepseek_snapshot,
-            "volc_stt": services["volc_stt"].last_call.snapshot(),
             "volc_tts": tts_snapshot,
         }
     }

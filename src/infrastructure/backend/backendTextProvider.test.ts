@@ -6,46 +6,23 @@ import { BackendHealthCache } from './backendHealth'
 import { BackendTextProvider } from './backendTextProvider'
 
 const VALID_FEEDBACK = {
-  keyIssues: [
-    {
-      category: 'fluency',
-      kind: 'improvement',
-      title: 'Pauses',
-      observation: 'Long pauses between sentences.',
-      action: 'Use linking phrases.',
-      evidence: null,
-    },
-  ],
-  secondAttemptTips: ['Speak at a steady pace'],
-  revisions: {
-    minimalFix: null,
-    naturalVersion: 'I usually read novels.',
-    stretchVersion: null,
-  },
-  summary: {
-    problem: '回答中长停顿较多。',
-    suggestion: '用连接短语把句子串起来。',
-  },
-  versions: [
-    {
-      style: '基础稳妥',
-      text: 'I like reading books in my free time because they help me relax.',
-      hint: 'opening: I like ... because ...',
-    },
-    {
-      style: '自然均衡',
-      text: 'In my free time, I enjoy reading books since they let me unwind.',
-      hint: 'opening: In my free time, I enjoy ...',
-    },
-    {
-      style: '略加挑战',
-      text: 'Reading is my favourite way to relax and learn something new.',
-      hint: '... is my favourite way to ...',
-    },
+  summary: '回答切题，重点改进过去时态。',
+  strengths: ['有具体例子。'],
+  problems: ['过去时态混用。'],
+  grammarSuggestions: ['先想好动词过去式。'],
+  vocabularySuggestions: ['用 relaxing 代替 good。'],
+  improvedAnswer: 'I like reading books because they help me relax.',
+  referenceAnswers: [
+    { label: '简单自然版', text: 'I like reading books because they help me relax.' },
+    { label: '自然提升版', text: 'I enjoy reading books because they help me unwind.' },
+    { label: '另一种表达版', text: 'Reading is my favourite way to relax after a busy day.' },
   ],
 }
 
-function createProvider(responseBody: unknown, status = 200): BackendTextProvider {
+function createProvider(responseBody: unknown, status = 200): {
+  provider: BackendTextProvider
+  fetch: ReturnType<typeof vi.fn>
+} {
   const fetch = vi.fn().mockResolvedValue(
     new Response(JSON.stringify(responseBody), {
       status,
@@ -57,7 +34,7 @@ function createProvider(responseBody: unknown, status = 200): BackendTextProvide
     isNative: () => false,
     fetch: fetch,
   })
-  return new BackendTextProvider(client)
+  return { provider: new BackendTextProvider(client), fetch }
 }
 
 function firstQuestion() {
@@ -71,23 +48,14 @@ function firstQuestion() {
 function feedbackRequest() {
   return {
     question: firstQuestion(),
-    transcript: 'I like reading books in my free time.',
-    metrics: {
-      durationMs: 12_000,
-      wordCount: 8,
-      wordsPerMinute: 40,
-      fillerWords: [],
-      fillerCount: 0,
-      repeatedWords: [],
-      repeatedWordCount: 0,
-      caveats: [],
-    },
+    answer: 'I like reading books in my free time.',
+    answerDurationSeconds: 12,
   }
 }
 
 describe('BackendTextProvider', () => {
   it('is optimistic about Text AI without a health cache', () => {
-    const provider = createProvider({})
+    const { provider } = createProvider({})
     expect(provider.isConfigured()).toBe(true)
   })
 
@@ -96,7 +64,6 @@ describe('BackendTextProvider', () => {
       new Response(
         JSON.stringify(makeBackendHealth({
           deepseek: false,
-          volc_stt: true,
           volc_tts: true,
         })),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -117,43 +84,45 @@ describe('BackendTextProvider', () => {
     expect(provider.isConfigured()).toBe(true)
   })
 
-  it('returns validated feedback for getFeedback', async () => {
-    const provider = createProvider(VALID_FEEDBACK)
+  it('sends part, question, answer and optional duration to /v1/feedback', async () => {
+    const { provider, fetch } = createProvider(VALID_FEEDBACK)
     const feedback = await provider.getFeedback(feedbackRequest())
-    expect(feedback.summary?.problem).toBe('回答中长停顿较多。')
-    expect(feedback.summary?.suggestion).toBe('用连接短语把句子串起来。')
-    expect(feedback.versions).toHaveLength(3)
+
+    expect(feedback.summary).toBe('回答切题，重点改进过去时态。')
+    expect(feedback.referenceAnswers).toHaveLength(3)
+    expect(feedback.referenceAnswers[1]?.label).toBe('自然提升版')
+
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('http://backend.test/v1/feedback')
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body).toEqual({
+      part: firstQuestion().part,
+      question: firstQuestion(),
+      answer: 'I like reading books in my free time.',
+      answerDurationSeconds: 12,
+    })
+  })
+
+  it('allows a null optional answer duration', async () => {
+    const { provider, fetch } = createProvider(VALID_FEEDBACK)
+    await provider.getFeedback({
+      question: firstQuestion(),
+      answer: 'I like reading books.',
+      answerDurationSeconds: null,
+    })
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.answerDurationSeconds).toBeNull()
   })
 
   it('rejects malformed feedback shapes', async () => {
-    const provider = createProvider({ keyIssues: 'not-a-list' })
+    const { provider } = createProvider({ summary: 'missing everything' })
     await expect(provider.getFeedback(feedbackRequest()))
       .rejects.toMatchObject({ code: 'invalid-response' })
   })
 
-  it('returns validated comparison feedback', async () => {
-    const provider = createProvider(VALID_FEEDBACK)
-    const part2 = questionBank.find((question) => question.part === 2)
-    if (!part2) {
-      throw new Error('question bank must contain a Part 2 question')
-    }
-    const result = await provider.compareAttempts({
-      question: part2,
-      firstTranscript: 'I went to Beijing.',
-      secondTranscript: 'I went to Beijing with my family.',
-      localComparison: {
-        durationMs: { first: 1000, second: 1500, delta: 500 },
-        wordsPerMinute: null,
-        fillerCount: null,
-        repeatedWordCount: null,
-        feedback: [],
-      },
-    })
-    expect(result.keyIssues ?? []).toHaveLength(1)
-  })
-
   it('maps organized questions into import candidates', async () => {
-    const provider = createProvider({
+    const { provider } = createProvider({
       questions: [
         {
           part: 2,
@@ -174,7 +143,7 @@ describe('BackendTextProvider', () => {
   })
 
   it('rejects malformed organize responses', async () => {
-    const provider = createProvider({})
+    const { provider } = createProvider({})
     await expect(
       provider.extractQuestions({ fileName: 'x.txt', extractedText: 'text' }),
     ).rejects.toMatchObject({ code: 'invalid-response' })

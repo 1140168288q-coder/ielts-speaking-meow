@@ -18,6 +18,8 @@ const expression: SavedExpression = {
 
 const audioFocus = {
   speak: vi.fn(() => Promise.resolve()),
+  stopTTS: vi.fn(() => Promise.resolve()),
+  subscribe: vi.fn(() => () => undefined),
 } as unknown as AudioFocus
 
 describe('ExpressionLibrary', () => {
@@ -40,7 +42,7 @@ describe('ExpressionLibrary', () => {
       />,
     )
 
-    expect(screen.getByText('有 1 句值得再跟读')).toBeInTheDocument()
+    expect(screen.getByText('有 1 句值得再听读')).toBeInTheDocument()
     const search = screen.getByRole('searchbox', { name: '搜索个人表达' })
     await user.type(search, 'travel')
     expect(screen.getByText('没有找到匹配表达')).toBeInTheDocument()
@@ -61,7 +63,7 @@ describe('ExpressionLibrary', () => {
       'Daily life',
     ))
 
-    await user.click(screen.getByRole('button', { name: '✓ 已跟读' }))
+    await user.click(screen.getByRole('button', { name: '✓ 已听读' }))
     await waitFor(() => expect(onReviewed).toHaveBeenCalledWith(expression.id))
 
     await user.click(screen.getByRole('button', { name: '用原题再练' }))

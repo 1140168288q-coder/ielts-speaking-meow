@@ -6,6 +6,7 @@ import type {
 } from '../../domain'
 import type { AudioFocus } from '../../ports/speech'
 import { selectExpressionReviewQueue } from '../../domain/progress'
+import { useTtsToggle } from './useTtsToggle'
 import {
   formatDate,
   statusLabel,
@@ -26,8 +27,8 @@ export function HistoryView({
     <section className="page-stack library-page">
       <div className="page-title">
         <p className="eyebrow">本地训练记录</p>
-        <h1>每次开口都留得住</h1>
-        <p>练习、转写和两段录音默认只保存在这台设备。</p>
+        <h1>每次练习都留得住</h1>
+        <p>练习、答案文本和个人语料默认只保存在这台设备。</p>
       </div>
       {sessions.length ? (
         <div className="history-list">
@@ -55,14 +56,14 @@ export function HistoryView({
                   aria-label={`删除练习：${question.prompt}`}
                   onClick={() => onDelete(session.id)}
                 >
-                  删除练习与录音
+                  删除练习
                 </button>
               </article>
             )
           })}
         </div>
       ) : (
-        <EmptyState title="还没有练习记录" body="从一道 Part 1 小题开始，完成你的第一次真实开口。" />
+        <EmptyState title="还没有练习记录" body="从一道 Part 1 小题开始，提交你的第一次真实回答。" />
       )}
     </section>
   )
@@ -89,6 +90,7 @@ export function ExpressionLibrary({
   const [editText, setEditText] = useState('')
   const [editTopic, setEditTopic] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const { speakingKey, toggle: toggleTts } = useTtsToggle(audioFocus)
   const reviewIds = useMemo(
     () => new Set(selectExpressionReviewQueue(expressions).map((item) => item.id)),
     [expressions],
@@ -100,10 +102,10 @@ export function ExpressionLibrary({
     item.topic.toLocaleLowerCase().includes(normalizedQuery),
   )
 
-  const speak = async (text: string) => {
+  const speak = async (expressionId: string, text: string) => {
     setMessage(null)
     try {
-      await audioFocus.speak({ text, language: 'en-US', rate: 0.92 })
+      await toggleTts(`expression:${expressionId}:${text}`, text)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '语音播放暂不可用。')
     }
@@ -146,7 +148,7 @@ export function ExpressionLibrary({
   const markReviewed = (item: SavedExpression) => {
     void run(item.id, async () => {
       await onReviewed(item.id)
-      setMessage('已记录这次跟读。')
+      setMessage('已记录这次听读复习。')
     })
   }
 
@@ -163,8 +165,8 @@ export function ExpressionLibrary({
           <div className="expression-review-card">
             <div>
               <p className="eyebrow">轻复习</p>
-              <h2>{reviewIds.size ? `有 ${reviewIds.size} 句值得再跟读` : '今天的表达已复习'}</h2>
-              <p>未跟读或超过 7 天的表达会优先标记，不做复杂记忆算法。</p>
+              <h2>{reviewIds.size ? `有 ${reviewIds.size} 句值得再听读` : '今天的表达已复习'}</h2>
+              <p>未听读或超过 7 天的表达会优先标记，不做复杂记忆算法。</p>
             </div>
             <span aria-hidden="true">↻</span>
           </div>
@@ -184,7 +186,7 @@ export function ExpressionLibrary({
           {visibleExpressions.map((item) => (
             <article key={item.id}>
               <div className="expression-meta">
-                <span>{item.topic}{reviewIds.has(item.id) ? ' · 待跟读' : ''}</span>
+                <span>{item.topic}{reviewIds.has(item.id) ? ' · 待听读' : ''}</span>
                 <small>{formatDate(item.createdAt)}</small>
               </div>
               {editingId === item.id ? (
@@ -210,11 +212,16 @@ export function ExpressionLibrary({
                 <>
                   <p>{item.text}</p>
                   <small className="review-count">
-                    已跟读 {item.reviewCount ?? 0} 次{item.lastReviewedAt ? ` · 最近 ${formatDate(item.lastReviewedAt)}` : ''}
+                    已听读 {item.reviewCount ?? 0} 次{item.lastReviewedAt ? ` · 最近 ${formatDate(item.lastReviewedAt)}` : ''}
                   </small>
                   <div className="expression-item-actions">
-                    <button type="button" onClick={() => void speak(item.text)}>▶ 试听</button>
-                    <button type="button" disabled={busyId === item.id} onClick={() => markReviewed(item)}>✓ 已跟读</button>
+                    <button
+                      type="button"
+                      onClick={() => void speak(item.id, item.text)}
+                    >
+                      {speakingKey === `expression:${item.id}:${item.text}` ? '■ 停止' : '▶ 试听'}
+                    </button>
+                    <button type="button" disabled={busyId === item.id} onClick={() => markReviewed(item)}>✓ 已听读</button>
                     <button type="button" onClick={() => onPractice(item.questionId)}>用原题再练</button>
                     <button type="button" onClick={() => beginEdit(item)}>编辑</button>
                     <button type="button" className="expression-delete-action" disabled={busyId === item.id} onClick={() => deleteItem(item)}>删除</button>

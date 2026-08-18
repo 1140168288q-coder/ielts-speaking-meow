@@ -18,25 +18,21 @@ describe('BackendHealthCache', () => {
   it('starts in the unknown state before the first check', () => {
     const cache = new BackendHealthCache(createClient({}))
     expect(cache.statusOf('deepseek')).toBe('unknown')
-    expect(cache.statusOf('volc_stt')).toBe('unknown')
     expect(cache.statusOf('volc_tts')).toBe('unknown')
     expect(cache.getSnapshot().health).toBeNull()
   })
 
-  it('caches provider states after a successful refresh', async () => {
+  it('caches DeepSeek and TTS states after a successful refresh', async () => {
     const cache = new BackendHealthCache(
       createClient(makeBackendHealth({
         deepseek: makeProviderHealth({ model: 'deepseek-v4-flash' }),
-        volc_stt: makeProviderHealth({ resourceId: 'volc.seedasr.sauc.duration' }),
         volc_tts: false,
       })),
     )
     const snapshot = await cache.refresh()
     expect(snapshot.health?.providers.deepseek?.configured).toBe(true)
-    expect(snapshot.health?.providers.volc_stt?.configured).toBe(true)
     expect(snapshot.health?.providers.volc_tts?.configured).toBe(false)
     expect(cache.statusOf('deepseek')).toBe('configured')
-    expect(cache.statusOf('volc_stt')).toBe('configured')
     expect(cache.statusOf('volc_tts')).toBe('unconfigured')
   })
 
@@ -66,20 +62,17 @@ describe('BackendHealthCache', () => {
         volc_tts: makeProviderHealth({
           speaker: { id: 'zh_female_vv_uranus_bigtts', name: null },
         }),
-        volc_stt: true,
       })),
     )
     await cache.refresh()
     expect(cache.providerInfo('deepseek')?.model).toBe('deepseek-v4-flash')
     expect(cache.providerInfo('volc_tts')?.speaker?.id).toBe('zh_female_vv_uranus_bigtts')
     expect(cache.verificationOf('deepseek')?.status).toBe('verified')
-    expect(cache.verificationOf('volc_stt')?.status).toBe('unverified')
   })
 
   it('deduplicates concurrent refreshes into a single request', async () => {
     const getHealth = vi.fn().mockResolvedValue(makeBackendHealth({
       deepseek: true,
-      volc_stt: true,
       volc_tts: true,
     }))
     const cache = new BackendHealthCache({
@@ -95,14 +88,13 @@ describe('BackendHealthCache', () => {
     const cache = new BackendHealthCache(
       createClient(makeBackendHealth({
         deepseek: true,
-        volc_stt: true,
         volc_tts: true,
       })),
     )
     await cache.refresh()
-    expect(cache.statusOf('volc_stt')).toBe('configured')
+    expect(cache.statusOf('volc_tts')).toBe('configured')
     cache.invalidate()
-    expect(cache.statusOf('volc_stt')).toBe('unknown')
+    expect(cache.statusOf('volc_tts')).toBe('unknown')
     expect(cache.getSnapshot().health).toBeNull()
   })
 
@@ -110,7 +102,6 @@ describe('BackendHealthCache', () => {
     const verifyProviders = vi.fn().mockResolvedValue({})
     const getHealth = vi.fn().mockResolvedValue(makeBackendHealth({
       deepseek: true,
-      volc_stt: true,
       volc_tts: true,
     }))
     const cache = new BackendHealthCache({

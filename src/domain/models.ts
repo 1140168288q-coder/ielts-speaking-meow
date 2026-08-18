@@ -77,6 +77,9 @@ export type IeltsPart = z.infer<typeof ieltsPartSchema>
 export type QuestionDifficulty = z.infer<typeof questionDifficultySchema>
 export type Question = z.infer<typeof questionSchema>
 
+// ---- 兼容 V1.6 及更早版本的旧会话字段。新流程不再生成这些结构,
+// 仅用于读取历史数据,避免用户已有记录丢失。----
+
 export const feedbackCategorySchema = z.enum([
   'fluency',
   'grammar',
@@ -109,7 +112,7 @@ export const answerRevisionSchema = z
   })
   .strict()
 
-/** 一行问题 + 一行建议的中文反馈摘要。 */
+/** 一行问题 + 一行建议的中文反馈摘要(无 AI 时的本地降级摘要)。 */
 export const feedbackSummarySchema = z
   .object({
     problem: nonEmptyText(200),
@@ -117,7 +120,7 @@ export const feedbackSummarySchema = z
   })
   .strict()
 
-/** AI 给出的一个可选回答版本(风格/难度略有差异)。 */
+/** V1.6 的旧回答版本结构,仅用于迁移历史 AI 反馈。 */
 export const answerVersionOptionSchema = z
   .object({
     style: nonEmptyText(40),
@@ -126,10 +129,7 @@ export const answerVersionOptionSchema = z
   })
   .strict()
 
-/**
- * 跟读复盘中的一条疑似发音问题。仅来自 STT 转写与范本的逐词比对,
- * 不是发音评分或 ground truth。
- */
+/** V1.6 的旧跟读发音比对结构,仅用于读取历史会话。 */
 export const pronunciationIssueSchema = z
   .object({
     word: nonEmptyText(80),
@@ -137,24 +137,41 @@ export const pronunciationIssueSchema = z
   })
   .strict()
 
-export const aiFeedbackSchema = z
-  .object({
-    keyIssues: actionableFeedbackListSchema.optional(),
-    secondAttemptTips: z.array(nonEmptyText(320)).max(3).optional(),
-    revisions: answerRevisionSchema.optional(),
-    summary: feedbackSummarySchema.optional(),
-    versions: z.array(answerVersionOptionSchema).max(3).optional(),
-  })
-  .strict()
-
 export type FeedbackCategory = z.infer<typeof feedbackCategorySchema>
 export type FeedbackKind = z.infer<typeof feedbackKindSchema>
 export type ActionableFeedback = z.infer<typeof actionableFeedbackSchema>
-export type AiFeedback = z.infer<typeof aiFeedbackSchema>
 export type FeedbackSummary = z.infer<typeof feedbackSummarySchema>
 export type AnswerVersionOption = z.infer<typeof answerVersionOptionSchema>
 export type PronunciationIssue = z.infer<typeof pronunciationIssueSchema>
-export type ReadAloudRecord = z.infer<typeof readAloudRecordSchema>
+
+// ---- V1.7 Text AI 结构 ----
+// DeepSeek 只分析用户提交的答案文本,绝不评价发音、语速、停顿、语调,
+// 也不给出任何 IELTS Band 分数或水平评分。
+
+export const referenceAnswerSchema = z
+  .object({
+    /** 中文标签,如:简单自然版 / 自然提升版 / 另一种表达版。 */
+    label: nonEmptyText(40),
+    text: nonEmptyText(1_500),
+  })
+  .strict()
+
+export const aiFeedbackSchema = z
+  .object({
+    /** 用中文写的整体小结。 */
+    summary: nonEmptyText(500),
+    strengths: z.array(nonEmptyText(320)).max(3),
+    problems: z.array(nonEmptyText(320)).max(3),
+    grammarSuggestions: z.array(nonEmptyText(320)).max(3),
+    vocabularySuggestions: z.array(nonEmptyText(320)).max(3),
+    /** 保持用户原本水平和表达习惯的优化版回答。 */
+    improvedAnswer: nonEmptyText(1_500),
+    referenceAnswers: z.array(referenceAnswerSchema).max(3),
+  })
+  .strict()
+
+export type ReferenceAnswer = z.infer<typeof referenceAnswerSchema>
+export type AiFeedback = z.infer<typeof aiFeedbackSchema>
 
 export const acousticSpeechMetricsSchema = z
   .object({
@@ -184,6 +201,11 @@ export const repeatedWordSchema = z
   })
   .strict()
 
+/**
+ * V1.7 只保留纯文本指标(词数、填充词、相邻重复词)供本地降级反馈;
+ * wordsPerMinute / acoustic 只可能来自 V1.6 历史记录,新流程不再计算,
+ * 也不会在 UI 中展示或评价。
+ */
 export const speechMetricsSchema = z
   .object({
     durationMs: z.number().finite().nonnegative(),
@@ -205,6 +227,7 @@ export const transcriptSchema = z
     status: z.enum(['pending', 'ready', 'failed']),
     text: z.string().max(10_000),
     originalText: z.string().max(10_000).nullable(),
+    // 'stt' 仅用于读取 V1.6 历史记录;V1.7 新回答一律为 'manual' 或 'edited'。
     source: z.enum(['stt', 'manual', 'edited']).nullable(),
     errorCode: z.string().max(120).nullable(),
     updatedAt: isoDateTimeSchema,
@@ -225,7 +248,8 @@ export const practiceAttemptSchema = z
   .object({
     id: nonEmptyText(120),
     attemptNumber: z.union([z.literal(1), z.literal(2)]),
-    audio: audioAssetSchema,
+    /** V1.7 新回答为 null;旧录音仍可读取。 */
+    audio: audioAssetSchema.nullable().optional(),
     transcript: transcriptSchema,
     metrics: speechMetricsSchema,
     createdAt: isoDateTimeSchema,
@@ -245,6 +269,8 @@ export const readAloudRecordSchema = z
     issues: z.array(pronunciationIssueSchema).max(30),
   })
   .strict()
+
+export type ReadAloudRecord = z.infer<typeof readAloudRecordSchema>
 
 export const metricDeltaSchema = z
   .object({
@@ -286,7 +312,8 @@ export const trainingSessionSchema = z
     attempts: z.array(practiceAttemptSchema).max(2),
     localFeedback: actionableFeedbackListSchema,
     aiFeedback: aiFeedbackSchema.nullable(),
-    aiComparison: aiFeedbackSchema.nullable().optional(),
+    // V1.6 历史字段:读取时保留,新流程不再写入。
+    aiComparison: z.unknown().nullable().optional(),
     comparison: attemptComparisonSchema.nullable(),
     selectedVersionIndex: z.number().int().min(0).max(2).nullable().optional(),
     readAloud: readAloudRecordSchema.nullable().optional(),
@@ -342,7 +369,7 @@ export const practiceTextsSchema = z
 export type PracticeTexts = z.infer<typeof practiceTextsSchema>
 
 export const DEFAULT_PRACTICE_TEXTS: PracticeTexts = {
-  top: '口语目标分：6.0',
+  top: '今天也自然地说一点英语',
   middle: '旅途的意义在于旅途本身',
   bottom: '请输入文本',
 }

@@ -8,7 +8,6 @@ import type {
 } from '../infrastructure/backend'
 import { makeBackendHealth, makeProviderHealth } from '../test/fixtures/backendHealth'
 import type {
-  STTProvider,
   SystemTTSProvider,
   SystemTtsStatus,
   TTSProvider,
@@ -51,11 +50,11 @@ function createHarness(options: {
   const verifyProviders = vi.fn().mockImplementation(refreshHealth)
   const healthCache = {
     getSnapshot: () => ({ checkedAt, health, failure }) satisfies BackendHealthSnapshot,
-    statusOf: (name: 'deepseek' | 'volc_stt' | 'volc_tts') =>
+    statusOf: (name: 'deepseek' | 'volc_tts') =>
       health?.providers[name]?.configured === true ? 'configured' as const : 'unknown' as const,
-    providerInfo: (name: 'deepseek' | 'volc_stt' | 'volc_tts') =>
+    providerInfo: (name: 'deepseek' | 'volc_tts') =>
       health?.providers[name] ?? null,
-    verificationOf: (name: 'deepseek' | 'volc_stt' | 'volc_tts') =>
+    verificationOf: (name: 'deepseek' | 'volc_tts') =>
       health?.providers[name]?.verification ?? null,
     refresh: refreshHealth,
     invalidate: invalidateHealth,
@@ -71,11 +70,6 @@ function createHarness(options: {
     load: vi.fn().mockResolvedValue(undefined),
   } as unknown as BackendConfigStore
 
-  const systemStt: STTProvider = {
-    id: 'system-stt',
-    isAvailable: () => true,
-    start: vi.fn(),
-  }
   const systemTtsSpeak = vi.fn().mockResolvedValue(undefined)
   const systemTts: SystemTTSProvider = {
     id: 'system-tts',
@@ -135,7 +129,6 @@ function createHarness(options: {
   return {
     healthCache,
     configStore,
-    systemStt,
     systemTts,
     systemTtsSpeak,
     preferredVoice,
@@ -158,7 +151,6 @@ describe('SettingsController', () => {
     expect(screen.getByText(/正式版本地址已固定/)).toBeTruthy()
     expect(screen.queryByLabelText('Backend 地址')).toBeNull()
     expect(screen.queryByRole('button', { name: /保存配置/ })).toBeNull()
-    expect(screen.queryByPlaceholderText(/Key/i)).toBeNull()
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
   })
 
@@ -179,7 +171,7 @@ describe('SettingsController', () => {
     expect(harness.invalidateHealth).toHaveBeenCalled()
   })
 
-  it('lists model, speaker and real verification states from the health response', async () => {
+  it('lists model, speaker and real verification states without any STT row', async () => {
     const harness = createHarness({
       health: makeBackendHealth({
         deepseek: makeProviderHealth({
@@ -192,16 +184,6 @@ describe('SettingsController', () => {
             lastResult: null,
           },
         }),
-        volc_stt: makeProviderHealth({
-          resourceId: 'volc.seedasr.sauc.duration',
-          verification: {
-            status: 'verified',
-            checkedAt: '2026-08-15T08:01:00.000Z',
-            latencyMs: 800,
-            lastError: null,
-            lastResult: 'I like reading books.',
-          },
-        }),
         volc_tts: makeProviderHealth({
           speaker: { id: 'zh_female_vv_uranus_bigtts', name: 'vivi 2.0' },
         }),
@@ -211,17 +193,16 @@ describe('SettingsController', () => {
     await waitFor(() => {
       expect(screen.getByText(/deepseek-v4-flash/)).toBeTruthy()
       expect(screen.getAllByText(/已验证/).length).toBeGreaterThanOrEqual(1)
-      expect(screen.getByText(/I like reading books/)).toBeTruthy()
       expect(screen.getByText(/vivi 2\.0/)).toBeTruthy()
     })
-    expect(screen.getByText(/已连接 · Backend 1\.5\.0/)).toBeTruthy()
+    expect(screen.queryByText(/火山流式语音识别/)).toBeNull()
+    expect(screen.getByText(/已连接 · Backend 1\.7\.0/)).toBeTruthy()
   })
 
   it('shows 验证失败 instead of 已连接 when a provider verification failed', async () => {
     const harness = createHarness({
       health: makeBackendHealth({
         deepseek: true,
-        volc_stt: true,
         volc_tts: makeProviderHealth({
           verification: {
             status: 'failed',
@@ -243,7 +224,7 @@ describe('SettingsController', () => {
   it('checks the cloud backend on demand and lists provider status', async () => {
     const user = userEvent.setup()
     const harness = createHarness({
-      health: makeBackendHealth({ deepseek: true, volc_stt: true, volc_tts: false }),
+      health: makeBackendHealth({ deepseek: true, volc_tts: false }),
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
@@ -267,7 +248,7 @@ describe('SettingsController', () => {
   it('runs real upstream verification on demand', async () => {
     const user = userEvent.setup()
     const harness = createHarness({
-      health: makeBackendHealth({ deepseek: true, volc_stt: true, volc_tts: true }),
+      health: makeBackendHealth({ deepseek: true, volc_tts: true }),
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())

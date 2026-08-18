@@ -5,7 +5,7 @@ import type {
   BackendProviderVerification,
 } from './backendClient'
 
-export type BackendProviderName = 'deepseek' | 'volc_stt' | 'volc_tts'
+export type BackendProviderName = 'deepseek' | 'volc_tts'
 
 export type ProviderHealthStatus = 'configured' | 'unconfigured' | 'unknown'
 

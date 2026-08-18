@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { analyzeSpeech } from './speechAnalysis'
 
 describe('analyzeSpeech', () => {
-  it('calculates duration, approximate WPM, fillers and adjacent repetitions', () => {
+  it('calculates duration, fillers and adjacent repetitions without speech-rate values', () => {
     const result = analyzeSpeech({
       transcript: 'Um, I I really enjoy it, you know.',
       durationMs: 60_000,
@@ -11,7 +11,7 @@ describe('analyzeSpeech', () => {
     expect(result).toMatchObject({
       durationMs: 60_000,
       wordCount: 8,
-      wordsPerMinute: 8,
+      wordsPerMinute: null,
       fillerCount: 2,
       repeatedWordCount: 1,
     })

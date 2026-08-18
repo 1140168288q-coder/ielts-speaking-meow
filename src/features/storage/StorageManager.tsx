@@ -91,8 +91,8 @@ export function StorageManager({
     <section className="settings-card storage-card">
       <h2 className="section-heading">本地数据与备份</h2>
       <p className="settings-note">
-        练习和录音默认只在本机。备份文件包含原始录音和转写，属于私密数据；导入
-        会合并记录，并覆盖相同 ID 的旧版本。
+        练习、答案文本和个人语料默认只在本机。备份文件可能包含 V1.6 及更早版本
+        的历史录音，属于私密数据；导入会合并记录，并覆盖相同 ID 的旧版本。
       </p>
       {summary ? (
         <div className="storage-summary" aria-label="本地存储概览">

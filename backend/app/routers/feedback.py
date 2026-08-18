@@ -1,8 +1,9 @@
-"""POST /v1/feedback 与 POST /v1/organize:Text AI(DeepSeek)。"""
-from typing import Literal
+"""POST /v1/feedback 与 POST /v1/organize:Text AI(DeepSeek)。
 
+V1.7 反馈只分析答案文本:Part、题目、答案和可选作答时间。
+"""
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..errors import invalid_request
 
@@ -10,13 +11,10 @@ router = APIRouter()
 
 
 class FeedbackPayload(BaseModel):
-    kind: Literal["first-attempt", "comparison"]
+    part: int = Field(ge=1, le=3)
     question: dict
-    transcript: str = ""
-    metrics: dict | None = None
-    firstTranscript: str | None = None
-    secondTranscript: str | None = None
-    localComparison: dict | None = None
+    answer: str = Field(min_length=1, max_length=10_000)
+    answerDurationSeconds: int | float | None = Field(default=None, ge=0)
 
 
 class OrganizePayload(BaseModel):
@@ -26,15 +24,10 @@ class OrganizePayload(BaseModel):
 
 @router.post("/v1/feedback")
 async def feedback(request: Request, payload: FeedbackPayload) -> dict:
+    if not payload.answer.strip():
+        raise invalid_request("反馈需要作答文本。")
     service = request.app.state.services["deepseek"]
-    data = payload.model_dump()
-    if payload.kind == "comparison":
-        if not data.get("firstTranscript") or not data.get("secondTranscript"):
-            raise invalid_request("对比反馈需要两次作答的转写文本。")
-        return await service.compare_attempts(data)
-    if not payload.transcript.strip():
-        raise invalid_request("反馈需要作答转写文本。")
-    return await service.get_feedback(data)
+    return await service.get_feedback(payload.model_dump())
 
 
 @router.post("/v1/organize")

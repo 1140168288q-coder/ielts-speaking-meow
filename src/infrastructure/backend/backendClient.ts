@@ -46,13 +46,6 @@ export type BackendHealth = z.infer<typeof backendHealthSchema>
 export type BackendProviderHealth = z.infer<typeof providerHealthSchema>
 export type BackendProviderVerification = z.infer<typeof providerVerificationSchema>
 
-export interface BackendMultipartFile {
-  fieldName: string
-  fileName: string
-  mimeType: string
-  data: Blob
-}
-
 interface BackendErrorEnvelope {
   error?: {
     code?: string
@@ -167,55 +160,6 @@ export class BackendClient {
         timeoutMs,
       }),
     )
-  }
-
-  async postMultipartJson<T>(
-    path: string,
-    fields: Record<string, string>,
-    file: BackendMultipartFile,
-    timeoutMs: number,
-  ): Promise<T> {
-    return mapTransportFailure(async () => {
-      if (this.isNative()) {
-        const base64 = await blobToBase64(file.data)
-        const data = [
-          ...Object.entries(fields).map(([key, value]) => ({
-            type: 'string' as const,
-            key,
-            value,
-          })),
-          {
-            type: 'base64File' as const,
-            key: file.fieldName,
-            value: base64,
-            fileName: file.fileName,
-            contentType: file.mimeType,
-          },
-        ]
-        return this.requestJson<T>(path, {
-          method: 'POST',
-          headers: { 'Content-Type': 'multipart/form-data' },
-          nativeBody: data,
-          nativeDataType: 'formData',
-          nativeResponseType: 'json',
-          timeoutMs,
-        })
-      }
-
-      const formData = new FormData()
-      for (const [key, value] of Object.entries(fields)) {
-        formData.append(key, value)
-      }
-      formData.append(file.fieldName, file.data, file.fileName)
-      return this.requestJson<T>(path, {
-        method: 'POST',
-        headers: {},
-        body: formData,
-        nativeBody: undefined,
-        nativeResponseType: 'json',
-        timeoutMs,
-      })
-    })
   }
 
   async postBinary(path: string, body: unknown, timeoutMs: number): Promise<Blob> {
@@ -423,22 +367,6 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
     bytes[index] = binary.charCodeAt(index)
   }
   return new Blob([bytes], { type: mimeType })
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result
-      if (typeof result !== 'string') {
-        reject(new Error('Unable to encode the audio file.'))
-        return
-      }
-      resolve(result.includes(',') ? (result.split(',').pop() ?? '') : result)
-    }
-    reader.onerror = () => reject(new Error('Unable to read the audio file.'))
-    reader.readAsDataURL(blob)
-  })
 }
 
 function createRequestId(): string {

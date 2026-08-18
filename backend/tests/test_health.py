@@ -24,13 +24,12 @@ async def test_health_configured(make_app):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["version"] == "1.6.0"
+    assert body["version"] == "1.7.0"
     assert body["providers"]["deepseek"]["configured"] is True
     assert body["providers"]["deepseek"]["model"] == "deepseek-v4-flash"
-    assert body["providers"]["volc_stt"]["configured"] is True
-    assert body["providers"]["volc_stt"]["resourceId"] == "volc.seedasr.sauc.duration"
     assert body["providers"]["volc_tts"]["configured"] is True
     assert body["providers"]["volc_tts"]["speaker"]["id"] == "zh_female_vv_uranus_bigtts"
+    assert "volc_stt" not in body["providers"]
     # 只配置了密钥、还没真实调用过:必须显示 unverified,而不是"已验证"
     assert body["providers"]["deepseek"]["verification"]["status"] == "unverified"
     assert body["providers"]["volc_tts"]["verification"]["status"] == "unverified"
@@ -47,7 +46,6 @@ async def test_health_unconfigured(make_app):
         response = await client.get("/health")
     providers = response.json()["providers"]
     assert providers["deepseek"]["configured"] is False
-    assert providers["volc_stt"]["configured"] is False
     assert providers["volc_tts"]["configured"] is False
 
 
@@ -100,7 +98,7 @@ async def test_health_verify_marks_deepseek_and_tts_verified(make_app):
     assert providers["deepseek"]["status"] == "verified"
     assert providers["deepseek"]["checkedAt"] is not None
     assert providers["volc_tts"]["status"] == "verified"
-    assert providers["volc_stt"]["status"] == "unverified"  # STT 不探针,只回真实调用结果
+    assert "volc_stt" not in providers
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

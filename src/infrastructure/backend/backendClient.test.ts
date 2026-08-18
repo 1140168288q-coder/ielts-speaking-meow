@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { installFakeFormData } from '../../test/fixtures/fakeFormData'
 import { makeBackendHealth } from '../../test/fixtures/backendHealth'
 import { BackendClient } from './backendClient'
 
@@ -118,27 +117,6 @@ describe('BackendClient (web transport)', () => {
     const audio = await client.postBinary('/v1/tts', { text: 'hi' }, 5_000)
     expect(audio.type).toBe('audio/mpeg')
     expect(await audio.arrayBuffer()).toHaveProperty('byteLength', 3)
-  })
-
-  it('sends multipart fields and file for postMultipartJson', async () => {
-    installFakeFormData()
-    const fetch = vi.fn().mockResolvedValue(jsonResponse({ text: 'hello' }))
-    const client = createClient(fetch)
-    await client.postMultipartJson(
-      '/v1/stt',
-      { language: 'en' },
-      {
-        fieldName: 'file',
-        fileName: 'audio.wav',
-        mimeType: 'audio/wav',
-        data: new Blob(['wav'], { type: 'audio/wav' }),
-      },
-      5_000,
-    )
-    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
-    const formData = init.body as { get(key: string): unknown }
-    expect(formData.get('language')).toBe('en')
-    expect(formData.get('file')).toBeInstanceOf(Blob)
   })
 
   it('uses the dynamic base URL getter when provided', async () => {

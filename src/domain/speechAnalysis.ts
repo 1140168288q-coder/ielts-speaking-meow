@@ -59,8 +59,9 @@ const countRepeatedWords = (words: readonly string[]) => {
 }
 
 /**
- * Produces deliberately limited, transcript-based fluency metrics.
- * It never claims to measure pronunciation or an IELTS band score.
+ * Produces deliberately limited, answer-text metrics for local fallback only.
+ * It never claims to measure pronunciation, speech rate, pauses or an IELTS
+ * band score; V1.7 does not compute speech-rate values at all.
  */
 export const analyzeSpeech = (input: {
   transcript: string
@@ -79,36 +80,19 @@ export const analyzeSpeech = (input: {
     (total, item) => total + item.count,
     0,
   )
-  const wordsPerMinute =
-    parsedInput.durationMs > 0 && words.length > 0
-      ? Math.round((words.length * 60_000) / parsedInput.durationMs)
-      : null
-
-  const caveats = [
-    'Word count, filler words and repetitions are estimated from the transcript.',
-  ]
-
-  if (wordsPerMinute !== null) {
-    caveats.push(
-      'Words per minute is approximate and depends on transcript accuracy and recorded duration.',
-    )
-  }
-
-  if (parsedInput.acoustic !== undefined && parsedInput.acoustic !== null) {
-    caveats.push(
-      'Pause and silence values are approximate local audio signals, not pronunciation or band scores.',
-    )
-  }
 
   return speechMetricsSchema.parse({
     durationMs: parsedInput.durationMs,
     wordCount: words.length,
-    wordsPerMinute,
+    // V1.7 不再计算或展示语速;只保留历史记录中的旧值。
+    wordsPerMinute: null,
     fillerWords,
     fillerCount,
     repeatedWords,
     repeatedWordCount,
     acoustic: parsedInput.acoustic ?? null,
-    caveats,
+    caveats: [
+      'Word count, filler words and repetitions are estimated from the submitted answer text.',
+    ],
   })
 }

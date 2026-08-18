@@ -1,22 +1,14 @@
-import type {
-  AiFeedback,
-  AttemptComparison,
-  Question,
-  SpeechMetrics,
-} from '../domain/models'
+import type { AiFeedback, Question } from '../domain/models'
 import type { ImportQuestionCandidate } from '../domain/imports'
 
+/**
+ * DeepSeek 只分析用户提交的答案文本。answerDurationSeconds 是用户主动
+ * 使用计时器得到的参考作答时长,可为 null;服务端不会据此评价语速。
+ */
 export interface LLMFeedbackRequest {
   question: Question
-  transcript: string
-  metrics: SpeechMetrics
-}
-
-export interface LLMComparisonRequest {
-  question: Question
-  firstTranscript: string
-  secondTranscript: string
-  localComparison: AttemptComparison
+  answer: string
+  answerDurationSeconds: number | null
 }
 
 /**
@@ -28,7 +20,6 @@ export interface LLMProvider {
   readonly id: string
   isConfigured(): boolean
   getFeedback(request: LLMFeedbackRequest): Promise<AiFeedback>
-  compareAttempts(request: LLMComparisonRequest): Promise<AiFeedback>
 }
 
 export interface MaterialQuestionRequest {
@@ -42,10 +33,4 @@ export interface MaterialQuestionOrganizer {
   extractQuestions(
     request: MaterialQuestionRequest,
   ): Promise<ImportQuestionCandidate[]>
-}
-
-/** Reserved for future acoustic evidence. V1 does not provide pronunciation scores. */
-export interface PronunciationProvider {
-  readonly id: string
-  isConfigured(): boolean
 }

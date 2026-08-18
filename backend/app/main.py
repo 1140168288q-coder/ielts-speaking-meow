@@ -11,11 +11,10 @@ from fastapi.responses import JSONResponse
 from .config import Settings, get_settings
 from .errors import BackendError
 from .logging_setup import configure_logging
-from .routers import feedback, health, stt, tts
+from .routers import feedback, health, tts
 from .security import RequestIdMiddleware, SlidingWindowRateLimiter
 from .services.deepseek_service import DeepSeekService
 from .services.http_client import build_http_client
-from .services.volcengine_streaming_stt_service import VolcengineStreamingSTTService
 from .services.volcengine_tts_service import VolcengineTTSService
 
 
@@ -35,11 +34,10 @@ def create_app(
     client = client or build_http_client(120.0)
     services = {
         "deepseek": DeepSeekService(client, settings),
-        "volc_stt": VolcengineStreamingSTTService(settings),
         "volc_tts": VolcengineTTSService(client, settings),
     }
 
-    app = FastAPI(title="雅思口语喵 Backend", version="1.6.0")
+    app = FastAPI(title="雅思口语喵 Backend", version="1.7.0")
     app.state.settings = settings
     app.state.client = client
     app.state.services = services
@@ -59,7 +57,6 @@ def create_app(
     app.add_middleware(RequestIdMiddleware)
 
     app.include_router(health.router)
-    app.include_router(stt.router, tags=["stt"])
     app.include_router(feedback.router, tags=["feedback"])
     app.include_router(tts.router, tags=["tts"])
 

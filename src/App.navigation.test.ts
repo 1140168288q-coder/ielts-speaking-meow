@@ -1,5 +1,4 @@
 import {
-  formatMicrophoneStartError,
   requestSafePracticeExit,
   resetViewScroll,
   resolveAndroidBackAction,
@@ -15,7 +14,7 @@ function focus(state: AudioFocusState) {
 }
 
 describe('requestSafePracticeExit', () => {
-  it('blocks visible navigation while the microphone is recording', async () => {
+  it('blocks navigation while a recording-like activity is still active', async () => {
     const { audioFocus, stopAllPlayback } = focus('recording')
     const onExit = vi.fn()
 
@@ -26,7 +25,7 @@ describe('requestSafePracticeExit', () => {
     expect(onExit).not.toHaveBeenCalled()
   })
 
-  it('also blocks while microphone permission or local persistence is pending', async () => {
+  it('also blocks while local persistence is pending', async () => {
     const { audioFocus, stopAllPlayback } = focus('idle')
     const onExit = vi.fn()
 
@@ -108,33 +107,3 @@ describe('resetViewScroll', () => {
   })
 })
 
-describe('formatMicrophoneStartError', () => {
-  it('gives an actionable Android settings path for NotAllowedError', () => {
-    const error = new DOMException('The request is not allowed', 'NotAllowedError')
-
-    expect(formatMicrophoneStartError(error)).toContain(
-      '系统设置 → 应用 → 雅思口语喵 → 权限 → 麦克风',
-    )
-  })
-
-  it('recognizes a provider Permission denied message case-insensitively', () => {
-    expect(formatMicrophoneStartError(new Error('PERMISSION DENIED'))).toContain(
-      '系统设置 → 应用 → 雅思口语喵 → 权限 → 麦克风',
-    )
-  })
-
-  it('preserves the existing semantics for unrelated recorder errors', () => {
-    const error = new Error('Microphone is already in use')
-    error.name = 'NotReadableError'
-
-    expect(formatMicrophoneStartError(error)).toBe(
-      '无法开始录音：Microphone is already in use',
-    )
-  })
-
-  it('preserves the generic fallback for non-Error failures', () => {
-    expect(formatMicrophoneStartError('unknown failure')).toBe(
-      '无法开始录音，请检查麦克风权限。',
-    )
-  })
-})

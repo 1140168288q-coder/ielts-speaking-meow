@@ -29,7 +29,8 @@ export interface LocalStorage {
  * Durable storage for the user's original recordings.
  *
  * `deleteAudio` is intentionally explicit. Implementations must never invoke it
- * as cleanup after a failed save/read or after an STT/provider failure.
+ * as cleanup after a failed save/read or a provider failure. V1.7 新练习不再
+ * 产生录音;该接口仅为读取/维护 V1.6 及更早版本的历史录音保留。
  */
 export interface AudioStorage {
   saveAudio(audioId: string, audio: Blob): Promise<void>

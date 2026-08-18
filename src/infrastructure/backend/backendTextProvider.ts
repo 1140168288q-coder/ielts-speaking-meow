@@ -6,7 +6,6 @@ import {
   type ImportQuestionCandidate,
 } from '../../domain'
 import type {
-  LLMComparisonRequest,
   LLMFeedbackRequest,
   LLMProvider,
   MaterialQuestionOrganizer,
@@ -41,29 +40,18 @@ export class BackendTextProvider implements LLMProvider, MaterialQuestionOrganiz
     const data = await this.client.postJson<unknown>(
       '/v1/feedback',
       {
-        kind: 'first-attempt',
+        part: request.question.part,
         question: request.question,
-        transcript: request.transcript,
-        metrics: request.metrics,
+        answer: request.answer,
+        answerDurationSeconds: request.answerDurationSeconds,
       },
       TEXT_TIMEOUT_MS,
     )
-    return parseValidated(data, aiFeedbackSchema, 'Text AI 返回结构不完整,已保留本地结果。')
-  }
-
-  async compareAttempts(request: LLMComparisonRequest): Promise<AiFeedback> {
-    const data = await this.client.postJson<unknown>(
-      '/v1/feedback',
-      {
-        kind: 'comparison',
-        question: request.question,
-        firstTranscript: request.firstTranscript,
-        secondTranscript: request.secondTranscript,
-        localComparison: request.localComparison,
-      },
-      TEXT_TIMEOUT_MS,
+    return parseValidated(
+      data,
+      aiFeedbackSchema,
+      'Text AI 返回结构不完整,已保留本地结果。',
     )
-    return parseValidated(data, aiFeedbackSchema, 'Text AI 返回结构不完整,已保留本地结果。')
   }
 
   async extractQuestions(

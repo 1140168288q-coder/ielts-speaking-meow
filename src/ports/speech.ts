@@ -1,6 +1,6 @@
 import type { AcousticSpeechMetrics } from '../domain/models'
 
-export type SpeechCapability = 'tts' | 'stt' | 'recording'
+export type SpeechCapability = 'tts' | 'recording'
 
 export class SpeechCapabilityUnavailableError extends Error {
   readonly capability: SpeechCapability
@@ -58,77 +58,6 @@ export interface SystemTtsStatus {
  */
 export interface SystemTTSProvider extends TTSProvider {
   getStatus(): Promise<SystemTtsStatus>
-}
-
-export interface STTRequest {
-  language?: string
-  continuous?: boolean
-  interimResults?: boolean
-}
-
-export interface STTResult {
-  transcript: string
-  isFinal: boolean
-  confidence?: number
-}
-
-export type STTErrorCode =
-  | 'aborted'
-  | 'audio-capture'
-  | 'network'
-  | 'no-speech'
-  | 'not-allowed'
-  | 'service-not-allowed'
-  | 'unknown'
-
-export class STTError extends Error {
-  readonly code: STTErrorCode
-  readonly retryable: boolean
-
-  constructor(code: STTErrorCode, message: string, retryable = true) {
-    super(message)
-    this.name = 'STTError'
-    this.code = code
-    this.retryable = retryable
-  }
-}
-
-export interface STTListener {
-  onResult(result: STTResult): void
-  onError?(error: STTError): void
-  onEnd?(): void
-}
-
-export interface STTSession {
-  stop(): Promise<void>
-  abort(): Promise<void>
-}
-
-/** Live transcription capability. The original audio is owned separately. */
-export interface STTProvider {
-  readonly id: string
-  isAvailable(): boolean
-  start(request: STTRequest, listener: STTListener): Promise<STTSession>
-}
-
-export interface RecordedAudioSTTRequest {
-  audio: Blob
-  mimeType: string
-  fileName: string
-  language?: string
-}
-
-/** Remote/file STT runs only after the original recording has been saved. */
-export interface RecordedAudioSTTProvider {
-  readonly id: string
-  isConfigured(): boolean
-  /**
-   * 云端 STT 是否已确认可用。只有为 true 时才应跳过本地实时转写;
-   * 状态未知(isConfigured() 为 true 但本方法为 false)时应同时保留本地
-   * 实时转写作为云端失败时的回退。
-   */
-  isDefinitelyConfigured(): boolean
-  transcribe(request: RecordedAudioSTTRequest): Promise<string>
 }
 
 export interface AudioRecording {

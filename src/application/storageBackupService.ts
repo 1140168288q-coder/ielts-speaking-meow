@@ -48,7 +48,9 @@ export class StorageBackupService {
     ])
     const audioIds = [...new Set(
       sessions.flatMap((session) =>
-        session.attempts.map((attempt) => attempt.audio.id),
+        session.attempts.flatMap((attempt) =>
+          attempt.audio ? [attempt.audio.id] : [],
+        ),
       ),
     )]
     const audio = []
@@ -95,7 +97,7 @@ export class StorageBackupService {
     const audioById = new Map(parsed.data.audio.map((item) => [item.id, item]))
     for (const session of parsed.data.sessions) {
       for (const attempt of session.attempts) {
-        if (!audioById.has(attempt.audio.id)) {
+        if (attempt.audio && !audioById.has(attempt.audio.id)) {
           throw new Error(`备份缺少练习所需录音：${attempt.audio.id}`)
         }
       }

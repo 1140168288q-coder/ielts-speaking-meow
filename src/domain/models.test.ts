@@ -1,21 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   aiFeedbackSchema,
+  answerVersionOptionSchema,
   feedbackSummarySchema,
   practiceTextsSchema,
   questionBankSchema,
   questionSchema,
   savedExpressionSchema,
 } from './models'
-
-const feedbackItem = {
-  category: 'fluency' as const,
-  kind: 'focus' as const,
-  title: 'Use a short pause',
-  observation: 'The answer contains a clear filler word.',
-  action: 'Pause silently before the next phrase.',
-  evidence: 'um ×1',
-}
 
 describe('question schemas', () => {
   it('requires cue points for a Part 2 question', () => {
@@ -63,56 +55,49 @@ describe('question schemas', () => {
 })
 
 describe('AI feedback schema', () => {
-  it('accepts a small structured response', () => {
-    const result = aiFeedbackSchema.safeParse({
-      keyIssues: [feedbackItem],
-      secondAttemptTips: ['Pause briefly before the main reason.'],
-      revisions: {
-        minimalFix: 'I go there twice a week.',
-        naturalVersion: null,
-        stretchVersion: null,
-      },
-    })
+  const feedback = {
+    summary: '回答切题，重点改进过去时态。',
+    strengths: ['有具体例子。'],
+    problems: ['过去时态混用。'],
+    grammarSuggestions: ['先想好动词过去式。'],
+    vocabularySuggestions: [],
+    improvedAnswer: 'I like reading books because they help me relax.',
+    referenceAnswers: [
+      { label: '简单自然版', text: 'I like reading books because they help me relax.' },
+      { label: '自然提升版', text: 'I enjoy reading books because they help me unwind.' },
+      { label: '另一种表达版', text: 'Reading is my favourite way to relax.' },
+    ],
+  }
 
+  it('accepts the V1.7 text-analysis contract', () => {
+    const result = aiFeedbackSchema.safeParse(feedback)
     expect(result.success).toBe(true)
   })
 
-  it('rejects more than three issues or tips', () => {
-    const tooManyIssues = aiFeedbackSchema.safeParse({
-      keyIssues: Array.from({ length: 4 }, () => feedbackItem),
-      secondAttemptTips: [],
-      revisions: {
-        minimalFix: null,
-        naturalVersion: null,
-        stretchVersion: null,
-      },
-    })
-    const tooManyTips = aiFeedbackSchema.safeParse({
-      keyIssues: [],
-      secondAttemptTips: ['one', 'two', 'three', 'four'],
-      revisions: {
-        minimalFix: null,
-        naturalVersion: null,
-        stretchVersion: null,
-      },
-    })
-
-    expect(tooManyIssues.success).toBe(false)
-    expect(tooManyTips.success).toBe(false)
+  it('rejects more than three reference answers or suggestion items', () => {
+    expect(
+      aiFeedbackSchema.safeParse({
+        ...feedback,
+        problems: ['one', 'two', 'three', 'four'],
+      }).success,
+    ).toBe(false)
+    expect(
+      aiFeedbackSchema.safeParse({
+        ...feedback,
+        referenceAnswers: [
+          ...feedback.referenceAnswers,
+          { label: '第四个版本', text: 'A fourth version.' },
+        ],
+      }).success,
+    ).toBe(false)
   })
 
-  it('rejects vendor-specific fields outside the contract', () => {
+  it('rejects fields outside the contract such as band scores or speech metrics', () => {
     const result = aiFeedbackSchema.safeParse({
-      keyIssues: [],
-      secondAttemptTips: [],
-      revisions: {
-        minimalFix: null,
-        naturalVersion: null,
-        stretchVersion: null,
-      },
-      modelScore: 8.5,
+      ...feedback,
+      ieltsBand: 6.5,
+      pronunciationScore: 8.5,
     })
-
     expect(result.success).toBe(false)
   })
 })
@@ -142,18 +127,13 @@ describe('feedback summary and answer version schemas', () => {
     expect(result.success).toBe(true)
   })
 
-  it('accepts at most three answer versions', () => {
-    const versions = [
-      { style: '基础稳妥', text: 'I like reading at home.', hint: 'I like ...' },
-      { style: '自然均衡', text: 'In my free time I enjoy reading.', hint: 'In my free time ...' },
-      { style: '略加挑战', text: 'Reading is my favourite way to relax.', hint: '... is my favourite way to ...' },
-      { style: '超出', text: 'A fourth version.', hint: 'fourth' },
-    ]
-    const result = aiFeedbackSchema.safeParse({
-      summary: { problem: '问题。', suggestion: '建议。' },
-      versions,
+  it('keeps the legacy answer-version contract for reading V1.6 sessions', () => {
+    const result = answerVersionOptionSchema.safeParse({
+      style: '基础稳妥',
+      text: 'I like reading at home.',
+      hint: 'I like ...',
     })
-    expect(result.success).toBe(false)
+    expect(result.success).toBe(true)
   })
 })
 

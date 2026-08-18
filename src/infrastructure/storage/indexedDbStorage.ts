@@ -2,9 +2,9 @@ import {
   backendConfigSchema,
   importedQuestionRecordSchema,
   importSourceSchema,
+  normalizeStoredTrainingSession,
   practiceTextsSchema,
   savedExpressionSchema,
-  trainingSessionSchema,
   ttsCacheEntrySchema,
   type BackendConfig,
   type ImportedQuestionRecord,
@@ -108,11 +108,20 @@ export class IndexedDbStorage
 
   async getSession(sessionId: string): Promise<TrainingSession | null> {
     assertStorageKey(sessionId, 'Session')
-    return this.getParsed(STORES.sessions, sessionId, trainingSessionSchema)
+    const value = await this.get<unknown>(STORES.sessions, sessionId)
+    return value === null ? null : normalizeStoredTrainingSession(value)
   }
 
   async listSessions(): Promise<TrainingSession[]> {
-    return this.getAllParsed(STORES.sessions, trainingSessionSchema)
+    const values = await this.getAll<unknown>(STORES.sessions)
+    const validValues: TrainingSession[] = []
+    for (const value of values) {
+      const parsed = normalizeStoredTrainingSession(value)
+      if (parsed !== null) {
+        validValues.push(parsed)
+      }
+    }
+    return validValues
   }
 
   async upsertExpression(expression: SavedExpression): Promise<void> {
@@ -339,7 +348,9 @@ export class IndexedDbStorage
     assertStorageKey(sessionId, 'Session')
     const session = await this.getSession(sessionId)
     const audioIds = [...new Set(
-      session?.attempts.map((attempt) => attempt.audio.id) ?? [],
+      session?.attempts.flatMap((attempt) =>
+        attempt.audio ? [attempt.audio.id] : [],
+      ) ?? [],
     )]
     const database = await this.getDatabase()
     const transaction = database.transaction(

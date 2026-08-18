@@ -30,10 +30,7 @@ import { recommendQuestion } from './domain/progress'
 import type { ImportedQuestionRecord } from './domain/imports'
 import type { AudioFocus } from './ports/speech'
 
-// Re-exported for focused regression tests and the Android back adapter.
-// eslint-disable-next-line react-refresh/only-export-components -- re-export keeps legacy test imports working.
-export { formatMicrophoneStartError } from './app/practiceExit'
-export { AttemptReview } from './features/practice'
+
 
 type AppView =
   | 'questions'
@@ -72,8 +69,8 @@ export const resolveAndroidBackAction = (
 
 /**
  * Shared by visible navigation today and a future native Back adapter. Leaving
- * is deliberately denied while microphone capture is pending, active, or being
- * persisted so an answer cannot be abandoned silently.
+ * is deliberately denied while an answer is being persisted so it cannot be
+ * abandoned silently.
  */
 // eslint-disable-next-line react-refresh/only-export-components -- native Back integration reuses this guard.
 export const requestSafePracticeExit = async (
@@ -198,7 +195,7 @@ export function App() {
   }
 
   const deleteSession = async (sessionId: string) => {
-    if (!window.confirm('删除这次练习及其两段原始录音？此操作不可撤销。')) return
+    if (!window.confirm('删除这次练习记录？此操作不可撤销。')) return
     try {
       await runtime.storage.deleteSessionWithAudio(sessionId)
       if (session?.id === sessionId) setSession(null)
@@ -238,7 +235,7 @@ export function App() {
             return
           }
           setNavigationNotice(
-            '正在申请麦克风、录音或保存回答。请先完成“停止并保存”，再离开练习。',
+            '正在保存回答，请稍候片刻再离开练习。',
           )
           window.scrollTo({ top: 0, behavior: 'smooth' })
         })
@@ -337,7 +334,7 @@ export function App() {
           </span>
           <span>
             <strong>雅思口语喵</strong>
-            <small>两次开口，看见进步</small>
+            <small>说出来，再改一遍</small>
           </span>
         </button>
         <span className={apiConnected ? 'api-badge ok' : 'api-badge down'}>
@@ -383,8 +380,6 @@ export function App() {
             session={session}
             service={runtime.practiceService}
             audioFocus={runtime.audioFocus}
-            stt={runtime.stt}
-            remoteStt={runtime.remoteStt}
             textAi={runtime.textAi}
             onExitGuardChange={setPracticeExitGuardActive}
             onChange={handleSessionChange}
@@ -434,7 +429,6 @@ export function App() {
           <SettingsController
             configStore={runtime.configStore}
             healthCache={runtime.healthCache}
-            systemStt={runtime.stt}
             systemTts={runtime.systemTts}
             preferredVoice={runtime.voiceAi}
             dataMaintenance={runtime.storage}

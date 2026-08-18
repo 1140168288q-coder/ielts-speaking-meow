@@ -23,7 +23,7 @@ export function makeProviderHealth(
 
 export function makeBackendHealth(
   providers: Record<string, BackendProviderHealth | boolean>,
-  version = '1.5.0',
+  version = '1.7.0',
 ): BackendHealth {
   const entries = Object.entries(providers).map(([name, value]) => {
     if (value === true) return [name, makeProviderHealth()]

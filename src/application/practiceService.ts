@@ -1,45 +1,25 @@
 import {
   aiFeedbackSchema,
+  savedExpressionSchema,
+  trainingSessionSchema,
   type AiFeedback,
   type PracticeAttempt,
   type SavedExpression,
   type TrainingSession,
-  savedExpressionSchema,
-  trainingSessionSchema,
 } from '../domain/models'
-import {
-  compareAttempts,
-  createLocalFeedback,
-} from '../domain/comparison'
-import { diffPronunciation } from '../domain/pronunciation'
 import { analyzeSpeech } from '../domain/speechAnalysis'
-import type { AudioRecording, RecordedAudioAnalyzer } from '../ports/speech'
-import type { AudioStorage, LocalStorage } from '../ports/storage'
+import type { LocalStorage } from '../ports/storage'
 
 export interface PracticeServiceDependencies {
   localStorage: LocalStorage
-  audioStorage: AudioStorage
-  audioAnalyzer?: RecordedAudioAnalyzer
   now?: () => Date
   createId?: () => string
 }
 
-export interface InitialTranscript {
-  text: string
-  status: 'pending' | 'ready' | 'failed'
-  source: 'stt' | 'manual' | null
-  errorCode?: string | null
-}
-
-export interface FirstTranscriptSnapshot {
+export interface AnswerTextSnapshot {
   attemptId: string
   text: string
   updatedAt: string
-}
-
-export interface ComparisonTranscriptSnapshot {
-  first: FirstTranscriptSnapshot
-  second: FirstTranscriptSnapshot
 }
 
 const defaultCreateId = () => {
@@ -51,20 +31,19 @@ const defaultCreateId = () => {
 }
 
 /**
- * Coordinates durable practice writes. Original audio is always committed
- * before attempt metadata and is never deleted when a later operation fails.
+ * Coordinates durable text-answer practice writes.
+ *
+ * V1.7 起答题为文本:用户手动输入,或使用手机系统键盘的语音输入。
+ * 可选计时器只记录作答耗时,仅供参考,不参与任何语速或语音表现评价。
+ * 历史录音数据仍由存储层原样保留,本服务不再读取或删除它们。
  */
 export class PracticeService {
   private readonly localStorage: LocalStorage
-  private readonly audioStorage: AudioStorage
-  private readonly audioAnalyzer: RecordedAudioAnalyzer | null
   private readonly now: () => Date
   private readonly createId: () => string
 
   constructor(dependencies: PracticeServiceDependencies) {
     this.localStorage = dependencies.localStorage
-    this.audioStorage = dependencies.audioStorage
-    this.audioAnalyzer = dependencies.audioAnalyzer ?? null
     this.now = dependencies.now ?? (() => new Date())
     this.createId = dependencies.createId ?? defaultCreateId
   }
@@ -88,46 +67,37 @@ export class PracticeService {
     return session
   }
 
-  async saveAttempt(
+  async saveTextAttempt(
     sessionId: string,
     attemptNumber: 1 | 2,
-    recording: AudioRecording,
-    transcriptInput: InitialTranscript,
+    text: string,
+    answerDurationMs: number | null = null,
   ): Promise<TrainingSession> {
-    if (recording.blob.size === 0) {
-      throw new Error('The recording is empty and was not saved.')
+    const cleanText = text.trim()
+    if (cleanText.length === 0) {
+      throw new Error('请先输入答案文本，再提交。')
     }
 
     const session = await this.requireSession(sessionId)
     const timestamp = this.now().toISOString()
-    const audioId = this.createId()
     const attemptId = this.createId()
-    const durationMs = Math.max(1, recording.durationMs)
-
-    // Critical durability order: audio first, session metadata second.
-    await this.audioStorage.saveAudio(audioId, recording.blob)
-    const acoustic = await this.analyzeAudio(recording.blob)
-
-    const transcriptText = transcriptInput.text.trim()
+    const durationMs = answerDurationMs ?? 0
     const attempt: PracticeAttempt = {
       id: attemptId,
       attemptNumber,
-      audio: {
-        id: audioId,
-        relativePath: `indexeddb://audio/${audioId}`,
-        mimeType: recording.mimeType,
-        durationMs,
-        createdAt: timestamp,
-      },
+      audio: null,
       transcript: {
-        status: transcriptInput.status,
-        text: transcriptText,
-        originalText: transcriptInput.source === 'stt' ? transcriptText : null,
-        source: transcriptInput.source,
-        errorCode: transcriptInput.errorCode ?? null,
+        status: 'ready',
+        text: cleanText,
+        originalText: null,
+        source: 'manual',
+        errorCode: null,
         updatedAt: timestamp,
       },
-      metrics: analyzeSpeech({ transcript: transcriptText, durationMs, acoustic }),
+      metrics: analyzeSpeech({
+        transcript: cleanText,
+        durationMs,
+      }),
       createdAt: timestamp,
       updatedAt: timestamp,
     }
@@ -139,121 +109,18 @@ export class PracticeService {
       attempt,
     ].sort((a, b) => a.attemptNumber - b.attemptNumber)
 
-    const firstAttempt = attempts.find((item) => item.attemptNumber === 1)
-    const secondAttempt = attempts.find((item) => item.attemptNumber === 2)
     const updated = trainingSessionSchema.parse({
       ...session,
       attempts,
       status: attemptNumber === 1 ? 'first-review' : 'comparison-ready',
-      localFeedback: firstAttempt
-        ? createLocalFeedback(firstAttempt.metrics)
-        : session.localFeedback,
-      comparison:
-        firstAttempt && secondAttempt
-          ? compareAttempts(firstAttempt.metrics, secondAttempt.metrics)
-          : null,
+      localFeedback: [],
+      comparison: null,
       aiComparison: null,
       updatedAt: timestamp,
     })
 
     await this.localStorage.upsertSession(updated)
     return updated
-  }
-
-  async updateTranscript(
-    sessionId: string,
-    attemptNumber: 1 | 2,
-    text: string,
-  ): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    const timestamp = this.now().toISOString()
-    const existing = session.attempts.find(
-      (attempt) => attempt.attemptNumber === attemptNumber,
-    )
-    if (!existing) {
-      throw new Error(`Attempt ${attemptNumber} does not exist.`)
-    }
-
-    const cleanText = text.trim()
-    const updatedAttempt: PracticeAttempt = {
-      ...existing,
-      transcript: {
-        ...existing.transcript,
-        status: 'ready',
-        text: cleanText,
-        source: existing.transcript.originalText ? 'edited' : 'manual',
-        errorCode: null,
-        updatedAt: timestamp,
-      },
-      metrics: analyzeSpeech({
-        transcript: cleanText,
-        durationMs: existing.audio.durationMs,
-        acoustic: existing.metrics.acoustic ?? null,
-      }),
-      updatedAt: timestamp,
-    }
-    const attempts = session.attempts.map((attempt) =>
-      attempt.attemptNumber === attemptNumber ? updatedAttempt : attempt,
-    )
-    const firstAttempt = attempts.find((attempt) => attempt.attemptNumber === 1)
-    const secondAttempt = attempts.find((attempt) => attempt.attemptNumber === 2)
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      attempts,
-      localFeedback: firstAttempt
-        ? createLocalFeedback(firstAttempt.metrics)
-        : session.localFeedback,
-      comparison:
-        firstAttempt && secondAttempt
-          ? compareAttempts(firstAttempt.metrics, secondAttempt.metrics)
-          : null,
-      aiFeedback:
-        attemptNumber === 1 ? null : session.aiFeedback,
-      aiComparison: null,
-      selectedVersionIndex:
-        attemptNumber === 1 ? null : session.selectedVersionIndex,
-      readAloud: attemptNumber === 1 ? null : session.readAloud,
-      updatedAt: timestamp,
-    })
-
-    await this.localStorage.upsertSession(updated)
-    return updated
-  }
-
-  async applySttTranscript(
-    sessionId: string,
-    attemptNumber: 1 | 2,
-    text: string,
-  ): Promise<TrainingSession> {
-    return this.replaceTranscript(sessionId, attemptNumber, {
-      status: 'ready',
-      text,
-      source: 'stt',
-      originalText: text,
-      errorCode: null,
-    })
-  }
-
-  async markTranscriptionFailed(
-    sessionId: string,
-    attemptNumber: 1 | 2,
-    errorCode = 'provider-failed',
-  ): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    const existing = session.attempts.find(
-      (attempt) => attempt.attemptNumber === attemptNumber,
-    )
-    if (!existing) {
-      throw new Error(`Attempt ${attemptNumber} does not exist.`)
-    }
-
-    return this.replaceTranscript(sessionId, attemptNumber, {
-      status: 'failed',
-      text: existing.transcript.text,
-      source: existing.transcript.source,
-      originalText: existing.transcript.originalText,
-      errorCode,
-    })
   }
 
   async applyAiFeedback(
@@ -264,9 +131,9 @@ export class PracticeService {
     return this.persistAiFeedback(session, feedback)
   }
 
-  async applyAiFeedbackIfTranscriptCurrent(
+  async applyAiFeedbackIfAnswerCurrent(
     sessionId: string,
-    snapshot: FirstTranscriptSnapshot,
+    snapshot: AnswerTextSnapshot,
     feedback: AiFeedback,
   ): Promise<TrainingSession | null> {
     const parsedFeedback = aiFeedbackSchema.parse(feedback)
@@ -287,36 +154,6 @@ export class PracticeService {
     return this.persistAiFeedback(session, parsedFeedback)
   }
 
-  async applyAiComparisonIfTranscriptsCurrent(
-    sessionId: string,
-    snapshot: ComparisonTranscriptSnapshot,
-    feedback: AiFeedback,
-  ): Promise<TrainingSession | null> {
-    const parsedFeedback = aiFeedbackSchema.parse(feedback)
-    const session = await this.requireSession(sessionId)
-    const firstAttempt = session.attempts.find(
-      (attempt) => attempt.attemptNumber === 1,
-    )
-    const secondAttempt = session.attempts.find(
-      (attempt) => attempt.attemptNumber === 2,
-    )
-
-    if (
-      !this.transcriptMatches(firstAttempt, snapshot.first) ||
-      !this.transcriptMatches(secondAttempt, snapshot.second)
-    ) {
-      return null
-    }
-
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      aiComparison: parsedFeedback,
-      updatedAt: this.now().toISOString(),
-    })
-    await this.localStorage.upsertSession(updated)
-    return updated
-  }
-
   private async persistAiFeedback(
     session: TrainingSession,
     feedback: AiFeedback,
@@ -335,7 +172,7 @@ export class PracticeService {
   async prepareSecondAttempt(sessionId: string): Promise<TrainingSession> {
     const session = await this.requireSession(sessionId)
     if (!session.attempts.some((attempt) => attempt.attemptNumber === 1)) {
-      throw new Error('The first recording must be saved before attempt two.')
+      throw new Error('请先完成第一次回答，再进入第二次。')
     }
 
     const updated = trainingSessionSchema.parse({
@@ -347,155 +184,9 @@ export class PracticeService {
     return updated
   }
 
-  /** 用户选定一个 AI 建议版本(0-2),已存在的跟读记录随之作废。 */
-  async selectVersion(sessionId: string, index: number): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    const versions = session.aiFeedback?.versions ?? []
-    if (index < 0 || index >= versions.length) {
-      throw new Error('所选回答版本不存在，请重新选择。')
-    }
-
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      selectedVersionIndex: index,
-      readAloud: null,
-      updatedAt: this.now().toISOString(),
-    })
-    await this.localStorage.upsertSession(updated)
-    return updated
-  }
-
-  /** 保存跟读录音;转写就绪时立即做逐词发音比对。 */
-  async saveReadAloud(
-    sessionId: string,
-    recording: AudioRecording,
-    transcriptInput: InitialTranscript,
-  ): Promise<TrainingSession> {
-    if (recording.blob.size === 0) {
-      throw new Error('The recording is empty and was not saved.')
-    }
-
-    const session = await this.requireSession(sessionId)
-    const versionIndex = session.selectedVersionIndex
-    if (versionIndex === null || versionIndex === undefined) {
-      throw new Error('请先选择一个回答版本，再开始跟读。')
-    }
-    const targetVersion = session.aiFeedback?.versions?.[versionIndex]
-    if (!targetVersion) {
-      throw new Error('所选回答版本已不存在，请重新获取 AI 建议。')
-    }
-
-    const timestamp = this.now().toISOString()
-    const audioId = this.createId()
-    // Critical durability order: audio first, session metadata second.
-    await this.audioStorage.saveAudio(audioId, recording.blob)
-
-    const transcriptText = transcriptInput.text.trim()
-    const issues =
-      transcriptInput.status === 'ready' && transcriptText.length > 0
-        ? diffPronunciation(targetVersion.text, transcriptText)
-        : []
-
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      readAloud: {
-        audio: {
-          id: audioId,
-          relativePath: `indexeddb://audio/${audioId}`,
-          mimeType: recording.mimeType,
-          durationMs: Math.max(1, recording.durationMs),
-          createdAt: timestamp,
-        },
-        transcript: {
-          status: transcriptInput.status,
-          text: transcriptText,
-          originalText:
-            transcriptInput.source === 'stt' ? transcriptText : null,
-          source: transcriptInput.source,
-          errorCode: transcriptInput.errorCode ?? null,
-          updatedAt: timestamp,
-        },
-        targetVersionIndex: versionIndex,
-        issues,
-      },
-      updatedAt: timestamp,
-    })
-    await this.localStorage.upsertSession(updated)
-    return updated
-  }
-
-  /** 跟读转写完成后写入文本并重算发音比对结果。 */
-  async applyReadAloudTranscript(
-    sessionId: string,
-    text: string,
-  ): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    const existing = session.readAloud
-    if (!existing) {
-      throw new Error('The read-aloud recording does not exist.')
-    }
-    const targetVersion =
-      session.aiFeedback?.versions?.[existing.targetVersionIndex]
-    if (!targetVersion) {
-      throw new Error('所选回答版本已不存在，请重新获取 AI 建议。')
-    }
-
-    const cleanText = text.trim()
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      readAloud: {
-        ...existing,
-        transcript: {
-          ...existing.transcript,
-          status: 'ready',
-          text: cleanText,
-          originalText: cleanText,
-          source: 'stt',
-          errorCode: null,
-          updatedAt: this.now().toISOString(),
-        },
-        issues:
-          cleanText.length > 0
-            ? diffPronunciation(targetVersion.text, cleanText)
-            : [],
-      },
-      updatedAt: this.now().toISOString(),
-    })
-    await this.localStorage.upsertSession(updated)
-    return updated
-  }
-
-  /** 跟读转写失败时保留录音与失败状态,复盘仍可继续。 */
-  async markReadAloudTranscriptionFailed(
-    sessionId: string,
-    errorCode = 'provider-failed',
-  ): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    const existing = session.readAloud
-    if (!existing) {
-      throw new Error('The read-aloud recording does not exist.')
-    }
-
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      readAloud: {
-        ...existing,
-        transcript: {
-          ...existing.transcript,
-          status: 'failed',
-          errorCode,
-        },
-        issues: [],
-      },
-      updatedAt: this.now().toISOString(),
-    })
-    await this.localStorage.upsertSession(updated)
-    return updated
-  }
-
   /**
-   * 第二次回答的转写经用户小改后提交:文本写入第二次尝试,并整体收录
-   * 进个人语料,会话完成。
+   * 第二次回答文本经用户小改后提交:写入第二次尝试并整体收录进个人语料,
+   * 会话完成。
    */
   async submitSecondAnswerToCorpus(
     sessionId: string,
@@ -507,7 +198,7 @@ export class PracticeService {
       (attempt) => attempt.attemptNumber === 2,
     )
     if (!secondAttempt) {
-      throw new Error('请先完成第二次回答录音，再提交收录。')
+      throw new Error('请先完成第二次回答，再提交收录。')
     }
 
     const cleanText = text.trim()
@@ -522,14 +213,13 @@ export class PracticeService {
         ...secondAttempt.transcript,
         status: 'ready',
         text: cleanText,
-        source: secondAttempt.transcript.originalText ? 'edited' : 'manual',
+        source: 'edited',
         errorCode: null,
         updatedAt: timestamp,
       },
       metrics: analyzeSpeech({
         transcript: cleanText,
-        durationMs: secondAttempt.audio.durationMs,
-        acoustic: secondAttempt.metrics.acoustic ?? null,
+        durationMs: secondAttempt.metrics.durationMs,
       }),
       updatedAt: timestamp,
     }
@@ -609,10 +299,6 @@ export class PracticeService {
     await this.localStorage.deleteExpression(expressionId)
   }
 
-  getAudio(audioId: string): Promise<Blob | null> {
-    return this.audioStorage.getAudio(audioId)
-  }
-
   getSession(sessionId: string): Promise<TrainingSession | null> {
     return this.localStorage.getSession(sessionId)
   }
@@ -625,97 +311,11 @@ export class PracticeService {
     return expression
   }
 
-  private async replaceTranscript(
-    sessionId: string,
-    attemptNumber: 1 | 2,
-    replacement: {
-      status: 'ready' | 'failed'
-      text: string
-      originalText: string | null
-      source: 'stt' | 'manual' | 'edited' | null
-      errorCode: string | null
-    },
-  ): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    const timestamp = this.now().toISOString()
-    const existing = session.attempts.find(
-      (attempt) => attempt.attemptNumber === attemptNumber,
-    )
-    if (!existing) {
-      throw new Error(`Attempt ${attemptNumber} does not exist.`)
-    }
-
-    const cleanText = replacement.text.trim()
-    const updatedAttempt: PracticeAttempt = {
-      ...existing,
-      transcript: {
-        status: replacement.status,
-        text: cleanText,
-        originalText: replacement.originalText,
-        source: replacement.source,
-        errorCode: replacement.errorCode,
-        updatedAt: timestamp,
-      },
-      metrics: analyzeSpeech({
-        transcript: cleanText,
-        durationMs: existing.audio.durationMs,
-        acoustic: existing.metrics.acoustic ?? null,
-      }),
-      updatedAt: timestamp,
-    }
-    const attempts = session.attempts.map((attempt) =>
-      attempt.attemptNumber === attemptNumber ? updatedAttempt : attempt,
-    )
-    const firstAttempt = attempts.find((attempt) => attempt.attemptNumber === 1)
-    const secondAttempt = attempts.find((attempt) => attempt.attemptNumber === 2)
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      attempts,
-      localFeedback: firstAttempt
-        ? createLocalFeedback(firstAttempt.metrics)
-        : session.localFeedback,
-      comparison:
-        firstAttempt && secondAttempt
-          ? compareAttempts(firstAttempt.metrics, secondAttempt.metrics)
-          : null,
-      aiFeedback:
-        attemptNumber === 1 ? null : session.aiFeedback,
-      aiComparison: null,
-      selectedVersionIndex:
-        attemptNumber === 1 ? null : session.selectedVersionIndex,
-      readAloud: attemptNumber === 1 ? null : session.readAloud,
-      updatedAt: timestamp,
-    })
-
-    await this.localStorage.upsertSession(updated)
-    return updated
-  }
-
   private async requireSession(sessionId: string): Promise<TrainingSession> {
     const session = await this.localStorage.getSession(sessionId)
     if (!session) {
       throw new Error('The practice session could not be found.')
     }
     return session
-  }
-
-  private transcriptMatches(
-    attempt: PracticeAttempt | undefined,
-    snapshot: FirstTranscriptSnapshot,
-  ): boolean {
-    return attempt?.id === snapshot.attemptId &&
-      attempt.transcript.status === 'ready' &&
-      attempt.transcript.text === snapshot.text &&
-      attempt.transcript.updatedAt === snapshot.updatedAt
-  }
-
-  private async analyzeAudio(audio: Blob) {
-    if (this.audioAnalyzer === null) return null
-    try {
-      return await this.audioAnalyzer.analyze(audio)
-    } catch {
-      // Acoustic enrichment must never block saving the original recording.
-      return null
-    }
   }
 }

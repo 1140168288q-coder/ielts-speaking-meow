@@ -162,7 +162,6 @@ describe('BackendTtsProvider', () => {
   it('becomes unavailable when the health cache confirms TTS is not configured', async () => {
     const { client, health } = createHealthClient({
       deepseek: true,
-      volc_stt: true,
       volc_tts: false,
     })
     await health.refresh()

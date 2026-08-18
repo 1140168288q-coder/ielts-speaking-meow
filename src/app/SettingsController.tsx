@@ -6,7 +6,6 @@ import type {
   BackendProviderHealth,
 } from '../infrastructure/backend'
 import type {
-  STTProvider,
   SystemTTSProvider,
   SystemTtsStatus,
   TTSProvider,
@@ -18,7 +17,6 @@ import { StorageManager } from '../features/storage'
 export interface SettingsControllerProps {
   configStore: BackendConfigStore
   healthCache: BackendHealthCache
-  systemStt: STTProvider
   /** 本机系统 TTS(Android)。「测试系统朗读」必须直连它,不走 AI 优先链路。 */
   systemTts: SystemTTSProvider
   /** 首选云端音色(BackendTtsProvider);用于展示当前实际播报来源与试听。 */
@@ -46,7 +44,6 @@ const CLOUD_PREVIEW_TEXT = 'Hello, this is your IELTS speaking coach.'
 export function SettingsController({
   configStore,
   healthCache,
-  systemStt,
   systemTts,
   preferredVoice,
   dataMaintenance,
@@ -238,8 +235,8 @@ export function SettingsController({
       <section className="settings-card">
         <h2 className="section-heading">云端服务</h2>
         <p className="settings-note">
-          转写、Text AI 反馈与 AI 语音均由你自己的云端服务提供。云端不可用时,
-          录音保存、本地反馈、系统朗读等能力仍可正常使用。
+          Text AI 文本分析与 AI 语音均由你自己的云端服务提供。云端不可用时,
+          本地答案保存、本地规则提示与系统朗读仍可正常使用。
         </p>
         <ul className="settings-providers">
           <li>
@@ -319,7 +316,6 @@ export function SettingsController({
         {health !== null ? (
           <ul className="settings-providers">
             <li>DeepSeek(Text AI):{providerSummary(health.providers.deepseek)}</li>
-            <li>火山流式语音识别(STT):{sttSummary(health.providers.volc_stt)}</li>
             <li>火山语音合成(TTS):{ttsSummary(health.providers.volc_tts)}</li>
             <li>
               当前实际播报来源:
@@ -348,9 +344,6 @@ export function SettingsController({
 
       <section className="settings-card">
         <h2 className="section-heading">本机能力</h2>
-        <p className="settings-note">
-          本机实时转写:{systemStt.isAvailable() ? '可用' : '当前 WebView 不支持,可手动输入转写。'}
-        </p>
         <ul className="settings-providers">
           <li>
             系统 TTS 引擎:
@@ -404,17 +397,6 @@ function providerSummary(provider: BackendProviderHealth | undefined): string {
       ? `已验证${verification.checkedAt ? ` · ${formatCheckedAt(new Date(verification.checkedAt).getTime())}` : ''}`
       : `验证失败${verification.lastError ? ` · ${verification.lastError}` : ''}`
   return `${provider.model ?? ''} · ${verificationLabel}`
-}
-
-function sttSummary(provider: BackendProviderHealth | undefined): string {
-  const base = providerSummary(provider)
-  if (provider === undefined || !provider.configured) {
-    return base
-  }
-  const resource = provider.resourceId ? ` · 资源 ${provider.resourceId}` : ''
-  const lastResult = provider.verification?.lastResult
-  const sample = lastResult ? ` · 最近转写:「${lastResult}」` : ''
-  return `${base}${resource}${sample}`
 }
 
 function ttsSummary(provider: BackendProviderHealth | undefined): string {

@@ -1,7 +1,8 @@
-"""DeepSeekService:雅思口语反馈的 Text AI。
+"""DeepSeekService:雅思口语答案的纯文本分析。
 
-提示词与客户端 V1.1 的 OpenAICompatibleTextProvider 保持一致,迁移后客户端
-不再接触 DeepSeek;模型名与密钥全部来自环境变量。
+V1.7 起 DeepSeek 只接收 Part、题目、用户答案文本与可选作答时间,
+只分析语法、词汇、连贯性、表达自然度、是否切题与内容展开。
+绝不评价发音、语速、停顿、语调,也绝不给出 IELTS Band 分数或水平评分。
 """
 import json
 import logging
@@ -19,17 +20,18 @@ from .verification import LastCallRecord
 logger = logging.getLogger(__name__)
 
 FEEDBACK_SYSTEM = (
-    "You are a concise IELTS speaking coach. Return JSON only. "
-    "Never give an IELTS band score or pronunciation score. "
-    "Prefer natural, speakable English and do not replace the learner "
-    "with a full model answer."
+    "You are a friendly IELTS Speaking Tutor. Analyze only the answer text "
+    "the learner submits. Return JSON only and write all comments in Chinese. "
+    "Prioritize the 2-3 most important issues; do not over-correct everything. "
+    "When improving the answer, keep the learner's current level, voice and "
+    "speaking habits; never rewrite it into advanced English that is clearly "
+    "hard for them to imitate. Every reference answer must sound like natural "
+    "spoken English, not a memorized essay. "
+    "Never mention or evaluate pronunciation, speech rate, pauses, intonation "
+    "or any acoustic feature. Never give an IELTS band score or any "
+    "proficiency rating."
 )
-COMPARISON_SYSTEM = (
-    "You are a concise IELTS speaking coach comparing two attempts. "
-    "Return JSON only. Use at most 3 evidence-based observations. "
-    "If evidence is missing, say so. "
-    "Never invent an IELTS band or pronunciation score."
-)
+
 ORGANIZE_SYSTEM = (
     "Extract IELTS Speaking questions from the supplied private material. "
     "Return JSON only. Do not generate answers. "
@@ -41,45 +43,23 @@ ORGANIZE_SYSTEM = (
 MAX_AI_IMPORT_CHARACTERS = 60_000
 
 
-class KeyIssue(BaseModel):
-    category: Literal["fluency", "grammar", "vocabulary", "coherence"]
-    kind: Literal["focus", "improvement", "notice"]
-    title: str
-    observation: str
-    action: str
-    evidence: str | None = None
+class ReferenceAnswer(BaseModel):
+    """一个自然口语化的参考回答版本。"""
 
-
-class Revisions(BaseModel):
-    minimalFix: str | None = None
-    naturalVersion: str | None = None
-    stretchVersion: str | None = None
-
-
-class AiFeedback(BaseModel):
-    keyIssues: list[KeyIssue] = Field(min_length=1, max_length=3)
-    secondAttemptTips: list[str] = Field(default_factory=list, max_length=3)
-    revisions: Revisions = Revisions()
-
-
-class FeedbackSummary(BaseModel):
-    """一行问题 + 一行建议,必须使用中文。"""
-
-    problem: str = Field(min_length=1, max_length=200)
-    suggestion: str = Field(min_length=1, max_length=200)
-
-
-class AnswerVersion(BaseModel):
-    """一个可试听的回答版本。text 正常语速朗读约 15-20 秒。"""
-
-    style: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=40)
     text: str = Field(min_length=1, max_length=1_500)
-    hint: str = Field(min_length=1, max_length=500)
 
 
-class FirstAttemptFeedback(BaseModel):
-    summary: FeedbackSummary
-    versions: list[AnswerVersion] = Field(min_length=3, max_length=3)
+class TextFeedback(BaseModel):
+    """客户端与服务端共同约定的结构化反馈,不包含任何评分字段。"""
+
+    summary: str = Field(min_length=1, max_length=500)
+    strengths: list[str] = Field(default_factory=list, max_length=3)
+    problems: list[str] = Field(default_factory=list, max_length=3)
+    grammarSuggestions: list[str] = Field(default_factory=list, max_length=3)
+    vocabularySuggestions: list[str] = Field(default_factory=list, max_length=3)
+    improvedAnswer: str = Field(min_length=1, max_length=1_500)
+    referenceAnswers: list[ReferenceAnswer] = Field(min_length=3, max_length=3)
 
 
 class ImportQuestion(BaseModel):
@@ -107,68 +87,62 @@ class DeepSeekService:
     async def get_feedback(self, payload: dict) -> dict:
         user = json.dumps(
             {
-                "task": "feedback-after-first-attempt",
+                "task": "analyze-ielts-speaking-answer-text",
                 "requiredShape": {
-                    "summary": {
-                        "problem": "用中文写一行，只指出这次回答最值得改的一个问题",
-                        "suggestion": "用中文写一行，给出针对这个问题的可执行建议",
-                    },
-                    "versions": [
+                    "summary": "用中文写的整体小结,先肯定再指出最值得改的重点",
+                    "strengths": [
+                        "用中文写 1-3 条做得好的地方,可以留空但不要硬凑"
+                    ],
+                    "problems": [
+                        "用中文写 1-3 条最优先的问题,按重要性排序,不要过度纠错"
+                    ],
+                    "grammarSuggestions": [
+                        "用中文写 1-3 条具体、可执行的语法建议,可留空"
+                    ],
+                    "vocabularySuggestions": [
+                        "用中文写 1-3 条贴合用户水平的词汇建议,可留空"
+                    ],
+                    "improvedAnswer": (
+                        "保持用户原本想法、水平和表达习惯的优化版英文回答,"
+                        "不要突然变成明显难以模仿的高级英语"
+                    ),
+                    "referenceAnswers": [
                         {
-                            "style": "简短的中文风格标签(如:基础稳妥/自然均衡/略加挑战)",
-                            "text": "英文回答文本,严格控制在40-55个单词(正常语速朗读约15-20秒)",
-                            "hint": "该版本的关键内容或关键句式提示(英文短语即可)",
+                            "label": (
+                                "固定使用:简单自然版 / 自然提升版 / 另一种表达版"
+                            ),
+                            "text": "自然口语化的英文参考回答,不是作文或背诵范文",
                         }
                     ],
                 },
-                "rules": [
-                    "给出恰好3个版本,风格和难度略有差异,但都要贴近用户当前水平,不要明显超出",
-                    "每个版本的text必须严格控制在40-55个单词,正常语速朗读约15-20秒,不要更长",
-                    "每个版本的text必须保持用户原有想法,只修正语言表达",
-                    "如果用户原录音内容过短,在40-55个单词内适当补充;如果过长,简化为40-55个单词",
-                    "hint只写关键内容或关键句式,方便用户第二次回答时参考",
-                    "不要给IELTS分数或发音分数",
+                "analysisDimensions": [
+                    "grammar",
+                    "vocabulary",
+                    "coherence",
+                    "naturalness of expression",
+                    "task relevance",
+                    "content development",
                 ],
+                "rules": [
+                    "referenceAnswers 必须恰好 3 个,label 固定依次为:"
+                    "简单自然版、自然提升版、另一种表达版",
+                    "简单自然版:最接近用户原回答,用户最容易直接模仿",
+                    "自然提升版:词汇和句型稍有提升,作为主要推荐版本",
+                    "另一种表达版:换一种思路或口语风格,但难度不要明显高于用户当前水平",
+                    "三个版本都必须像真实口语,不要写成作文或背诵范文",
+                    "优先指出最重要的问题,不要一次纠完所有小错",
+                    "修改表达时保持用户原本水平和表达习惯",
+                    "不要评价发音、语速、停顿、语调或任何语音表现",
+                    "不要给出 IELTS Band 分数、分数段或任何水平评分",
+                ],
+                "part": payload.get("part"),
                 "question": payload.get("question"),
-                "transcript": payload.get("transcript"),
-                "localMetrics": payload.get("metrics"),
+                "answer": payload.get("answer"),
+                "answerDurationSeconds": payload.get("answerDurationSeconds"),
             },
             ensure_ascii=False,
         )
-        return await self._complete_validated(
-            FEEDBACK_SYSTEM, user, FirstAttemptFeedback
-        )
-
-    async def compare_attempts(self, payload: dict) -> dict:
-        user = json.dumps(
-            {
-                "task": "compare-two-speaking-attempts",
-                "requiredShape": {
-                    "keyIssues": [
-                        {
-                            "category": "fluency | grammar | vocabulary | coherence",
-                            "kind": "focus | improvement | notice",
-                            "title": "short title",
-                            "observation": "evidence-based comparison",
-                            "action": "one next action",
-                            "evidence": "short quote or null",
-                        }
-                    ],
-                    "secondAttemptTips": [],
-                    "revisions": {
-                        "minimalFix": "string or null",
-                        "naturalVersion": "string or null",
-                        "stretchVersion": "string or null",
-                    },
-                },
-                "question": payload.get("question"),
-                "firstTranscript": payload.get("firstTranscript"),
-                "secondTranscript": payload.get("secondTranscript"),
-                "localComparison": payload.get("localComparison"),
-            },
-            ensure_ascii=False,
-        )
-        return await self._complete_validated(COMPARISON_SYSTEM, user, AiFeedback)
+        return await self._complete_validated(FEEDBACK_SYSTEM, user, TextFeedback)
 
     async def organize_questions(self, fileName: str, extractedText: str) -> list[dict]:
         user = json.dumps(

@@ -1,4 +1,5 @@
 import {
+  accountProfileSchema,
   backendConfigSchema,
   importedQuestionRecordSchema,
   importSourceSchema,
@@ -6,6 +7,7 @@ import {
   practiceTextsSchema,
   savedExpressionSchema,
   ttsCacheEntrySchema,
+  type AccountProfile,
   type BackendConfig,
   type ImportedQuestionRecord,
   type ImportSource,
@@ -14,6 +16,7 @@ import {
   type TrainingSession,
   type TtsCacheEntry,
 } from '../../domain'
+import type { AccountStorage } from '../../ports/accounts'
 import type { BackendConfigStorage } from '../../ports/backend'
 import type {
   ImportBundle,
@@ -27,7 +30,7 @@ import type {
   StorageUsageSummary,
 } from '../../ports/storage'
 
-const DATABASE_VERSION = 4
+const DATABASE_VERSION = 5
 const DEFAULT_DATABASE_NAME = 'ielts-speaking-meow'
 const MAX_TTS_CACHE_ENTRIES = 40
 const MAX_TTS_CACHE_BYTES = 25 * 1024 * 1024
@@ -47,6 +50,7 @@ const STORES = {
   ttsCache: 'ttsCache',
   backendConfig: 'backendConfig',
   appMeta: 'appMeta',
+  accounts: 'accounts',
 } as const
 
 type StoreName = (typeof STORES)[keyof typeof STORES]
@@ -84,6 +88,7 @@ export class IndexedDbStorage
     ImportStorage,
     TtsCacheStorage,
     BackendConfigStorage,
+    AccountStorage,
     LocalDataMaintenance
 {
   private readonly databaseName: string
@@ -165,6 +170,35 @@ export class IndexedDbStorage
   async savePracticeTexts(texts: PracticeTexts): Promise<void> {
     const parsed = practiceTextsSchema.parse(texts)
     await this.put(STORES.appMeta, { id: 'practiceTexts', ...parsed })
+  }
+
+  async upsertAccount(account: AccountProfile): Promise<void> {
+    assertStorageKey(account.id, 'Account')
+    await this.put(STORES.accounts, accountProfileSchema.parse(account))
+  }
+
+  async getAccount(accountId: string): Promise<AccountProfile | null> {
+    assertStorageKey(accountId, 'Account')
+    return this.getParsed(STORES.accounts, accountId, accountProfileSchema)
+  }
+
+  async listAccounts(): Promise<AccountProfile[]> {
+    return this.getAllParsed(STORES.accounts, accountProfileSchema)
+  }
+
+  async getCurrentAccountId(): Promise<string | null> {
+    const record = await this.get<{ id: string; value: string }>(
+      STORES.appMeta,
+      'currentAccountId',
+    )
+    return record === null || typeof record.value !== 'string'
+      ? null
+      : record.value
+  }
+
+  async setCurrentAccountId(accountId: string): Promise<void> {
+    assertStorageKey(accountId, 'Account')
+    await this.put(STORES.appMeta, { id: 'currentAccountId', value: accountId })
   }
 
   async saveAudio(audioId: string, audio: Blob): Promise<void> {
@@ -573,6 +607,9 @@ export class IndexedDbStorage
         }
         if (!database.objectStoreNames.contains(STORES.appMeta)) {
           database.createObjectStore(STORES.appMeta, { keyPath: 'id' })
+        }
+        if (!database.objectStoreNames.contains(STORES.accounts)) {
+          database.createObjectStore(STORES.accounts, { keyPath: 'id' })
         }
       }
 

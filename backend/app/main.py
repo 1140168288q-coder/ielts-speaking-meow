@@ -37,7 +37,7 @@ def create_app(
         "volc_tts": VolcengineTTSService(client, settings),
     }
 
-    app = FastAPI(title="雅思口语喵 Backend", version="1.7.0")
+    app = FastAPI(title="雅思口语喵 Backend", version="1.8.0")
     app.state.settings = settings
     app.state.client = client
     app.state.services = services

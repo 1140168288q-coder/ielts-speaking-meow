@@ -4,6 +4,8 @@
 Android 客户端只调用本服务，**任何第三方密钥只存在于本服务的环境变量中**。
 
 V1.7 起不再提供 STT 能力；客户端直接用手机系统键盘语音输入答案文本。
+V1.8 的 `/v1/feedback` 额外接受本地 RAG/长期记忆生成的可选
+`tutorContext` / `learnerContext`，Backend 仍不保存用户数据。
 
 ## 架构
 
@@ -22,7 +24,7 @@ FastAPI Backend(密钥在环境变量,日志脱敏)
 |---|---|---|
 | GET | `/health` | 存活 + DeepSeek / TTS 详情:密钥是否配置、模型 / 音色、最近一次真实调用的验证状态(verified / unverified / failed + 时间),不含密钥 |
 | POST | `/health/verify` | 真实小规模验证:DeepSeek 一次 32 token 的小规模补全(推理模型需预留思考 token)、TTS 合成一句 "Hello." |
-| POST | `/v1/feedback` | JSON `{part, question, answer, answerDurationSeconds?}` → V1.7 文本分析结构(`summary` / `strengths` / `problems` / `grammarSuggestions` / `vocabularySuggestions` / `improvedAnswer` / 恰好 3 个 `referenceAnswers`) |
+| POST | `/v1/feedback` | JSON `{part, question, answer, answerDurationSeconds?, tutorContext?, learnerContext?}` → V1.7 文本分析结构(`summary` / `strengths` / `problems` / `grammarSuggestions` / `vocabularySuggestions` / `improvedAnswer` / 恰好 3 个 `referenceAnswers`) |
 | POST | `/v1/tts` | JSON `{text, language?, rate?, pitch?}` → `audio/mpeg` 二进制;rate/pitch 映射火山 speed_ratio / pitch_ratio(0.5–2.0) |
 | POST | `/v1/organize` | JSON `{fileName, extractedText}` → `{questions: [...]}` |
 

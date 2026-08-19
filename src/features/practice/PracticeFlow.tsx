@@ -12,7 +12,12 @@ import type {
   ReferenceAnswer,
   TrainingSession,
 } from '../../domain'
-import { createLocalSummary } from '../../domain'
+import {
+  buildTutorContext,
+  createLocalSummary,
+  retrieveTutorKnowledge,
+  type ReusableExpression,
+} from '../../domain'
 import type { LLMProvider } from '../../ports/ai'
 import type { AudioFocus } from '../../ports/speech'
 import {
@@ -53,6 +58,9 @@ export function PracticeFlow({
   service,
   audioFocus,
   textAi,
+  reusableExpressions = [],
+  learnerContext = '',
+  onExpressionReused = () => undefined,
   onExitGuardChange,
   onChange,
   onBack,
@@ -62,6 +70,9 @@ export function PracticeFlow({
   service: PracticeService
   audioFocus: AudioFocus
   textAi: LLMProvider
+  reusableExpressions?: ReusableExpression[]
+  learnerContext?: string
+  onExpressionReused?: (expressionId: string) => void | Promise<void>
   onExitGuardChange: (active: boolean) => void
   onChange: (session: TrainingSession) => void
   onBack: () => void
@@ -70,6 +81,7 @@ export function PracticeFlow({
   const [busy, setBusy] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiNote, setAiNote] = useState<string | null>(null)
+  const [insertSeed, setInsertSeed] = useState<{ nonce: number; text: string } | null>(null)
   const mountedRef = useRef(true)
   const sessionRef = useRef(session)
   const onChangeRef = useRef(onChange)
@@ -82,6 +94,8 @@ export function PracticeFlow({
   const step = STAGE_STEP[stage]
   const aiConfigured = textAi.isConfigured()
   const aiFeedback = session.aiFeedback
+  const tutorContext = buildTutorContext(question)
+  const tutorKnowledge = retrieveTutorKnowledge(question)
 
   useEffect(() => {
     sessionRef.current = session
@@ -139,6 +153,10 @@ export function PracticeFlow({
             attempt.metrics.durationMs > 0
               ? Math.max(1, Math.round(attempt.metrics.durationMs / 1_000))
               : null,
+          tutorContext,
+          ...(learnerContext.trim().length > 0
+            ? { learnerContext: learnerContext.trim() }
+            : {}),
         })
 
         if (generation !== aiRequestGenerationRef.current) return
@@ -172,7 +190,7 @@ export function PracticeFlow({
         }
       }
     },
-    [question, service, textAi],
+    [learnerContext, question, service, textAi, tutorContext],
   )
 
   const saveAnswer = async (
@@ -253,6 +271,18 @@ export function PracticeFlow({
     }
   }
 
+  const reuseExpression = (item: ReusableExpression) => {
+    setInsertSeed((current) => ({
+      nonce: (current?.nonce ?? 0) + 1,
+      text: item.expression.text,
+    }))
+    try {
+      void onExpressionReused(item.expression.id)
+    } catch {
+      // 复用计数失败不影响答题
+    }
+  }
+
   const firstAttempt = session.attempts.find(
     (attempt) => attempt.attemptNumber === 1,
   )
@@ -283,13 +313,25 @@ export function PracticeFlow({
       {message ? <div className="notice" role="status">{message}</div> : null}
 
       {stage === 'first-answer' ? (
-        <AnswerEntryStage
-          eyebrow="第一次回答"
-          heading="输入你的回答，或按住键盘麦克风直接说。"
-          buttonLabel="提交第 1 次回答并分析"
-          busy={busy}
-          onSubmit={(text, durationMs) => void saveAnswer(1, text, durationMs)}
-        />
+        <div className="practice-stack">
+          <TutorKnowledgeCard docs={tutorKnowledge} />
+          {reusableExpressions.length ? (
+            <ReusableMaterialCard
+              items={reusableExpressions}
+              playingKey={speakingKey}
+              onToggle={(key, text) => void toggleSpeak(key, text)}
+              onUse={reuseExpression}
+            />
+          ) : null}
+          <AnswerEntryStage
+            eyebrow="第一次回答"
+            heading="输入你的回答，或按住键盘麦克风直接说。"
+            buttonLabel="提交第 1 次回答并分析"
+            busy={busy}
+            insertSeed={insertSeed}
+            onSubmit={(text, durationMs) => void saveAnswer(1, text, durationMs)}
+          />
+        </div>
       ) : null}
 
       {stage === 'review-first' && firstAttempt ? (
@@ -339,11 +381,20 @@ export function PracticeFlow({
               onToggle={(key, text) => void toggleSpeak(key, text)}
             />
           ) : null}
+          {reusableExpressions.length ? (
+            <ReusableMaterialCard
+              items={reusableExpressions}
+              playingKey={speakingKey}
+              onToggle={(key, text) => void toggleSpeak(key, text)}
+              onUse={reuseExpression}
+            />
+          ) : null}
           <AnswerEntryStage
             eyebrow="第二次回答"
             heading="结合刚才的重点，再完整回答一次。"
             buttonLabel="提交第 2 次回答"
             busy={busy}
+            insertSeed={insertSeed}
             onSubmit={(text, durationMs) => void saveAnswer(2, text, durationMs)}
           />
         </div>
@@ -409,6 +460,82 @@ function QuestionCard({
         </span>
       </div>
     </article>
+  )
+}
+
+function TutorKnowledgeCard({
+  docs,
+}: {
+  docs: ReturnType<typeof retrieveTutorKnowledge>
+}) {
+  if (docs.length === 0) return null
+  return (
+    <details className="tutor-knowledge-card">
+      <summary>
+        本题备考要点（{docs.length} 条）· 离线可用
+      </summary>
+      <div className="tutor-knowledge-list">
+        {docs.map((item) => (
+          <article key={item.doc.id}>
+            <strong>{item.doc.title}</strong>
+            <p>{item.doc.body}</p>
+          </article>
+        ))}
+      </div>
+    </details>
+  )
+}
+
+function ReusableMaterialCard({
+  items,
+  playingKey,
+  onToggle,
+  onUse,
+}: {
+  items: ReusableExpression[]
+  playingKey: string | null
+  onToggle: (key: string, text: string) => void
+  onUse: (item: ReusableExpression) => void
+}) {
+  return (
+    <section className="reusable-material-card">
+      <div className="section-heading compact-heading">
+        <div>
+          <p className="eyebrow">你的长期素材</p>
+          <h2>可跨题复用，先说自己的话</h2>
+        </div>
+      </div>
+      <div className="reusable-material-list">
+        {items.map((item) => {
+          const key = `reuse:${item.expression.id}:${item.expression.text}`
+          return (
+            <article key={item.expression.id}>
+              <div className="reusable-material-meta">
+                <span>{item.expression.topic}</span>
+                <small>{item.reason}</small>
+              </div>
+              <p>{item.expression.text}</p>
+              <div className="reusable-material-actions">
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  onClick={() => onToggle(key, item.expression.text)}
+                >
+                  {playingKey === key ? '■ 停止' : '▶ 试听'}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  onClick={() => onUse(item)}
+                >
+                  + 插入答案
+                </button>
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -479,16 +606,32 @@ function AnswerEntryStage({
   heading,
   buttonLabel,
   busy,
+  insertSeed = null,
   onSubmit,
 }: {
   eyebrow: string
   heading: string
   buttonLabel: string
   busy: boolean
+  insertSeed?: { nonce: number; text: string } | null
   onSubmit: (text: string, answerDurationMs: number | null) => void
 }) {
   const [draft, setDraft] = useState('')
   const { elapsedMs, status, start, pause, resume, reset } = useManualTimer()
+
+  // 用户点击“插入素材”时,把历史表达追加到当前答案框。
+  useEffect(() => {
+    if (insertSeed === null) return
+    const text = insertSeed.text.trim()
+    if (text.length === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 把外部点击事件转成受控 textarea 的一次性追加
+    setDraft((current) => {
+      const cleanCurrent = current.trim()
+      return cleanCurrent.length === 0
+        ? text
+        : `${cleanCurrent} ${text}`
+    })
+  }, [insertSeed])
 
   const submit = () => {
     const text = draft.trim()
@@ -615,72 +758,132 @@ function AiFeedbackCard({
   playingKey: string | null
   onToggle: (key: string, text: string) => void
 }) {
+  const [activeReferenceIndex, setActiveReferenceIndex] = useState(0)
+  const topIssues = pickTopIssues(feedback)
+  const references = feedback.referenceAnswers
+  const activeReference = references[activeReferenceIndex] ?? references[0]
+
   return (
     <section className="ai-feedback-card">
       <div className="section-heading compact-heading">
         <div>
           <p className="eyebrow">AI 文本分析 · 不评分</p>
-          <h2>优先改最重要的，不追求一次改完</h2>
+          <h2>先改最值得改的 2-3 点</h2>
         </div>
       </div>
+
       <p className="ai-summary">{feedback.summary}</p>
       {feedback.strengths.length > 0 ? (
-        <FeedbackList title="做得好的地方" items={feedback.strengths} tone="strength" />
+        <p className="ai-strengths">
+          <strong>已经不错：</strong>
+          {feedback.strengths.join('；')}
+        </p>
       ) : null}
-      {feedback.problems.length > 0 ? (
-        <FeedbackList title="优先注意的问题" items={feedback.problems} tone="problem" />
+
+      {topIssues.length > 0 ? (
+        <section className="priority-issues">
+          <h3>优先改这 {topIssues.length} 点</h3>
+          <ol>
+            {topIssues.map((item, index) => (
+              <li key={`${item.tone}-${index}`} className={item.tone}>
+                <span>{index + 1}</span>
+                <p>{item.text}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
       ) : null}
+
       {feedback.grammarSuggestions.length > 0 ? (
-        <FeedbackList title="语法建议" items={feedback.grammarSuggestions} tone="grammar" />
+        <details className="feedback-details grammar">
+          <summary>
+            语法微修（{feedback.grammarSuggestions.length}）
+          </summary>
+          <ul>
+            {feedback.grammarSuggestions.map((item, index) => (
+              <li key={`grammar-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </details>
       ) : null}
+
       {feedback.vocabularySuggestions.length > 0 ? (
-        <FeedbackList title="词汇建议" items={feedback.vocabularySuggestions} tone="vocabulary" />
+        <details className="feedback-details vocabulary">
+          <summary>
+            词汇替换（{feedback.vocabularySuggestions.length}）
+          </summary>
+          <ul>
+            {feedback.vocabularySuggestions.map((item, index) => (
+              <li key={`vocabulary-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </details>
       ) : null}
-      <TtsSection
-        title="优化答案"
-        text={feedback.improvedAnswer}
-        playingKey={playingKey}
-        onToggle={onToggle}
-      />
-      {feedback.referenceAnswers.length > 0 ? (
+
+      <details className="improved-answer-details">
+        <summary>优化答案（保持你的水平，不是范文）</summary>
+        <TtsSection
+          title="优化答案"
+          text={feedback.improvedAnswer}
+          playingKey={playingKey}
+          onToggle={onToggle}
+        />
+      </details>
+
+      {references.length > 0 ? (
         <section className="reference-answers">
-          <p className="eyebrow">3 个参考回答</p>
-          <h3>三个版本都是口语，不是作文范文</h3>
-          <div className="reference-answer-list">
-            {feedback.referenceAnswers.map((reference, index) => (
-              <ReferenceAnswerCard
+          <div className="reference-heading">
+            <p className="eyebrow">3 个参考回答</p>
+            <h3>逐个看，不要一次读三篇</h3>
+          </div>
+          <div className="reference-tabs" role="tablist" aria-label="参考回答版本">
+            {references.map((reference, index) => (
+              <button
                 key={`${reference.label}-${index}`}
-                reference={reference}
-                playingKey={playingKey}
-                onToggle={onToggle}
-              />
+                type="button"
+                role="tab"
+                aria-selected={index === activeReferenceIndex}
+                className={index === activeReferenceIndex ? 'active' : ''}
+                onClick={() => setActiveReferenceIndex(index)}
+              >
+                {reference.label}
+              </button>
             ))}
           </div>
+          {activeReference ? (
+            <ReferenceAnswerCard
+              reference={activeReference}
+              playingKey={playingKey}
+              onToggle={onToggle}
+            />
+          ) : null}
         </section>
       ) : null}
     </section>
   )
 }
 
-function FeedbackList({
-  title,
-  items,
-  tone,
-}: {
-  title: string
-  items: string[]
-  tone: 'strength' | 'problem' | 'grammar' | 'vocabulary'
-}) {
-  return (
-    <div className={`feedback-list ${tone}`}>
-      <h3>{title}</h3>
-      <ul>
-        {items.map((item, index) => (
-          <li key={`${title}-${index}`}>{item}</li>
-        ))}
-      </ul>
-    </div>
-  )
+function pickTopIssues(feedback: AiFeedback): Array<{
+  text: string
+  tone: 'problem' | 'grammar' | 'vocabulary'
+}> {
+  if (feedback.problems.length > 0) {
+    return feedback.problems.slice(0, 3).map((text) => ({
+      text,
+      tone: 'problem',
+    }))
+  }
+  const fallback: Array<{ text: string; tone: 'grammar' | 'vocabulary' }> = [
+    ...feedback.grammarSuggestions.slice(0, 2).map((text) => ({
+      text,
+      tone: 'grammar' as const,
+    })),
+    ...feedback.vocabularySuggestions.slice(0, 1).map((text) => ({
+      text,
+      tone: 'vocabulary' as const,
+    })),
+  ]
+  return fallback.slice(0, 3)
 }
 
 function TtsSection({

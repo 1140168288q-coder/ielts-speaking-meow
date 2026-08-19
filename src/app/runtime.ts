@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { TTS_VOICE_CONFIG_VERSION } from '../domain'
+import { AccountService } from '../application/accountService'
 import {
   ImportMaterialService,
   MaterialExtractor,
@@ -30,6 +31,7 @@ import { IndexedDbStorage } from '../infrastructure/storage'
  */
 export const createBrowserRuntime = () => {
   const storage = new IndexedDbStorage()
+  const accountService = new AccountService({ storage })
   const systemTts = Capacitor.getPlatform() === 'android'
     ? new CapacitorSystemTTS()
     : new SystemWebSpeechTTS()
@@ -56,15 +58,18 @@ export const createBrowserRuntime = () => {
   const importService = new ImportMaterialService({
     storage,
     extractor: new MaterialExtractor(documentOcr),
+    getCurrentUserId: () => accountService.getCurrentUserId(),
   })
   const practiceService = new PracticeService({
     localStorage: storage,
+    getCurrentUserId: () => accountService.getCurrentUserId(),
   })
   const backupService = new StorageBackupService(storage, storage)
 
   return {
-    /** 载入运行时配置并做一次非阻塞的云端健康检查。 */
+    /** 载入账号、运行时配置并做一次非阻塞的云端健康检查。 */
     initialize: async () => {
+      await accountService.initialize()
       await configStore.load()
       // V1.5 缓存键结构升级:清理一次旧 AI TTS 缓存,避免旧音色音频继续命中
       try {
@@ -79,6 +84,7 @@ export const createBrowserRuntime = () => {
       void healthCache.refresh()
     },
     storage,
+    accountService,
     configStore,
     healthCache,
     audioFocus,

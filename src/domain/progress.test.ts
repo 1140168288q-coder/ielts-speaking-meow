@@ -86,8 +86,8 @@ function session(
 describe('local progress', () => {
   it('summarizes second-attempt follow-through and only explainable speech signals', () => {
     const sessions = [
-      session('one', 'p1-home-001', { filler: 3, repeated: 1, longPauses: 2 }, { filler: 1, repeated: 0, longPauses: 1 }),
-      session('two', 'p1-home-001', { filler: 2, repeated: 0, longPauses: 0 }),
+      session('one', 'p1-where-is-your-hometown-001', { filler: 3, repeated: 1, longPauses: 2 }, { filler: 1, repeated: 0, longPauses: 1 }),
+      session('two', 'p1-where-is-your-hometown-001', { filler: 2, repeated: 0, longPauses: 0 }),
     ]
     const summary = buildProgressSummary(sessions, questionBank)
 
@@ -101,17 +101,17 @@ describe('local progress', () => {
       averageFillerDelta: -2,
       averageLongPauseDelta: -1,
     })
-    expect(summary.activeTopics[0]).toEqual({ topic: 'Home', practiceCount: 2 })
+    expect(summary.activeTopics[0]).toEqual({ topic: 'Hometown', practiceCount: 2 })
     expect(summary.recurringFocus.map((item) => item.key)).toContain('filler')
   })
 
   it('recommends an unpracticed topic and avoids simply repeating the latest question', () => {
     const practiced = [
-      session('recent', 'p1-home-001', { filler: 0, repeated: 0, longPauses: 0 }),
+      session('recent', 'p1-where-is-your-hometown-001', { filler: 0, repeated: 0, longPauses: 0 }),
     ]
     const result = recommendQuestion(questionBank, practiced)
 
-    expect(result?.question.id).not.toBe('p1-home-001')
+    expect(result?.question.id).not.toBe('p1-where-is-your-hometown-001')
     expect(result?.reason).toContain('还没练过')
   })
 

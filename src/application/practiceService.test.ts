@@ -79,14 +79,19 @@ class MemoryPersistence implements LocalStorage {
   }
 }
 
-const createService = (storage = new MemoryPersistence()) =>
+const createService = (
+  storage = new MemoryPersistence(),
+  getCurrentUserId?: () => string,
+  createId?: () => string,
+) =>
   new PracticeService({
     localStorage: storage,
     now: () => NOW,
-    createId: (() => {
+    createId: createId ?? (() => {
       let counter = 0
       return () => `id-${++counter}`
     })(),
+    ...(getCurrentUserId !== undefined ? { getCurrentUserId } : {}),
   })
 
 const FEEDBACK: AiFeedback = {
@@ -278,5 +283,54 @@ describe('PracticeService V1.7 text-answer flow', () => {
       new Set([first.id, second.id]),
     )
     expect(sessions).toHaveLength(2)
+  })
+
+  it('isolates sessions and expressions between local accounts', async () => {
+    const storage = new MemoryPersistence()
+    const alice = '00000000-0000-4000-8000-00000000000a'
+    const bob = '00000000-0000-4000-8000-00000000000b'
+    let idCounter = 0
+    const sharedCreateId = () => `id-${++idCounter}`
+    const aliceService = createService(storage, () => alice, sharedCreateId)
+    const bobService = createService(storage, () => bob, sharedCreateId)
+
+    const aliceSession = await aliceService.createSession('p1-hobbies')
+    await aliceService.saveTextAttempt(aliceSession.id, 1, 'Alice answer.', null)
+    const bobSession = await bobService.createSession('p1-hobbies')
+
+    expect((await aliceService.listSessions()).map((item) => item.id)).toEqual([
+      aliceSession.id,
+    ])
+    expect((await bobService.listSessions()).map((item) => item.id)).toEqual([
+      bobSession.id,
+    ])
+    await expect(
+      bobService.saveTextAttempt(aliceSession.id, 1, 'Should fail.', null),
+    ).rejects.toThrow('could not be found')
+
+    const bobAttempt = await bobService.saveTextAttempt(
+      bobSession.id,
+      1,
+      'Bob answer.',
+      null,
+    )
+    await bobService.prepareSecondAttempt(bobAttempt.id)
+    await bobService.saveTextAttempt(bobSession.id, 2, 'Bob second answer.', null)
+    const submitted = await bobService.submitSecondAnswerToCorpus(
+      bobSession.id,
+      'Bob second answer.',
+      'Hobbies',
+    )
+    expect(await aliceService.listExpressions()).toHaveLength(0)
+    expect(await bobService.listExpressions()).toHaveLength(1)
+
+    const reused = await bobService.markExpressionReused(submitted.expression.id)
+    expect(reused.reuseCount).toBe(1)
+    await expect(
+      aliceService.updateExpression(
+        submitted.expression.id,
+        { text: 'Alice cannot edit this.', topic: 'Hobbies' },
+      ),
+    ).rejects.toThrow('not found')
   })
 })

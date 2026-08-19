@@ -37,13 +37,33 @@ export class BackendTextProvider implements LLMProvider, MaterialQuestionOrganiz
   }
 
   async getFeedback(request: LLMFeedbackRequest): Promise<AiFeedback> {
+    const question = {
+      part: request.question.part,
+      topic: request.question.topic,
+      prompt: request.question.prompt,
+      ...('cuePoints' in request.question
+        ? { cuePoints: request.question.cuePoints }
+        : {}),
+      ...(request.question.isNew !== undefined
+        ? { isNew: request.question.isNew }
+        : {}),
+      ...(request.question.category !== undefined
+        ? { category: request.question.category }
+        : {}),
+    }
     const data = await this.client.postJson<unknown>(
       '/v1/feedback',
       {
         part: request.question.part,
-        question: request.question,
+        question,
         answer: request.answer,
         answerDurationSeconds: request.answerDurationSeconds,
+        ...(request.tutorContext
+          ? { tutorContext: request.tutorContext }
+          : {}),
+        ...(request.learnerContext
+          ? { learnerContext: request.learnerContext }
+          : {}),
       },
       TEXT_TIMEOUT_MS,
     )

@@ -93,6 +93,7 @@ describe('ImportMaterialService', () => {
       {
         id: 'p1-import-fixture-token-1',
         sourceId: draft.source.id,
+        ownerId: '00000000-0000-4000-8000-000000000001',
         question: {
           id: 'p1-import-fixture-token-1',
           part: 1,

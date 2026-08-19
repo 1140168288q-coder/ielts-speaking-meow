@@ -24,6 +24,14 @@ const questionBaseSchema = z
     prompt: nonEmptyText(500),
     difficulty: questionDifficultySchema.optional(),
     source: nonEmptyText(160).optional(),
+    /**
+     * 题库结构化元数据(内置季度题库生成器写入,导入题没有)。
+     * - category: Part 1 的必考/高频分类;Part 2&3 的 PLACE/PEOPLE/
+     *   OBJECTS/EVENTS。
+     * - isNew: 当季新题;false 表示保留的旧题。
+     */
+    category: nonEmptyText(80).optional(),
+    isNew: z.boolean().optional(),
   })
   .strict()
 
@@ -33,11 +41,18 @@ export const partOneQuestionSchema = questionBaseSchema.extend({
 
 export const partTwoQuestionSchema = questionBaseSchema.extend({
   part: z.literal(2),
-  cuePoints: z.array(nonEmptyText(160)).min(2).max(5),
+  cuePoints: z.array(nonEmptyText(160)).min(2).max(6),
+  /** 同一张 cue card 对应的 Part 3 跟进题 id(按题库原顺序)。 */
+  relatedPart3Ids: z
+    .array(z.string().regex(/^p3-[a-z0-9-]+$/))
+    .max(12)
+    .optional(),
 })
 
 export const partThreeQuestionSchema = questionBaseSchema.extend({
   part: z.literal(3),
+  /** 来源 Part 2 cue card 的 id;内置题必有,导入题可缺省。 */
+  part2QuestionId: z.string().regex(/^p2-[a-z0-9-]+$/).optional(),
 })
 
 export const questionSchema = z.discriminatedUnion('part', [
@@ -307,6 +322,8 @@ export const trainingSessionStatusSchema = z.enum([
 export const trainingSessionSchema = z
   .object({
     id: nonEmptyText(120),
+    /** 本地账号 userId;V1.8 起写入。旧记录缺省时归“本机用户”。 */
+    ownerId: nonEmptyText(120).optional(),
     questionId: nonEmptyText(120),
     status: trainingSessionStatusSchema,
     attempts: z.array(practiceAttemptSchema).max(2),
@@ -343,6 +360,8 @@ export type TrainingSession = z.infer<typeof trainingSessionSchema>
 export const savedExpressionSchema = z
   .object({
     id: nonEmptyText(120),
+    /** 本地账号 userId;V1.8 起写入。旧记录缺省时归“本机用户”。 */
+    ownerId: nonEmptyText(120).optional(),
     text: nonEmptyText(1_000),
     topic: nonEmptyText(80),
     questionId: nonEmptyText(120),
@@ -352,6 +371,8 @@ export const savedExpressionSchema = z
     updatedAt: isoDateTimeSchema.optional(),
     reviewCount: z.number().int().nonnegative().optional(),
     lastReviewedAt: isoDateTimeSchema.nullable().optional(),
+    /** 跨题复用次数:用户从“可复用素材”插入一次就 +1。 */
+    reuseCount: z.number().int().nonnegative().optional(),
   })
   .strict()
 

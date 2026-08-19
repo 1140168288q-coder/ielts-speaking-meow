@@ -64,7 +64,12 @@ async def test_feedback_sends_text_only_payload(make_app):
     ) as client:
         response = await client.post(
             "/v1/feedback",
-            json={**FEEDBACK_PAYLOAD, "answerDurationSeconds": None},
+            json={
+                **FEEDBACK_PAYLOAD,
+                "answerDurationSeconds": None,
+                "tutorContext": "【Part 1 先直接回答】先用一句话直接回答。",
+                "learnerContext": "本机历史:该学习者共完成 2 次单题练习。",
+            },
         )
     assert response.status_code == 200
     request_body = captured["body"]
@@ -80,6 +85,9 @@ async def test_feedback_sends_text_only_payload(make_app):
     assert parsed_user["part"] == 1
     assert parsed_user["answer"] == "I like reading books in my free time."
     assert parsed_user["answerDurationSeconds"] is None
+    assert parsed_user["tutorContext"].startswith("【Part 1")
+    assert parsed_user["learnerContext"].startswith("本机历史")
+    assert "contextRules" in parsed_user
 
 
 async def test_feedback_rejects_empty_answer(make_app):

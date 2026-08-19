@@ -212,8 +212,10 @@ describe('PracticeFlow V1.7 text answer flow', () => {
       (audioFocus.stopTTS as ReturnType<typeof vi.fn>).mock.calls.length,
     ).toBeGreaterThan(0)
 
-    // 播放 A 时点 B:UI 只保留 B 的播放状态,并提交 B 的新文本。
+    // 播放 A 时点 B:先切换参考回答 tab,再点 B 的试听;
+    // UI 只保留 B 的播放状态,并提交 B 的新文本。
     await user.click(screen.getByRole('button', { name: '试听' }))
+    await user.click(screen.getByRole('tab', { name: '自然提升版' }))
     await user.click(screen.getByRole('button', { name: '试听 自然提升版' }))
     expect(screen.getByRole('button', { name: '停止' })).toBeInTheDocument()
     expect(

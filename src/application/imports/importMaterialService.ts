@@ -1,4 +1,5 @@
 import {
+  LOCAL_DEFAULT_USER_ID,
   candidateToQuestion,
   importQuestionCandidateSchema,
   importSourceSchema,
@@ -23,15 +24,20 @@ export interface ImportMaterialServiceOptions {
   extractor: MaterialExtractor
   now?: () => Date
   createId?: () => string
+  /** 当前本地账号 userId;导入题默认隔离到当前账号。 */
+  getCurrentUserId?: () => string
 }
 
 export class ImportMaterialService {
   private readonly now: () => Date
   private readonly createId: () => string
+  private readonly getCurrentUserId: () => string
 
   constructor(private readonly options: ImportMaterialServiceOptions) {
     this.now = options.now ?? (() => new Date())
     this.createId = options.createId ?? createRandomId
+    this.getCurrentUserId =
+      options.getCurrentUserId ?? (() => LOCAL_DEFAULT_USER_ID)
   }
 
   async prepare(file: File): Promise<ImportDraft> {
@@ -77,6 +83,7 @@ export class ImportMaterialService {
       return importedQuestionRecordSchema.parse({
         id: questionId,
         sourceId: draft.source.id,
+        ownerId: this.getCurrentUserId(),
         question: candidateToQuestion(candidate, questionId),
         sourcePage: candidate.sourcePage,
         createdAt,

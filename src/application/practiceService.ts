@@ -1,4 +1,8 @@
 import {
+  LOCAL_DEFAULT_USER_ID,
+  recordBelongsToAccount,
+} from '../domain/accounts'
+import {
   aiFeedbackSchema,
   savedExpressionSchema,
   trainingSessionSchema,
@@ -14,6 +18,8 @@ export interface PracticeServiceDependencies {
   localStorage: LocalStorage
   now?: () => Date
   createId?: () => string
+  /** 当前本地账号 userId;切换账号后所有读写立即按新账号过滤。 */
+  getCurrentUserId?: () => string
 }
 
 export interface AnswerTextSnapshot {
@@ -41,17 +47,21 @@ export class PracticeService {
   private readonly localStorage: LocalStorage
   private readonly now: () => Date
   private readonly createId: () => string
+  private readonly getCurrentUserId: () => string
 
   constructor(dependencies: PracticeServiceDependencies) {
     this.localStorage = dependencies.localStorage
     this.now = dependencies.now ?? (() => new Date())
     this.createId = dependencies.createId ?? defaultCreateId
+    this.getCurrentUserId =
+      dependencies.getCurrentUserId ?? (() => LOCAL_DEFAULT_USER_ID)
   }
 
   async createSession(questionId: string): Promise<TrainingSession> {
     const timestamp = this.now().toISOString()
     const session = trainingSessionSchema.parse({
       id: this.createId(),
+      ownerId: this.getCurrentUserId(),
       questionId,
       status: 'first-ready',
       attempts: [],
@@ -229,6 +239,7 @@ export class PracticeService {
 
     const expression = savedExpressionSchema.parse({
       id: this.createId(),
+      ownerId: this.getCurrentUserId(),
       text: cleanText,
       topic,
       questionId: session.questionId,
@@ -252,12 +263,18 @@ export class PracticeService {
   }
 
   async listSessions(): Promise<TrainingSession[]> {
-    const sessions = await this.localStorage.listSessions()
+    const ownerId = this.getCurrentUserId()
+    const sessions = (await this.localStorage.listSessions()).filter((session) =>
+      recordBelongsToAccount(session.ownerId, ownerId),
+    )
     return sessions.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
   async listExpressions(): Promise<SavedExpression[]> {
-    const expressions = await this.localStorage.listExpressions()
+    const ownerId = this.getCurrentUserId()
+    const expressions = (await this.localStorage.listExpressions()).filter(
+      (expression) => recordBelongsToAccount(expression.ownerId, ownerId),
+    )
     return expressions.sort((a, b) =>
       (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt),
     )
@@ -291,6 +308,18 @@ export class PracticeService {
     return updated
   }
 
+  /** 用户把历史素材插入当前题答案时调用;用于长期记忆和排序。 */
+  async markExpressionReused(expressionId: string): Promise<SavedExpression> {
+    const existing = await this.requireExpression(expressionId)
+    const updated = savedExpressionSchema.parse({
+      ...existing,
+      reuseCount: (existing.reuseCount ?? 0) + 1,
+      updatedAt: this.now().toISOString(),
+    })
+    await this.localStorage.upsertExpression(updated)
+    return updated
+  }
+
   async deleteExpression(expressionId: string): Promise<void> {
     const existing = await this.localStorage.getExpression(expressionId)
     if (!existing) {
@@ -299,13 +328,20 @@ export class PracticeService {
     await this.localStorage.deleteExpression(expressionId)
   }
 
-  getSession(sessionId: string): Promise<TrainingSession | null> {
-    return this.localStorage.getSession(sessionId)
+  async getSession(sessionId: string): Promise<TrainingSession | null> {
+    const session = await this.localStorage.getSession(sessionId)
+    if (session === null) return null
+    return recordBelongsToAccount(session.ownerId, this.getCurrentUserId())
+      ? session
+      : null
   }
 
   private async requireExpression(expressionId: string): Promise<SavedExpression> {
     const expression = await this.localStorage.getExpression(expressionId)
-    if (!expression) {
+    if (!expression || !recordBelongsToAccount(
+      expression.ownerId,
+      this.getCurrentUserId(),
+    )) {
       throw new Error('Saved expression not found.')
     }
     return expression
@@ -313,7 +349,10 @@ export class PracticeService {
 
   private async requireSession(sessionId: string): Promise<TrainingSession> {
     const session = await this.localStorage.getSession(sessionId)
-    if (!session) {
+    if (!session || !recordBelongsToAccount(
+      session.ownerId,
+      this.getCurrentUserId(),
+    )) {
       throw new Error('The practice session could not be found.')
     }
     return session

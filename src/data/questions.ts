@@ -1,6 +1,49 @@
-import { questionBankSchema } from '../domain/models'
+import { z } from 'zod'
+import { questionBankSchema, type Question } from '../domain/models'
+import generatedQuestionBank from './questionBank.generated.json'
 
-const builtInQuestions = [
+/**
+ * 内置题库来自 scripts/import-question-bank.mjs 生成的
+ * questionBank.generated.json。换季度题库时运行:
+ *
+ *   npm run question-bank:update -- "<新季度题库.pdf>"
+ *
+ * 然后执行 npm run verify。业务代码不需要为季度变化手工改题。
+ */
+
+const generatedQuestionBankSchema = z
+  .object({
+    format: z.literal('ielts-speaking-meow-question-bank'),
+    formatVersion: z.literal(1),
+    seasonLabel: z.string().trim().min(1),
+    sourceFile: z.string().trim().min(1),
+    generatedAt: z.iso.datetime({ offset: true }),
+    counts: z
+      .object({
+        1: z.number().int().positive(),
+        2: z.number().int().positive(),
+        3: z.number().int().positive(),
+      })
+      .passthrough(),
+    questions: questionBankSchema,
+  })
+  .strict()
+
+const parsed = generatedQuestionBankSchema.parse(generatedQuestionBank)
+
+export const questionBank: Question[] = parsed.questions
+export const questionBankMeta = {
+  seasonLabel: parsed.seasonLabel,
+  sourceFile: parsed.sourceFile,
+  generatedAt: parsed.generatedAt,
+  counts: parsed.counts,
+} as const
+
+/**
+ * V1.4 及更早的内置题只在这里保留原文,用于 V1.8 删除旧题库后仍能
+ * 正确显示历史练习记录。它们不会出现在题库浏览/随机抽题中。
+ */
+const legacyQuestions: Question[] = [
   {
     id: 'p1-home-001',
     part: 1,
@@ -147,16 +190,6 @@ const builtInQuestions = [
   },
 ]
 
-const difficultyByPart = {
-  1: 'foundation',
-  2: 'developing',
-  3: 'stretch',
-} as const
-
-export const questionBank = questionBankSchema.parse(
-  builtInQuestions.map((question) => ({
-    ...question,
-    difficulty: difficultyByPart[question.part as 1 | 2 | 3],
-    source: '雅思口语喵内置题库 v1.4',
-  })),
+export const legacyQuestionsById = new Map(
+  legacyQuestions.map((question) => [question.id, question]),
 )

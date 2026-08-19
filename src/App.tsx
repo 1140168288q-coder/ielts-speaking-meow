@@ -18,7 +18,11 @@ import {
   partLabel,
   statusLabel,
 } from './features/practice/format'
-import { questionBank } from './data/questions'
+import {
+  legacyQuestionsById,
+  questionBank,
+  questionBankMeta,
+} from './data/questions'
 import {
   DEFAULT_PRACTICE_TEXTS,
   type PracticeTexts,
@@ -26,9 +30,15 @@ import {
   type SavedExpression,
   type TrainingSession,
 } from './domain/models'
+import {
+  recordBelongsToAccount,
+  type AccountProfile,
+} from './domain/accounts'
 import { recommendQuestion } from './domain/progress'
+import { buildLearnerContext, findReusableExpressions } from './domain/userMemory'
 import type { ImportedQuestionRecord } from './domain/imports'
 import type { AudioFocus } from './ports/speech'
+import { AccountView } from './features/accounts'
 
 
 
@@ -37,6 +47,7 @@ type AppView =
   | 'practice'
   | 'history'
   | 'expressions'
+  | 'accounts'
   | 'imports'
   | 'settings'
 
@@ -97,6 +108,9 @@ export function App() {
   const [importedQuestions, setImportedQuestions] = useState<
     ImportedQuestionRecord[]
   >([])
+  const [currentAccount, setCurrentAccount] = useState<AccountProfile | null>(
+    null,
+  )
   const [loading, setLoading] = useState(true)
   const [storageError, setStorageError] = useState<string | null>(null)
   const [navigationNotice, setNavigationNotice] = useState<string | null>(null)
@@ -107,6 +121,7 @@ export function App() {
   const [apiConnected, setApiConnected] = useState(false)
 
   const refreshLibrary = useCallback(async () => {
+    const ownerId = runtime.accountService.getCurrentUserId()
     const [nextSessions, nextExpressions, nextImportedQuestions] = await Promise.all([
       runtime.practiceService.listSessions(),
       runtime.practiceService.listExpressions(),
@@ -114,14 +129,21 @@ export function App() {
     ])
     setSessions(nextSessions)
     setExpressions(nextExpressions)
-    setImportedQuestions(nextImportedQuestions)
-  }, [runtime.practiceService, runtime.storage])
+    setImportedQuestions(
+      nextImportedQuestions.filter((record) =>
+        recordBelongsToAccount(record.ownerId, ownerId),
+      ),
+    )
+  }, [runtime.practiceService, runtime.storage, runtime.accountService])
 
   useEffect(() => {
     let active = true
     const load = async () => {
       try {
         await runtime.initialize()
+        if (active) {
+          setCurrentAccount(runtime.accountService.getCurrentAccount())
+        }
         const storedTexts = await runtime.storage.getPracticeTexts()
         if (active && storedTexts !== null) {
           setPracticeTexts(storedTexts)
@@ -220,6 +242,15 @@ export function App() {
     await refreshLibrary()
   }
 
+  const handleAccountSwitched = (account: AccountProfile) => {
+    setCurrentAccount(account)
+    setSession(null)
+    setPracticeExitGuardActive(false)
+    setNavigationNotice(null)
+    setView('questions')
+    void refreshLibrary()
+  }
+
   const navigateSafely = useCallback(
     (nextView: Exclude<AppView, 'practice'>) => {
       void requestSafePracticeExit(
@@ -316,9 +347,30 @@ export function App() {
     ...questionBank,
     ...importedQuestions.map((record) => record.question),
   ]
+  /** 历史记录允许引用 V1.8 之前的旧内置题;这些题不进入浏览/随机抽题。 */
+  const questionsForHistory = [
+    ...allQuestions,
+    ...legacyQuestionsById.values(),
+  ]
   const activeQuestion = session
-    ? allQuestions.find((question) => question.id === session.questionId) ?? null
+    ? allQuestions.find((question) => question.id === session.questionId) ??
+      legacyQuestionsById.get(session.questionId) ??
+      null
     : null
+  const activeMemory = activeQuestion
+    ? {
+        reusableExpressions: findReusableExpressions(
+          activeQuestion,
+          expressions,
+          3,
+        ),
+        learnerContext: buildLearnerContext(
+          activeQuestion,
+          sessions,
+          expressions,
+        ),
+      }
+    : { reusableExpressions: [], learnerContext: '' }
 
   return (
     <div className="app-shell">
@@ -337,8 +389,18 @@ export function App() {
             <small>说出来，再改一遍</small>
           </span>
         </button>
-        <span className={apiConnected ? 'api-badge ok' : 'api-badge down'}>
-          {apiConnected ? 'API连接成功' : 'API未连接'}
+        <span className="header-tools">
+          <button
+            type="button"
+            className="account-chip"
+            onClick={() => navigateSafely('accounts')}
+            aria-label="打开账号页"
+          >
+            {currentAccount?.displayName ?? '本机用户'}
+          </button>
+          <span className={apiConnected ? 'api-badge ok' : 'api-badge down'}>
+            {apiConnected ? 'API连接成功' : 'API未连接'}
+          </span>
         </span>
       </header>
 
@@ -366,6 +428,7 @@ export function App() {
         ) : view === 'questions' ? (
           <QuestionLibrary
             questions={allQuestions}
+            bankMeta={questionBankMeta}
             sessions={sessions}
             practiceTexts={practiceTexts}
             onPracticeTextsChange={updatePracticeTexts}
@@ -381,13 +444,21 @@ export function App() {
             service={runtime.practiceService}
             audioFocus={runtime.audioFocus}
             textAi={runtime.textAi}
+            reusableExpressions={activeMemory.reusableExpressions}
+            learnerContext={activeMemory.learnerContext}
+            onExpressionReused={(expressionId) =>
+              void runtime.practiceService
+                .markExpressionReused(expressionId)
+                .then(() => refreshLibrary())
+                .catch(() => undefined)
+            }
             onExitGuardChange={setPracticeExitGuardActive}
             onChange={handleSessionChange}
             onBack={() => navigateSafely('questions')}
           />
         ) : view === 'history' ? (
           <HistoryView
-            questions={allQuestions}
+            questions={questionsForHistory}
             sessions={sessions}
             onOpen={openSession}
             onDelete={(sessionId) => void deleteSession(sessionId)}
@@ -400,13 +471,18 @@ export function App() {
             onDelete={deleteExpression}
             onReviewed={markExpressionReviewed}
             onPractice={(questionId) => {
-              const question = allQuestions.find((item) => item.id === questionId)
+              const question = questionsForHistory.find((item) => item.id === questionId)
               if (question) {
                 void startQuestion(question)
               } else {
                 setStorageError('这条表达关联的原题已不存在，表达本身仍安全保留。')
               }
             }}
+          />
+        ) : view === 'accounts' ? (
+          <AccountView
+            service={runtime.accountService}
+            onSwitched={handleAccountSwitched}
           />
         ) : view === 'imports' ? (
           <ImportController
@@ -467,6 +543,7 @@ function BottomNavigation({
     { view: 'questions', label: '练习', icon: '◉' },
     { view: 'history', label: '记录', icon: '↻' },
     { view: 'expressions', label: '表达', icon: '✦' },
+    { view: 'accounts', label: '我的', icon: '◎' },
     { view: 'settings', label: '设置', icon: '⚙' },
   ]
 
@@ -489,6 +566,7 @@ function BottomNavigation({
 
 function QuestionLibrary({
   questions,
+  bankMeta,
   sessions,
   practiceTexts,
   onPracticeTextsChange,
@@ -497,6 +575,7 @@ function QuestionLibrary({
   onImport,
 }: {
   questions: Question[]
+  bankMeta: { seasonLabel: string; counts: { 1: number; 2: number; 3: number } }
   sessions: TrainingSession[]
   practiceTexts: PracticeTexts
   onPracticeTextsChange: (texts: PracticeTexts) => void
@@ -505,16 +584,34 @@ function QuestionLibrary({
   onImport: () => void
 }) {
   const [part, setPart] = useState<1 | 2 | 3>(1)
+  const [query, setQuery] = useState('')
+  const [newOnly, setNewOnly] = useState(false)
+  const [showFollowUpsFor, setShowFollowUpsFor] = useState<string | null>(null)
+  const normalizedQuery = query.trim().toLocaleLowerCase()
   const partQuestions = questions.filter((question) => question.part === part)
+  const visiblePartQuestions = partQuestions.filter((question) => {
+    const matchesQuery =
+      normalizedQuery.length === 0 ||
+      question.topic.toLocaleLowerCase().includes(normalizedQuery) ||
+      question.prompt.toLocaleLowerCase().includes(normalizedQuery) ||
+      (question.category ?? '').toLocaleLowerCase().includes(normalizedQuery)
+    // 只隐藏明确的旧题;导入题没有 new/old 标记,仍然可见。
+    const matchesNew = !newOnly || question.isNew !== false
+    return matchesQuery && matchesNew
+  })
+  const questionById = new Map(questions.map((question) => [question.id, question]))
+  const groups = groupQuestions(visiblePartQuestions)
   const resumable = sessions.find((item) => item.status !== 'completed')
   const resumableQuestion = resumable
-    ? questions.find((question) => question.id === resumable.questionId)
+    ? questionById.get(resumable.questionId) ??
+      legacyQuestionsById.get(resumable.questionId)
     : undefined
   const recommendation = recommendQuestion(questions, sessions)
 
   const pickRandom = () => {
-    const index = Math.floor(Math.random() * partQuestions.length)
-    const question = partQuestions[index]
+    // eslint-disable-next-line react-hooks/purity -- 随机抽题只在用户点击时执行
+    const index = Math.floor(Math.random() * visiblePartQuestions.length)
+    const question = visiblePartQuestions[index]
     if (question) {
       onStart(question)
     }
@@ -522,6 +619,12 @@ function QuestionLibrary({
 
   const setText = (field: keyof PracticeTexts, value: string) => {
     onPracticeTextsChange({ ...practiceTexts, [field]: value })
+  }
+
+  const toggleFollowUps = (questionId: string) => {
+    setShowFollowUpsFor((current) =>
+      current === questionId ? null : questionId,
+    )
   }
 
   return (
@@ -593,15 +696,9 @@ function QuestionLibrary({
 
       <div className="section-heading">
         <div>
-          <p className="eyebrow">基础题库</p>
+          <p className="eyebrow">{bankMeta.seasonLabel} 季度题库</p>
           <h2>选择一道单题</h2>
         </div>
-        <button className="secondary-button compact" type="button" onClick={pickRandom}>
-          随机一题
-        </button>
-        <button className="secondary-button compact" type="button" onClick={onImport}>
-          导入材料
-        </button>
       </div>
 
       <div className="part-tabs" role="tablist" aria-label="IELTS Speaking 部分">
@@ -612,28 +709,200 @@ function QuestionLibrary({
             type="button"
             key={value}
             className={part === value ? 'active' : ''}
-            onClick={() => setPart(value)}
+            onClick={() => {
+              setPart(value)
+              setShowFollowUpsFor(null)
+            }}
           >
             Part {value}
-            <small>{value === 1 ? '短问答' : value === 2 ? '话题卡' : '观点题'}</small>
+            <small>
+              {value === 1 ? '短问答' : value === 2 ? '话题卡' : '观点题'}
+              {' · '}
+              {bankMeta.counts[value]} 题
+            </small>
           </button>
         ))}
       </div>
 
-      <div className="question-list">
-        {partQuestions.map((question, index) => (
-          <article className="question-row" key={question.id}>
-            <span className="question-number">{String(index + 1).padStart(2, '0')}</span>
-            <button type="button" onClick={() => onStart(question)}>
-              <small>{question.topic} · {difficultyLabel(question.difficulty)}</small>
-              <strong>{question.prompt}</strong>
-              <span>{question.source ?? '本地题库'} · 开始练习 <b aria-hidden="true">→</b></span>
-            </button>
-          </article>
-        ))}
+      <div className="question-filters">
+        <label className="question-search">
+          <span>搜索题目或主题</span>
+          <input
+            type="search"
+            value={query}
+            placeholder="输入英文关键词"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className={newOnly ? 'filter-toggle active' : 'filter-toggle'}
+          aria-pressed={newOnly}
+          onClick={() => setNewOnly((value) => !value)}
+        >
+          只看新题
+        </button>
+        <button
+          type="button"
+          className="secondary-button compact"
+          disabled={visiblePartQuestions.length === 0}
+          onClick={pickRandom}
+        >
+          随机一题
+        </button>
+        <button className="secondary-button compact" type="button" onClick={onImport}>
+          导入材料
+        </button>
       </div>
+
+      {groups.length ? (
+        groups.map((group) => (
+          <section className="question-group" key={group.label}>
+            <div className="question-group-heading">
+              <strong>{group.label}</strong>
+              <small>{group.questions.length} 题</small>
+            </div>
+            <div className="question-list">
+              {group.questions.map((question, index) => (
+                <QuestionRow
+                  key={question.id}
+                  question={question}
+                  index={index}
+                  questionById={questionById}
+                  showFollowUps={showFollowUpsFor === question.id}
+                  onToggleFollowUps={toggleFollowUps}
+                  onStart={onStart}
+                />
+              ))}
+            </div>
+          </section>
+        ))
+      ) : (
+        <EmptyQuestionResult query={normalizedQuery} newOnly={newOnly} />
+      )}
     </section>
   )
+}
+
+function QuestionRow({
+  question,
+  index,
+  questionById,
+  showFollowUps,
+  onToggleFollowUps,
+  onStart,
+}: {
+  question: Question
+  index: number
+  questionById: Map<string, Question>
+  showFollowUps: boolean
+  onToggleFollowUps: (questionId: string) => void
+  onStart: (question: Question) => void
+}) {
+  const followUpIds =
+    question.part === 2 ? (question.relatedPart3Ids ?? []) : []
+  const followUps = followUpIds
+    .map((id) => questionById.get(id))
+    .filter((item): item is Question => item !== undefined)
+  const parentPart2 =
+    question.part === 3 && question.part2QuestionId !== undefined
+      ? questionById.get(question.part2QuestionId)
+      : undefined
+  const topicLabel = parentPart2 ? `对应 P2 · ${parentPart2.topic}` : question.topic
+
+  return (
+    <div className="question-row-wrap">
+      <article className="question-row">
+        <span className="question-number">{String(index + 1).padStart(2, '0')}</span>
+        <button type="button" onClick={() => onStart(question)}>
+          <small>
+            {topicLabel}
+            {' · '}
+            <QuestionStatus isNew={question.isNew} />
+            {' · '}
+            {difficultyLabel(question.difficulty)}
+            {question.part === 2 ? ` · ${question.cuePoints.length} 个提示点` : ''}
+          </small>
+          <strong>{question.prompt}</strong>
+          <span>
+            {question.category ?? '导入题目'}
+            {followUps.length > 0 ? ` · 对应 Part 3 ${followUps.length} 道` : ''}
+            {' · 开始练习 '}
+            <b aria-hidden="true">→</b>
+          </span>
+        </button>
+      </article>
+      {followUps.length > 0 ? (
+        <div className="follow-up-row">
+          <button
+            type="button"
+            className="follow-up-toggle"
+            aria-expanded={showFollowUps}
+            onClick={() => onToggleFollowUps(question.id)}
+          >
+            {showFollowUps ? '收起对应 Part 3' : `查看对应 Part 3（${followUps.length} 道）`}
+          </button>
+          {showFollowUps ? (
+            <div className="follow-up-list">
+              {followUps.map((followUp) => (
+                <button
+                  type="button"
+                  key={followUp.id}
+                  onClick={() => onStart(followUp)}
+                >
+                  {followUp.prompt}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function QuestionStatus({ isNew }: { isNew: boolean | undefined }) {
+  if (isNew === true) return <b className="new-tag">新题</b>
+  if (isNew === false) return <span>保留题</span>
+  return <span>自定义</span>
+}
+
+function EmptyQuestionResult({
+  query,
+  newOnly,
+}: {
+  query: string
+  newOnly: boolean
+}) {
+  return (
+    <div className="empty-state">
+      <span aria-hidden="true">=＾● ⋏ ●＾=</span>
+      <h2>没有匹配的题目</h2>
+      <p>
+        {query ? `没有找到包含“${query}”的题目。` : ''}
+        {newOnly ? '当前筛选只显示当季新题。' : ''}
+        可以清除筛选，或随机抽一道题开始。
+      </p>
+    </div>
+  )
+}
+
+function groupQuestions(questions: Question[]): Array<{
+  label: string
+  questions: Question[]
+}> {
+  const groups: Array<{ label: string; questions: Question[] }> = []
+  const byLabel = new Map<string, Question[]>()
+  for (const question of questions) {
+    const label = question.category ?? '导入题目'
+    const list = byLabel.get(label) ?? []
+    list.push(question)
+    byLabel.set(label, list)
+  }
+  for (const [label, list] of byLabel) {
+    groups.push({ label, questions: list })
+  }
+  return groups
 }
 
 function difficultyLabel(difficulty: Question['difficulty']): string {

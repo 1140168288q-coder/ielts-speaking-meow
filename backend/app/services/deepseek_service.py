@@ -23,6 +23,9 @@ FEEDBACK_SYSTEM = (
     "You are a friendly IELTS Speaking Tutor. Analyze only the answer text "
     "the learner submits. Return JSON only and write all comments in Chinese. "
     "Prioritize the 2-3 most important issues; do not over-correct everything. "
+    "Keep summary and problems short and actionable: summary at most 2 short "
+    "sentences; every problem is one action-first sentence of at most 30 "
+    "Chinese characters when possible. "
     "When improving the answer, keep the learner's current level, voice and "
     "speaking habits; never rewrite it into advanced English that is clearly "
     "hard for them to imitate. Every reference answer must sound like natural "
@@ -89,18 +92,19 @@ class DeepSeekService:
             {
                 "task": "analyze-ielts-speaking-answer-text",
                 "requiredShape": {
-                    "summary": "用中文写的整体小结,先肯定再指出最值得改的重点",
+                    "summary": "用中文写的最多两句话的整体小结,先肯定再指出最值得改的重点",
                     "strengths": [
-                        "用中文写 1-3 条做得好的地方,可以留空但不要硬凑"
+                        "用中文写 0-2 条做得好的地方,不要硬凑"
                     ],
                     "problems": [
-                        "用中文写 1-3 条最优先的问题,按重要性排序,不要过度纠错"
+                        "用中文写 2-3 条最优先的问题,按重要性排序,"
+                        "每条先给动作再给例子,一句话讲完"
                     ],
                     "grammarSuggestions": [
-                        "用中文写 1-3 条具体、可执行的语法建议,可留空"
+                        "用中文写 0-3 条具体、可执行的语法建议,一条一个动作"
                     ],
                     "vocabularySuggestions": [
-                        "用中文写 1-3 条贴合用户水平的词汇建议,可留空"
+                        "用中文写 0-3 条贴合用户水平的词汇建议,一条一个替换"
                     ],
                     "improvedAnswer": (
                         "保持用户原本想法、水平和表达习惯的优化版英文回答,"
@@ -139,6 +143,20 @@ class DeepSeekService:
                 "question": payload.get("question"),
                 "answer": payload.get("answer"),
                 "answerDurationSeconds": payload.get("answerDurationSeconds"),
+                "tutorContext": payload.get("tutorContext") or "",
+                "learnerContext": payload.get("learnerContext") or "",
+                "contextRules": [
+                    "tutorContext 是 IELTS 教学原则,优先按其重点给建议,"
+                    "但不要长篇复述这些原则",
+                    "learnerContext 是学习者的长期记忆聚合(练过次数、"
+                    "近期重点、其本人可复用素材);如果其中素材适合本题,"
+                    "改进版和参考回答可自然沿用素材原句或短语,"
+                    "但不要生硬粘贴,也不要把素材当作范文整段背诵",
+                    "若没有上下文,就按题目和答案正常分析",
+                    "永远不要评价 pronunciation、speech rate、pauses、"
+                    "intonation 或任何语音表现",
+                    "永远不要给 IELTS Band 分数、分数段或水平评分",
+                ],
             },
             ensure_ascii=False,
         )

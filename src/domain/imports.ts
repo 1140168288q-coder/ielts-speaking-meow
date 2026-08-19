@@ -46,6 +46,8 @@ export const importedQuestionRecordSchema = z
   .object({
     id: z.string().regex(/^p[123]-[a-z0-9-]+$/),
     sourceId: nonEmptyText(120),
+    /** 本地账号 userId;V1.8 起写入。旧记录缺省时归“本机用户”。 */
+    ownerId: nonEmptyText(120).optional(),
     question: questionSchema,
     sourcePage: z.number().int().positive().nullable(),
     createdAt: isoDateTimeSchema,

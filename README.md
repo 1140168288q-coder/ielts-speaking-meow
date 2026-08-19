@@ -1,12 +1,32 @@
 # 雅思口语喵
 
-Android-first 的 IELTS Speaking 单题练习应用。V1.7 的闭环：
+Android-first 的 IELTS Speaking 单题练习应用。V1.8 的闭环：
 
-> 听题 → 用系统键盘语音输入或手动输入第一次回答（可选手动计时）→
-> DeepSeek 纯文本分析（语法 / 词汇 / 连贯性 / 自然度 / 切题 / 内容展开）→
-> 试听优化答案与 3 个参考回答 → 第二次回答 → 小改后收录个人语料
+> 结构化季度题库 → 听题 → 用系统键盘语音输入或手动输入第一次回答
+> （可选手动计时）→ 本地教学 RAG + 长期记忆增强的 DeepSeek 纯文本分析
+> （语法 / 词汇 / 连贯性 / 自然度 / 切题 / 内容展开）→
+> 简洁重点式反馈 + 试听优化答案与 3 个参考回答 → 复用个人素材完成
+> 第二次回答 → 小改后收录个人语料
 
-## V1.7 变化
+## V1.8 变化
+
+- **2026 年 5-8 月结构化内置题库**：由 `scripts/import-question-bank.mjs`
+  自动从新航道 PDF 解析生成，保留 Part 1/2/3、topic、new/old、Part 2
+  cue points、Part 2↔Part 3 关联；旧 V1.4 内置题只保留为历史记录解析。
+- **题库可维护更新**：换季度只需
+  `npm run question-bank:update -- "<新题库.pdf>"`，业务代码不用改。
+- **简易本地账号**：昵称 + 可选本地 PIN + 稳定 userId；练习、AI 反馈、
+  个人表达和导入题按账号隔离；旧数据自动归属“本机用户”，未来云同步以
+  userId 对齐。
+- **IELTS 教学 RAG（本地词汇检索）**：按 Part 与主题检索教学原则，
+  离线可用，并把紧凑上下文随反馈请求发送到自建 Backend。
+- **用户长期 Memory**：从真实练习和语料聚合练过次数、反复问题与可复用
+  表达，AI 反馈会自动参考；练习页可直接试听并插入跨题素材。
+- **AI 反馈 UI 精简**：优先展示最值得改的 2-3 点；语法/词汇/优化答案
+  折叠；3 个参考回答改为 tab 切换，减少信息堆积。
+- 不评分、不评价发音/语速/停顿/语调、不恢复 STT 的产品方向不变。
+
+## V1.7 变化（历史）
 
 - **彻底移除 STT**：客户端不再有录音转写 UI，Backend 不再提供 `/v1/stt`，
   火山 STT 服务、配置和测试全部删除。用户直接用手机系统键盘的麦克风语音输入，
@@ -38,6 +58,10 @@ Android-first 的 IELTS Speaking 单题练习应用。V1.7 的闭环：
 - React 19 + TypeScript strict + Vite；
 - Capacitor 8，仅生成 Android 平台；
 - Zod 校验题库、持久化领域对象和 AI 结构化结果；
+- 内置题库为生成式 JSON（`src/data/questionBank.generated.json`），
+  更新流水线见 `docs/QUESTION_BANK_UPDATE.md`；
+- IndexedDB 本地账号与数据隔离；RAG/Memory 为轻量本地词汇检索与聚合，
+  不引入向量数据库或 embedding API；
 - React 本地状态 + application service，不引入额外状态框架；
 - Vitest + Testing Library + fake IndexedDB；
 - Backend：FastAPI + httpx + pydantic，pytest 单测（mock 上游），部署见
@@ -58,6 +82,8 @@ npm run lint
 npm test
 npm run build
 npm run android:sync
+# 换季度题库:自动解析 PDF 并覆盖内置题库
+npm run question-bank:update -- "新季度题库.pdf"
 ```
 
 Windows 下也可以直接双击项目根目录的 `start.bat`：脚本会先结束 5173 端口上的
@@ -84,8 +110,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/android-build.ps
 APK 输出到：
 
 ```text
-artifacts/ielts-speaking-meow-v1.7.0-debug.apk    # 开发调试
-artifacts/ielts-speaking-meow-v1.7.0-release.apk  # 正式签名
+artifacts/ielts-speaking-meow-v1.8.0-debug.apk    # 开发调试
+artifacts/ielts-speaking-meow-v1.8.0-release.apk  # 正式签名
 ```
 
 连接 Android 手机或启动模拟器后，可以额外运行设备端测试：
@@ -98,12 +124,12 @@ Android Studio 可以直接打开 `android/`。
 
 ## 安装到手机
 
-正式包是 `artifacts/ielts-speaking-meow-v1.7.0-release.apk`。把 APK 复制或
+正式包是 `artifacts/ielts-speaking-meow-v1.8.0-release.apk`。把 APK 复制或
 发送到 Android 手机，允许对应文件应用“安装未知应用”后即可安装。通过 USB
 调试也可执行：
 
 ```bash
-adb install artifacts/ielts-speaking-meow-v1.7.0-release.apk
+adb install artifacts/ielts-speaking-meow-v1.8.0-release.apk
 ```
 
 **注意**：Release 与早期 Debug 包签名不同，Android 不允许互相覆盖安装；

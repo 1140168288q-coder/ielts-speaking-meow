@@ -95,9 +95,18 @@ describe('BackendTextProvider', () => {
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('http://backend.test/v1/feedback')
     const body = JSON.parse(init.body as string) as Record<string, unknown>
+    const question = firstQuestion()
     expect(body).toEqual({
-      part: firstQuestion().part,
-      question: firstQuestion(),
+      part: question.part,
+      question: {
+        part: question.part,
+        topic: question.topic,
+        prompt: question.prompt,
+        ...(question.category !== undefined
+          ? { category: question.category }
+          : {}),
+        ...(question.isNew !== undefined ? { isNew: question.isNew } : {}),
+      },
       answer: 'I like reading books in my free time.',
       answerDurationSeconds: 12,
     })

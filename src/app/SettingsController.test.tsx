@@ -196,7 +196,7 @@ describe('SettingsController', () => {
       expect(screen.getByText(/vivi 2\.0/)).toBeTruthy()
     })
     expect(screen.queryByText(/火山流式语音识别/)).toBeNull()
-    expect(screen.getByText(/已连接 · Backend 1\.7\.0/)).toBeTruthy()
+    expect(screen.getByText(/已连接 · Backend 1\.8\.0/)).toBeTruthy()
   })
 
   it('shows 验证失败 instead of 已连接 when a provider verification failed', async () => {

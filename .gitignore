@@ -17,6 +17,7 @@ android/build/
 android/capacitor-cordova-android-plugins/build/
 *.jks
 *.keystore
+*.pdf
 android/keystore.properties
 *.apk
 artifacts/*.wav

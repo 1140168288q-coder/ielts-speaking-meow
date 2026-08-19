@@ -15,6 +15,8 @@ class FeedbackPayload(BaseModel):
     question: dict
     answer: str = Field(min_length=1, max_length=10_000)
     answerDurationSeconds: int | float | None = Field(default=None, ge=0)
+    tutorContext: str = Field(default="", max_length=3_000)
+    learnerContext: str = Field(default="", max_length=2_000)
 
 
 class OrganizePayload(BaseModel):

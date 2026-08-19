@@ -9,6 +9,16 @@ export interface LLMFeedbackRequest {
   question: Question
   answer: string
   answerDurationSeconds: number | null
+  /**
+   * 本地 RAG 检索出的 IELTS 教学原则(不含用户答案)。
+   * 客户端只负责检索,第三方调用仍全部经由自建 Backend。
+   */
+  tutorContext?: string
+  /**
+   * 用户长期记忆聚合:练过次数、近期重点、可复用素材。
+   * 长度有限,且只包含用户已经保存在本机的数据。
+   */
+  learnerContext?: string
 }
 
 /**

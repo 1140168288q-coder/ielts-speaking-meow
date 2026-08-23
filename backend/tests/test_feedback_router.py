@@ -2,7 +2,11 @@ import json
 
 import httpx
 
-from tests.conftest import configured_settings, deepseek_ok_handler
+from tests.conftest import (
+    authenticated_headers,
+    configured_settings,
+    deepseek_ok_handler,
+)
 
 TEXT_FEEDBACK = {
     "summary": "回答切题，先肯定；重点是时态需要再稳一点。",
@@ -35,12 +39,22 @@ FEEDBACK_PAYLOAD = {
 }
 
 
+async def post_authenticated(
+    client: httpx.AsyncClient, path: str, payload: dict
+) -> httpx.Response:
+    return await client.post(
+        path,
+        json=payload,
+        headers=await authenticated_headers(client),
+    )
+
+
 async def test_feedback_happy_path(make_app):
     app, _ = make_app(deepseek_ok_handler(TEXT_FEEDBACK))
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/feedback", json=FEEDBACK_PAYLOAD)
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
     assert response.status_code == 200
     body = response.json()
     assert body["summary"] == "回答切题，先肯定；重点是时态需要再稳一点。"
@@ -62,9 +76,10 @@ async def test_feedback_sends_text_only_payload(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post(
+        response = await post_authenticated(
+            client,
             "/v1/feedback",
-            json={
+            {
                 **FEEDBACK_PAYLOAD,
                 "answerDurationSeconds": None,
                 "tutorContext": "【Part 1 先直接回答】先用一句话直接回答。",
@@ -95,8 +110,8 @@ async def test_feedback_rejects_empty_answer(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post(
-            "/v1/feedback", json={**FEEDBACK_PAYLOAD, "answer": "   "}
+        response = await post_authenticated(
+            client, "/v1/feedback", {**FEEDBACK_PAYLOAD, "answer": "   "}
         )
     assert response.status_code == 400
 
@@ -107,7 +122,7 @@ async def test_feedback_not_configured(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/feedback", json=FEEDBACK_PAYLOAD)
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "not-configured"
 
@@ -117,7 +132,7 @@ async def test_feedback_invalid_shape_returns_502(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/feedback", json=FEEDBACK_PAYLOAD)
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
     assert response.status_code == 502
     assert response.json()["error"]["code"] == "provider-error"
 
@@ -130,7 +145,7 @@ async def test_feedback_upstream_401(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/feedback", json=FEEDBACK_PAYLOAD)
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
     assert response.status_code == 502
     assert "401" in response.json()["error"]["message"]
 
@@ -149,9 +164,10 @@ async def test_organize_happy_path(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post(
+        response = await post_authenticated(
+            client,
             "/v1/organize",
-            json={"fileName": "notes.txt", "extractedText": "I visited Beijing last year."},
+            {"fileName": "notes.txt", "extractedText": "I visited Beijing last year."},
         )
     assert response.status_code == 200
     assert response.json()["questions"][0]["part"] == 2

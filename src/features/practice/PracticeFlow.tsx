@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { CheckCircle2, ChevronLeft, Lightbulb, Play, Sparkles, Square } from 'lucide-react'
 import type { PracticeService } from '../../application/practiceService'
 import type {
   AiFeedback,
@@ -17,6 +18,7 @@ import {
   createLocalSummary,
   retrieveTutorKnowledge,
   type ReusableExpression,
+  type ReusablePersonalMaterial,
 } from '../../domain'
 import type { LLMProvider } from '../../ports/ai'
 import type { AudioFocus } from '../../ports/speech'
@@ -59,6 +61,7 @@ export function PracticeFlow({
   audioFocus,
   textAi,
   reusableExpressions = [],
+  reusablePersonalMaterials = [],
   learnerContext = '',
   onExpressionReused = () => undefined,
   onExitGuardChange,
@@ -71,6 +74,7 @@ export function PracticeFlow({
   audioFocus: AudioFocus
   textAi: LLMProvider
   reusableExpressions?: ReusableExpression[]
+  reusablePersonalMaterials?: ReusablePersonalMaterial[]
   learnerContext?: string
   onExpressionReused?: (expressionId: string) => void | Promise<void>
   onExitGuardChange: (active: boolean) => void
@@ -102,10 +106,16 @@ export function PracticeFlow({
     onChangeRef.current = onChange
   }, [onChange, session])
 
-  useEffect(() => () => {
-    mountedRef.current = false
-    aiRequestGenerationRef.current += 1
-    aiRequestInFlightRef.current = false
+  useEffect(() => {
+    // React StrictMode runs one development-only setup/cleanup cycle before the
+    // real mount. Reset the flag in setup so async feedback can still release
+    // loading state after that cycle.
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      aiRequestGenerationRef.current += 1
+      aiRequestInFlightRef.current = false
+    }
   }, [])
 
   // 进入答题界面自动播放一次题目;用户可随时用按钮重播或停止。
@@ -220,9 +230,11 @@ export function PracticeFlow({
 
     if (saved === null) return
     if (attemptNumber === 1) {
-      await requestAiFeedback(saved)
+      clearPracticeDraft(session, attemptNumber)
+      void requestAiFeedback(saved)
     } else {
-      setMessage('第二次回答已保存，确认文本后即可收录到个人语料。')
+      clearPracticeDraft(session, attemptNumber)
+      setMessage('第二次回答已保存。现在可以完成练习，或挑一句收进个人语料。')
     }
   }
 
@@ -262,6 +274,21 @@ export function PracticeFlow({
     }
   }
 
+  const completePractice = async () => {
+    onExitGuardChange(true)
+    setBusy(true)
+    setMessage(null)
+    try {
+      const updated = await service.completeSession(session.id)
+      onChange(updated)
+    } catch (error) {
+      showError(error, '暂时无法完成练习，请重试。')
+    } finally {
+      setBusy(false)
+      onExitGuardChange(false)
+    }
+  }
+
   const toggleSpeak = async (key: string, text: string) => {
     setMessage(null)
     try {
@@ -294,7 +321,7 @@ export function PracticeFlow({
     <section className="practice-page">
       <div className="practice-topbar">
         <button type="button" className="icon-button" onClick={onBack} aria-label="返回题库">
-          ←
+          <ChevronLeft aria-hidden="true" size={21} />
         </button>
         <div className="step-track" aria-label={`当前第 ${step} 步，共 4 步`}>
           {[1, 2, 3, 4].map((value) => (
@@ -307,6 +334,7 @@ export function PracticeFlow({
       <QuestionCard
         question={question}
         playing={speakingKey === `question:${question.id}`}
+        compact={stage !== 'first-answer'}
         onToggle={() => void toggleSpeak(`question:${question.id}`, question.prompt)}
       />
 
@@ -314,21 +342,13 @@ export function PracticeFlow({
 
       {stage === 'first-answer' ? (
         <div className="practice-stack">
-          <TutorKnowledgeCard docs={tutorKnowledge} />
-          {reusableExpressions.length ? (
-            <ReusableMaterialCard
-              items={reusableExpressions}
-              playingKey={speakingKey}
-              onToggle={(key, text) => void toggleSpeak(key, text)}
-              onUse={reuseExpression}
-            />
-          ) : null}
           <AnswerEntryStage
             eyebrow="第一次回答"
             heading="输入你的回答，或按住键盘麦克风直接说。"
-            buttonLabel="提交第 1 次回答并分析"
+            buttonLabel="保存第 1 次回答"
             busy={busy}
             insertSeed={insertSeed}
+            draftKey={practiceDraftKey(session, 1)}
             onSubmit={(text, durationMs) => void saveAnswer(1, text, durationMs)}
           />
         </div>
@@ -359,11 +379,11 @@ export function PracticeFlow({
           ) : null}
           <section className="next-attempt-card">
             <p className="eyebrow">第二次是核心</p>
-            <h2>参考上面的重点，再把这道题完整回答一次。</h2>
+            <h2>先用本地重点继续练；AI 结果会在后台补充。</h2>
             <button
               type="button"
               className="primary-button"
-              disabled={busy || aiBusy}
+              disabled={busy}
               onClick={() => void prepareSecond()}
             >
               进入第二次回答
@@ -374,12 +394,16 @@ export function PracticeFlow({
 
       {stage === 'second-answer' ? (
         <div className="practice-stack">
+          <TutorKnowledgeCard docs={tutorKnowledge} />
           {aiFeedback ? (
             <ReferenceRecap
               feedback={aiFeedback}
               playingKey={speakingKey}
               onToggle={(key, text) => void toggleSpeak(key, text)}
             />
+          ) : null}
+          {reusablePersonalMaterials.length ? (
+            <PersonalMaterialIdeasCard items={reusablePersonalMaterials} />
           ) : null}
           {reusableExpressions.length ? (
             <ReusableMaterialCard
@@ -395,6 +419,7 @@ export function PracticeFlow({
             buttonLabel="提交第 2 次回答"
             busy={busy}
             insertSeed={insertSeed}
+            draftKey={practiceDraftKey(session, 2)}
             onSubmit={(text, durationMs) => void saveAnswer(2, text, durationMs)}
           />
         </div>
@@ -405,15 +430,16 @@ export function PracticeFlow({
           attempt={secondAttempt}
           busy={busy}
           onSubmit={(text) => void submitCorpus(text)}
+          onComplete={() => void completePractice()}
         />
       ) : null}
 
       {stage === 'completed' ? (
         <section className="completed-card">
-          <span className="celebration" aria-hidden="true">✦</span>
+          <span className="celebration" aria-hidden="true"><CheckCircle2 size={28} /></span>
           <p className="eyebrow">本次练习完成</p>
-          <h2>第二次回答已收录到个人语料</h2>
-          <p>你可以在“表达”页面试听和复习这段回答。</p>
+          <h2>你已经完成了两次回答</h2>
+          <p>练习记录已保存；确认过的短表达可在“复盘 → 个人语料”继续复习。</p>
           <button type="button" className="primary-button" onClick={onBack}>
             返回题库
           </button>
@@ -426,33 +452,42 @@ export function PracticeFlow({
 function QuestionCard({
   question,
   playing,
+  compact,
   onToggle,
 }: {
   question: Question
   playing: boolean
+  compact: boolean
   onToggle: () => void
 }) {
+  const cueList = 'cuePoints' in question ? (
+    <ul className="cue-list">
+      {question.cuePoints.map((point) => (
+        <li key={point}>{point}</li>
+      ))}
+    </ul>
+  ) : null
+
   return (
-    <article className="prompt-card">
+    <article className={compact ? 'prompt-card compact' : 'prompt-card'}>
       <div className="prompt-meta">
         <span>{partLabel(question.part)}</span>
         <span>{question.topic}</span>
       </div>
       <h1>{question.prompt}</h1>
-      {'cuePoints' in question ? (
-        <ul className="cue-list">
-          {question.cuePoints.map((point) => (
-            <li key={point}>{point}</li>
-          ))}
-        </ul>
-      ) : null}
+      {compact && cueList ? (
+        <details className="compact-cue-list">
+          <summary>查看提示点</summary>
+          {cueList}
+        </details>
+      ) : cueList}
       <div className="prompt-actions">
         <button
           type="button"
           className={playing ? 'sound-button playing' : 'sound-button'}
           onClick={onToggle}
         >
-          <span aria-hidden="true">{playing ? '■' : '▶'}</span>
+          {playing ? <Square aria-hidden="true" size={15} fill="currentColor" /> : <Play aria-hidden="true" size={16} fill="currentColor" />}
           {playing ? '停止播报' : '播放题目'}
         </button>
         <span className="audio-state">
@@ -501,8 +536,8 @@ function ReusableMaterialCard({
     <section className="reusable-material-card">
       <div className="section-heading compact-heading">
         <div>
-          <p className="eyebrow">你的长期素材</p>
-          <h2>可跨题复用，先说自己的话</h2>
+          <p className="eyebrow">你的个人语料</p>
+          <h2>挑一句你说过的话，放进这次回答</h2>
         </div>
       </div>
       <div className="reusable-material-list">
@@ -521,7 +556,7 @@ function ReusableMaterialCard({
                   className="secondary-button compact"
                   onClick={() => onToggle(key, item.expression.text)}
                 >
-                  {playingKey === key ? '■ 停止' : '▶ 试听'}
+                  {playingKey === key ? <><Square aria-hidden="true" size={13} fill="currentColor" /> 停止</> : <><Play aria-hidden="true" size={14} fill="currentColor" /> 试听</>}
                 </button>
                 <button
                   type="button"
@@ -535,6 +570,33 @@ function ReusableMaterialCard({
           )
         })}
       </div>
+    </section>
+  )
+}
+
+function PersonalMaterialIdeasCard({
+  items,
+}: {
+  items: ReusablePersonalMaterial[]
+}) {
+  return (
+    <section className="personal-material-ideas-card">
+      <div className="section-heading compact-heading">
+        <span className="memory-icon"><Lightbulb aria-hidden="true" size={20} /></span>
+        <div>
+          <p className="eyebrow">你的个人素材 · 说什么</p>
+          <h2>这些真实经历可能适合本题</h2>
+        </div>
+      </div>
+      <div className="personal-material-ideas-list">
+        {items.map(({ material, reason }) => (
+          <article key={material.id}>
+            <div><strong>{material.title}</strong><small>{reason}</small></div>
+            <p>{material.content}</p>
+          </article>
+        ))}
+      </div>
+      <small className="privacy-caption">仅在本机展示，不会自动发送给 AI；需要个性化生成时应再次由你确认。</small>
     </section>
   )
 }
@@ -607,6 +669,7 @@ function AnswerEntryStage({
   buttonLabel,
   busy,
   insertSeed = null,
+  draftKey,
   onSubmit,
 }: {
   eyebrow: string
@@ -614,10 +677,23 @@ function AnswerEntryStage({
   buttonLabel: string
   busy: boolean
   insertSeed?: { nonce: number; text: string } | null
+  draftKey: string
   onSubmit: (text: string, answerDurationMs: number | null) => void
 }) {
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState(() => readPracticeDraft(draftKey))
   const { elapsedMs, status, start, pause, resume, reset } = useManualTimer()
+
+  useEffect(() => {
+    try {
+      if (draft.trim().length === 0) {
+        window.localStorage.removeItem(draftKey)
+      } else {
+        window.localStorage.setItem(draftKey, draft)
+      }
+    } catch {
+      // The answer remains in component state if local draft storage is unavailable.
+    }
+  }, [draft, draftKey])
 
   // 用户点击“插入素材”时,把历史表达追加到当前答案框。
   useEffect(() => {
@@ -957,7 +1033,7 @@ function TtsPlayButton({
       className={playing ? 'secondary-button playing' : 'secondary-button'}
       onClick={onClick}
     >
-      <span aria-hidden="true">{playing ? '■' : '▶'}</span>
+      {playing ? <Square aria-hidden="true" size={14} fill="currentColor" /> : <Play aria-hidden="true" size={15} fill="currentColor" />}
       {playing ? playingLabel : label}
     </button>
   )
@@ -1004,12 +1080,14 @@ function SubmitCorpusStage({
   attempt,
   busy,
   onSubmit,
+  onComplete,
 }: {
   attempt: PracticeAttempt
   busy: boolean
   onSubmit: (text: string) => void
+  onComplete: () => void
 }) {
-  const [draft, setDraft] = useState(attempt.transcript.text)
+  const [draft, setDraft] = useState(() => suggestReusableSnippet(attempt.transcript.text))
   const lastIncomingTranscript = useRef({
     attemptId: attempt.id,
     text: attempt.transcript.text,
@@ -1024,7 +1102,7 @@ function SubmitCorpusStage({
     }
     setDraft((current) =>
       previous.attemptId !== attempt.id || current === previous.text
-        ? incomingText
+        ? suggestReusableSnippet(incomingText)
         : current,
     )
   }, [attempt.id, attempt.transcript.text, attempt.transcript.updatedAt])
@@ -1033,8 +1111,8 @@ function SubmitCorpusStage({
     <section className="submit-corpus-card">
       <div className="section-heading compact-heading">
         <div>
-          <p className="eyebrow">第二次回答</p>
-          <h2>少量修改后，收录进个人语料。</h2>
+          <p className="eyebrow">完成与沉淀</p>
+          <h2>这次练习已经完成，要留下一句以后再用吗？</h2>
         </div>
         {attempt.metrics.durationMs > 0 ? (
           <span className="answer-duration">
@@ -1044,26 +1122,64 @@ function SubmitCorpusStage({
       </div>
       <label className="transcript-field">
         <span>
-          第二次回答文本
-          <small>确认这就是你以后真正想再说的话，再提交收录。</small>
+          候选表达
+          <small>系统先挑出一句；请确认或改短。完整回答不会进入个人语料库。</small>
         </span>
         <textarea
           value={draft}
-          placeholder="在这里输入你第二次回答的英文文本。"
+          placeholder="例如：It helps me unwind after a long day."
           onChange={(event) => setDraft(event.target.value)}
-          rows={6}
+          rows={3}
+          maxLength={320}
         />
       </label>
-      <button
-        type="button"
-        className="primary-button"
-        disabled={busy || draft.trim().length === 0}
-        onClick={() => onSubmit(draft)}
-      >
-        {busy ? '正在保存…' : '保存并收录到个人语料'}
-      </button>
+      <div className="corpus-actions">
+        <button
+          type="button"
+          className="primary-button"
+          disabled={busy || draft.trim().length === 0}
+          onClick={() => onSubmit(draft)}
+        >
+          <Sparkles aria-hidden="true" size={17} />
+          {busy ? '正在保存…' : '收进个人语料并完成'}
+        </button>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy}
+          onClick={onComplete}
+        >
+          仅完成练习
+        </button>
+      </div>
     </section>
   )
+}
+
+function practiceDraftKey(session: TrainingSession, attemptNumber: 1 | 2): string {
+  return `ielts-speaking-meow:draft:${session.ownerId ?? 'local'}:${session.id}:${attemptNumber}`
+}
+
+function clearPracticeDraft(session: TrainingSession, attemptNumber: 1 | 2): void {
+  try {
+    window.localStorage.removeItem(practiceDraftKey(session, attemptNumber))
+  } catch {
+    // Draft persistence is best-effort; the durable answer is already saved.
+  }
+}
+
+function readPracticeDraft(key: string): string {
+  try {
+    return window.localStorage.getItem(key) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function suggestReusableSnippet(text: string): string {
+  const clean = text.trim()
+  const firstSentence = clean.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() ?? clean
+  return firstSentence.slice(0, 320)
 }
 
 function formatTimer(elapsedMs: number): string {

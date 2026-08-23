@@ -3,6 +3,7 @@ import type {
   SavedExpression,
   TrainingSession,
 } from '../domain/models'
+import type { PersonalMaterial } from '../domain/personalMaterials'
 import type { AudioStorage, LocalStorage } from '../ports/storage'
 import { StorageBackupService } from './storageBackupService'
 
@@ -11,6 +12,7 @@ const NOW = '2026-08-14T08:00:00.000Z'
 class MemoryStorage implements LocalStorage, AudioStorage {
   readonly sessions = new Map<string, TrainingSession>()
   readonly expressions = new Map<string, SavedExpression>()
+  readonly materials = new Map<string, PersonalMaterial>()
   readonly audio = new Map<string, Blob>()
 
   upsertSession(session: TrainingSession): Promise<void> {
@@ -36,6 +38,33 @@ class MemoryStorage implements LocalStorage, AudioStorage {
 
   deleteExpression(expressionId: string): Promise<void> {
     this.expressions.delete(expressionId)
+    return Promise.resolve()
+  }
+  upsertPersonalMaterial(material: PersonalMaterial): Promise<void> {
+    this.materials.set(material.id, structuredClone(material))
+    return Promise.resolve()
+  }
+  getPersonalMaterial(
+    materialId: string,
+    ownerId: string,
+  ): Promise<PersonalMaterial | null> {
+    const material = this.materials.get(materialId)
+    return Promise.resolve(material?.ownerId === ownerId ? material : null)
+  }
+  listPersonalMaterials(ownerId: string): Promise<PersonalMaterial[]> {
+    return Promise.resolve(
+      [...this.materials.values()].filter(
+        (material) => material.ownerId === ownerId,
+      ),
+    )
+  }
+  deletePersonalMaterial(
+    materialId: string,
+    ownerId: string,
+  ): Promise<void> {
+    if (this.materials.get(materialId)?.ownerId === ownerId) {
+      this.materials.delete(materialId)
+    }
     return Promise.resolve()
   }
   getPracticeTexts(): Promise<PracticeTexts | null> {

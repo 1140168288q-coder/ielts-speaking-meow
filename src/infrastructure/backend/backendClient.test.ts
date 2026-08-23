@@ -119,6 +119,42 @@ describe('BackendClient (web transport)', () => {
     expect(await audio.arrayBuffer()).toHaveProperty('byteLength', 3)
   })
 
+  it('adds the cloud session token to protected requests', async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
+    const client = new BackendClient({
+      baseUrl: 'http://backend.test',
+      isNative: () => false,
+      fetch,
+      getAccessToken: () => Promise.resolve('cloud-session-token'),
+    })
+
+    await client.postJson('/v1/feedback', {}, 5_000)
+
+    const init = fetch.mock.calls[0]?.[1] as RequestInit
+    expect(new Headers(init.headers).get('Authorization')).toBe(
+      'Bearer cloud-session-token',
+    )
+  })
+
+  it('clears the local session when a protected request returns 401', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({ error: { code: 'unauthorized', message: 'expired' } }, 401),
+    )
+    const onUnauthorized = vi.fn()
+    const client = new BackendClient({
+      baseUrl: 'http://backend.test',
+      isNative: () => false,
+      fetch,
+      getAccessToken: () => Promise.resolve('expired-token'),
+      onUnauthorized,
+    })
+
+    await expect(client.postJson('/v1/feedback', {}, 5_000)).rejects.toMatchObject({
+      code: 'request-failed',
+    })
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+  })
+
   it('uses the dynamic base URL getter when provided', async () => {
     const fetch = vi.fn().mockResolvedValue(
       jsonResponse({ status: 'ok', providers: {} }),

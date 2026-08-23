@@ -1,8 +1,10 @@
 """POST /v1/tts:文本 → 火山语音合成 2.0 → mp3 字节。"""
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
-router = APIRouter()
+from .auth import get_current_auth
+
+router = APIRouter(dependencies=[Depends(get_current_auth)])
 
 
 class TtsPayload(BaseModel):
@@ -26,5 +28,5 @@ async def tts(request: Request, payload: TtsPayload) -> Response:
     return Response(
         content=audio,
         media_type="audio/mpeg",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers={"Cache-Control": "private, max-age=86400"},
     )

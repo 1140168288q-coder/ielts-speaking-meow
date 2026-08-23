@@ -194,9 +194,24 @@ export class PracticeService {
     return updated
   }
 
+  async completeSession(sessionId: string): Promise<TrainingSession> {
+    const session = await this.requireSession(sessionId)
+    if (!session.attempts.some((attempt) => attempt.attemptNumber === 2)) {
+      throw new Error('请先完成第二次回答，再结束练习。')
+    }
+
+    const updated = trainingSessionSchema.parse({
+      ...session,
+      status: 'completed',
+      updatedAt: this.now().toISOString(),
+    })
+    await this.localStorage.upsertSession(updated)
+    return updated
+  }
+
   /**
-   * 第二次回答文本经用户小改后提交:写入第二次尝试并整体收录进个人语料,
-   * 会话完成。
+   * 用户从第二次回答里确认一条短表达后收录进个人语料；完整回答仍只属于
+   * 练习记录，避免把个人语料库变成范文仓库。会话同时完成。
    */
   async submitSecondAnswerToCorpus(
     sessionId: string,
@@ -213,30 +228,13 @@ export class PracticeService {
 
     const cleanText = text.trim()
     if (cleanText.length === 0) {
-      throw new Error('请先填写第二次回答的文本。')
+      throw new Error('请先挑选一句值得复用的表达。')
+    }
+    if (cleanText.length > 320) {
+      throw new Error('个人语料请保留一句或一个短表达，不超过 320 个字符。')
     }
 
     const timestamp = this.now().toISOString()
-    const updatedAttempt: PracticeAttempt = {
-      ...secondAttempt,
-      transcript: {
-        ...secondAttempt.transcript,
-        status: 'ready',
-        text: cleanText,
-        source: 'edited',
-        errorCode: null,
-        updatedAt: timestamp,
-      },
-      metrics: analyzeSpeech({
-        transcript: cleanText,
-        durationMs: secondAttempt.metrics.durationMs,
-      }),
-      updatedAt: timestamp,
-    }
-    const attempts = session.attempts.map((attempt) =>
-      attempt.attemptNumber === 2 ? updatedAttempt : attempt,
-    )
-
     const expression = savedExpressionSchema.parse({
       id: this.createId(),
       ownerId: this.getCurrentUserId(),
@@ -254,7 +252,6 @@ export class PracticeService {
 
     const updated = trainingSessionSchema.parse({
       ...session,
-      attempts,
       status: 'completed',
       updatedAt: timestamp,
     })

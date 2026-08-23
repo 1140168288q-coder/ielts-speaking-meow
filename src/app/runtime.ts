@@ -1,11 +1,9 @@
 import { Capacitor } from '@capacitor/core'
 import { TTS_VOICE_CONFIG_VERSION } from '../domain'
 import { AccountService } from '../application/accountService'
-import {
-  ImportMaterialService,
-  MaterialExtractor,
-} from '../application/imports'
+import { ImportMaterialService } from '../application/imports/importMaterialService'
 import { PracticeService } from '../application/practiceService'
+import { PersonalMaterialService } from '../application/personalMaterialService'
 import { StorageBackupService } from '../application/storageBackupService'
 import {
   BackendClient,
@@ -13,13 +11,15 @@ import {
   BackendHealthCache,
   BackendTextProvider,
   BackendTtsProvider,
+  BrowserSessionAuthTokenStore,
+  CloudAuthClient,
+  CloudSyncClient,
 } from '../infrastructure/backend'
-import { CapacitorDocumentOcr } from '../infrastructure/platform'
+import { CapacitorDocumentOcr, CapacitorSecureAuthTokenStore } from '../infrastructure/platform'
 import { AudioCoordinator } from '../infrastructure/speech/audioCoordinator'
 import { CapacitorSystemTTS } from '../infrastructure/speech/capacitorSystemTts'
 import { FallbackTTSProvider } from '../infrastructure/speech/fallbackTtsProvider'
 import { HTMLAudioPlayback } from '../infrastructure/speech/htmlAudioPlayback'
-import { MediaRecorderAdapter } from '../infrastructure/speech/mediaRecorderAdapter'
 import { SystemWebSpeechTTS } from '../infrastructure/speech/systemWebSpeechTts'
 import { IndexedDbStorage } from '../infrastructure/storage'
 
@@ -36,10 +36,23 @@ export const createBrowserRuntime = () => {
     ? new CapacitorSystemTTS()
     : new SystemWebSpeechTTS()
   const configStore = new BackendConfigStore(storage)
+  const authTokenStore = Capacitor.getPlatform() === 'android'
+    ? new CapacitorSecureAuthTokenStore()
+    : new BrowserSessionAuthTokenStore()
   const backendClient = new BackendClient({
     getBaseUrl: () => configStore.getBaseUrl(),
+    getAccessToken: () => authTokenStore.getToken(),
+    onUnauthorized: () => authTokenStore.clearToken(),
   })
   const healthCache = new BackendHealthCache(backendClient)
+  const cloudAuthClient = new CloudAuthClient({
+    getBaseUrl: () => configStore.getBaseUrl(),
+  })
+  const cloudSyncClient = new CloudSyncClient({
+    getBaseUrl: () => configStore.getBaseUrl(),
+    getAccessToken: () => authTokenStore.getToken(),
+    onUnauthorized: () => authTokenStore.clearToken(),
+  })
   const textAi = new BackendTextProvider(backendClient, healthCache)
   const voicePlayback = new HTMLAudioPlayback()
   const voiceAi = new BackendTtsProvider(
@@ -49,18 +62,28 @@ export const createBrowserRuntime = () => {
     healthCache,
   )
   const tts = new FallbackTTSProvider(voiceAi, systemTts)
-  const recorder = new MediaRecorderAdapter()
   const playback = new HTMLAudioPlayback()
-  const audioFocus = new AudioCoordinator(tts, recorder, playback)
+  const audioFocus = new AudioCoordinator(tts, playback)
   const documentOcr = Capacitor.getPlatform() === 'android'
     ? new CapacitorDocumentOcr()
     : null
   const importService = new ImportMaterialService({
     storage,
-    extractor: new MaterialExtractor(documentOcr),
+    extractor: {
+      async extract(file) {
+        const { MaterialExtractor } = await import(
+          '../application/imports/materialExtractor'
+        )
+        return new MaterialExtractor(documentOcr).extract(file)
+      },
+    },
     getCurrentUserId: () => accountService.getCurrentUserId(),
   })
   const practiceService = new PracticeService({
+    localStorage: storage,
+    getCurrentUserId: () => accountService.getCurrentUserId(),
+  })
+  const personalMaterialService = new PersonalMaterialService({
     localStorage: storage,
     getCurrentUserId: () => accountService.getCurrentUserId(),
   })
@@ -92,8 +115,12 @@ export const createBrowserRuntime = () => {
     voiceAi,
     systemTts,
     backendClient,
+    cloudAuthClient,
+    cloudSyncClient,
+    authTokenStore,
     importService,
     practiceService,
+    personalMaterialService,
     backupService,
   }
 }

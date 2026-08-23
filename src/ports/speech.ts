@@ -1,6 +1,6 @@
 import type { AcousticSpeechMetrics } from '../domain/models'
 
-export type SpeechCapability = 'tts' | 'recording'
+export type SpeechCapability = 'tts'
 
 export class SpeechCapabilityUnavailableError extends Error {
   readonly capability: SpeechCapability
@@ -60,14 +60,6 @@ export interface SystemTTSProvider extends TTSProvider {
   getStatus(): Promise<SystemTtsStatus>
 }
 
-export interface AudioRecording {
-  blob: Blob
-  mimeType: string
-  durationMs: number
-  startedAt: number
-  endedAt: number
-}
-
 export interface RecordedAudioAnalyzer {
   /**
    * Returns simple local timing evidence, never pronunciation or IELTS scores.
@@ -76,41 +68,18 @@ export interface RecordedAudioAnalyzer {
   analyze(audio: Blob): Promise<AcousticSpeechMetrics | null>
 }
 
-export interface RecordingOptions {
-  mimeType?: string
-  audioBitsPerSecond?: number
-}
-
-export type RecorderState = 'idle' | 'recording' | 'stopping'
-
-/** Captures audio only; persisting the returned original blob is a separate port. */
-export interface AudioRecorder {
-  readonly state: RecorderState
-  isAvailable(): boolean
-  start(options?: RecordingOptions): Promise<void>
-  stop(): Promise<AudioRecording>
-  cancel(): Promise<void>
-}
-
-/** Playback of an already saved answer. */
+/** Playback of an answer recording saved by V1.6 or earlier. */
 export interface RecordingPlayback {
   play(source: string): Promise<void>
   stop(): Promise<void>
 }
 
-export type AudioFocusState = 'idle' | 'tts' | 'recording-playback' | 'recording'
+export type AudioFocusState = 'idle' | 'tts' | 'recording-playback'
 export type AudioFocusListener = (state: AudioFocusState) => void
-
-export class AudioFocusConflictError extends Error {
-  constructor(message = 'Playback is not allowed while recording') {
-    super(message)
-    this.name = 'AudioFocusConflictError'
-  }
-}
 
 /**
  * The UI-facing audio boundary. Implementations enforce a single active audio
- * activity so a question can never be played into the user's recording.
+ * playback across TTS and V1.6-or-earlier saved recordings.
  */
 export interface AudioFocus {
   readonly state: AudioFocusState
@@ -119,8 +88,5 @@ export interface AudioFocus {
   stopTTS(): Promise<void>
   playRecording(source: string): Promise<void>
   stopRecordingPlayback(): Promise<void>
-  startRecording(options?: RecordingOptions): Promise<void>
-  stopRecording(): Promise<AudioRecording>
-  cancelRecording(): Promise<void>
   stopAllPlayback(): Promise<void>
 }

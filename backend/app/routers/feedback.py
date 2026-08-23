@@ -2,12 +2,13 @@
 
 V1.7 反馈只分析答案文本:Part、题目、答案和可选作答时间。
 """
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from ..errors import invalid_request
+from .auth import get_current_auth
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_auth)])
 
 
 class FeedbackPayload(BaseModel):

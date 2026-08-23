@@ -5,6 +5,7 @@
 
 # Python
 __pycache__/
+.pytest_tmp/
 *.py[cod]
 .venv/
 venv/
@@ -14,4 +15,8 @@ venv/
 
 # 运行时产物
 .audio_tmp/
+data/
+*.db
+*.db-shm
+*.db-wal
 *.log

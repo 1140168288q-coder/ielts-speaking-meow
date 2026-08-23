@@ -27,6 +27,16 @@ def invalid_request(message: str) -> BackendError:
     return BackendError(400, "invalid-request", message)
 
 
+def unauthorized(
+    message: str = "登录状态无效或已过期,请重新登录。",
+) -> BackendError:
+    return BackendError(401, "invalid-session", message)
+
+
+def conflict(code: str, message: str) -> BackendError:
+    return BackendError(409, code, message)
+
+
 def payload_too_large(message: str) -> BackendError:
     return BackendError(413, "payload-too-large", message)
 

@@ -63,7 +63,7 @@ describe('ExpressionLibrary', () => {
       'Daily life',
     ))
 
-    await user.click(screen.getByRole('button', { name: '✓ 已听读' }))
+    await user.click(screen.getByRole('button', { name: '已听读' }))
     await waitFor(() => expect(onReviewed).toHaveBeenCalledWith(expression.id))
 
     await user.click(screen.getByRole('button', { name: '用原题再练' }))

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ArrowRight, Settings, UserRound } from 'lucide-react'
 import type { AccountService } from '../../application/accountService'
 import type { AccountProfile } from '../../domain/accounts'
 import { formatDate } from '../practice/format'
@@ -6,9 +7,13 @@ import { formatDate } from '../practice/format'
 export function AccountView({
   service,
   onSwitched,
+  onOpenSettings = () => undefined,
+  cloudPanel = null,
 }: {
   service: AccountService
   onSwitched: (account: AccountProfile) => void
+  onOpenSettings?: () => void
+  cloudPanel?: ReactNode
 }) {
   const [accounts, setAccounts] = useState<AccountProfile[]>([])
   const [current, setCurrent] = useState<AccountProfile | null>(() =>
@@ -69,25 +74,38 @@ export function AccountView({
   return (
     <section className="page-stack account-page">
       <div className="page-title">
-        <p className="eyebrow">简易账号</p>
-        <h1>先分清是谁的数据</h1>
+        <p className="eyebrow">Account & sync</p>
+        <h1>账号与同步</h1>
         <p>
-          每个账号的练习记录、AI 反馈、个人表达和导入题互不可见。
-          未来接云同步时，以账号的稳定 userId 对齐远端。
+          邮箱账号已经可用；验证邮箱后可手动同步已确认的学习资料，本机数据仍可离线保存。
         </p>
       </div>
 
       {message ? <div className="notice" role="status">{message}</div> : null}
 
+      {cloudPanel}
+
       <section className="account-current-card">
         <div>
-          <p className="eyebrow">当前账号</p>
+          <p className="eyebrow">当前本机资料</p>
           <h2>{current?.displayName ?? '未登录'}</h2>
-          <p className="account-user-id">userId: {current?.userId ?? '-'}</p>
+          <p className="settings-note">用于离线隔离练习和草稿，不等同于云端邮箱账号。</p>
         </div>
-        <span aria-hidden="true">◎</span>
+        <span className="account-avatar" aria-hidden="true"><UserRound size={24} /></span>
       </section>
 
+      <button type="button" className="profile-settings-link" onClick={onOpenSettings}>
+        <span><Settings aria-hidden="true" size={19} /></span>
+        <span>
+          <strong>应用设置</strong>
+          <small>主题、朗读、云端服务与本地备份</small>
+        </span>
+        <ArrowRight aria-hidden="true" size={18} />
+      </button>
+
+      <details className="device-profile-manager">
+        <summary>管理这台设备上的资料身份</summary>
+        <div className="device-profile-manager-body">
       <section className="account-list-card">
         <div className="section-heading compact-heading">
           <div>
@@ -189,8 +207,7 @@ export function AccountView({
           />
         </label>
         <p className="settings-note">
-          PIN 只用于防止误切换到别人账号，不是加密也不是密码找回凭证；
-          本应用没有社交、会员或云端注册。
+          PIN 只用于防止误切换到别人资料，不是账号密码，也不提供找回。
         </p>
         <button
           type="button"
@@ -201,6 +218,8 @@ export function AccountView({
           {busy ? '正在保存…' : '创建本地账号'}
         </button>
       </section>
+        </div>
+      </details>
     </section>
   )
 }

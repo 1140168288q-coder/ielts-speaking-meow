@@ -4,6 +4,7 @@ import {
   type SavedExpression,
   type TrainingSession,
 } from '../domain/models'
+import type { PersonalMaterial } from '../domain/personalMaterials'
 import type { LocalStorage } from '../ports/storage'
 import { PracticeService } from './practiceService'
 
@@ -17,6 +18,7 @@ interface MemoryBacking {
 class MemoryPersistence implements LocalStorage {
   sessions: Map<string, TrainingSession>
   expressions: Map<string, SavedExpression>
+  materials = new Map<string, PersonalMaterial>()
   texts: PracticeTexts | null = null
   failNextSessionWrite: Error | null = null
 
@@ -66,6 +68,39 @@ class MemoryPersistence implements LocalStorage {
 
   deleteExpression(expressionId: string): Promise<void> {
     this.expressions.delete(expressionId)
+    return Promise.resolve()
+  }
+
+  upsertPersonalMaterial(material: PersonalMaterial): Promise<void> {
+    this.materials.set(material.id, structuredClone(material))
+    return Promise.resolve()
+  }
+
+  getPersonalMaterial(
+    materialId: string,
+    ownerId: string,
+  ): Promise<PersonalMaterial | null> {
+    const material = this.materials.get(materialId)
+    return Promise.resolve(
+      material?.ownerId === ownerId ? structuredClone(material) : null,
+    )
+  }
+
+  listPersonalMaterials(ownerId: string): Promise<PersonalMaterial[]> {
+    return Promise.resolve(
+      [...this.materials.values()].filter(
+        (material) => material.ownerId === ownerId,
+      ),
+    )
+  }
+
+  deletePersonalMaterial(
+    materialId: string,
+    ownerId: string,
+  ): Promise<void> {
+    if (this.materials.get(materialId)?.ownerId === ownerId) {
+      this.materials.delete(materialId)
+    }
     return Promise.resolve()
   }
 
@@ -207,7 +242,7 @@ describe('PracticeService V1.7 text-answer flow', () => {
     expect(secondReady.attempts).toHaveLength(1)
   })
 
-  it('saves the second answer and then submits it to the personal corpus', async () => {
+  it('saves the full second answer but only submits a confirmed snippet to the personal corpus', async () => {
     const storage = new MemoryPersistence()
     const service = createService(storage)
     const session = await service.createSession('p1-hobbies')
@@ -236,11 +271,33 @@ describe('PracticeService V1.7 text-answer flow', () => {
     )
 
     expect(result.session.status).toBe('completed')
-    expect(result.session.attempts[1]?.transcript.source).toBe('edited')
-    expect(result.session.attempts[1]?.transcript.text).toContain('after a long day')
+    expect(result.session.attempts[1]?.transcript.source).toBe('manual')
+    expect(result.session.attempts[1]?.transcript.text).toBe(
+      'I like reading books because they help me relax.',
+    )
+    expect(result.expression.text).toContain('after a long day')
     expect(result.expression.topic).toBe('Hobbies')
     expect(result.expression.sourceAttempt).toBe(2)
     expect(storage.expressions.size).toBe(1)
+  })
+
+  it('can complete a practice without forcing the answer into the personal corpus', async () => {
+    const storage = new MemoryPersistence()
+    const service = createService(storage)
+    const session = await service.createSession('p1-hobbies')
+    const withFirst = await service.saveTextAttempt(session.id, 1, 'I like reading.', null)
+    const secondReady = await service.prepareSecondAttempt(withFirst.id)
+    const withSecond = await service.saveTextAttempt(
+      secondReady.id,
+      2,
+      'I like reading because it helps me relax.',
+      null,
+    )
+
+    const completed = await service.completeSession(withSecond.id)
+
+    expect(completed.status).toBe('completed')
+    expect(storage.expressions.size).toBe(0)
   })
 
   it('keeps expression CRUD local and marks reviews', async () => {

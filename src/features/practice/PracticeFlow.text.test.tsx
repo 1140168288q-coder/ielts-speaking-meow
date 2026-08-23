@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -98,6 +99,7 @@ function createService(
     saveTextAttempt: vi.fn(),
     applyAiFeedbackIfAnswerCurrent: vi.fn(),
     prepareSecondAttempt: vi.fn(),
+    completeSession: vi.fn(),
     submitSecondAnswerToCorpus: vi.fn(),
     ...overrides,
   } as unknown as PracticeService
@@ -156,7 +158,7 @@ describe('PracticeFlow V1.7 text answer flow', () => {
     await user.click(screen.getByRole('button', { name: '开始计时' }))
     const textarea = screen.getByRole('textbox', { name: '你的答案文本' })
     await user.type(textarea, 'I like reading books in my free time.')
-    await user.click(screen.getByRole('button', { name: /提交第 1 次回答并分析/ }))
+    await user.click(screen.getByRole('button', { name: '保存第 1 次回答' }))
 
     await waitFor(() => {
       expect(saveTextAttempt).toHaveBeenCalledWith(
@@ -227,5 +229,42 @@ describe('PracticeFlow V1.7 text answer flow', () => {
         ]),
       ]),
     )
+  })
+
+  it('releases AI loading and enables the second attempt under StrictMode', async () => {
+    const user = userEvent.setup()
+    const updatedSession = makeSession({
+      status: 'feedback-ready',
+      attempts: [attempt],
+      aiFeedback: feedback,
+    })
+    const applyAiFeedbackIfAnswerCurrent = vi.fn().mockResolvedValue(updatedSession)
+    const textAi: LLMProvider = {
+      id: 'backend-text',
+      isConfigured: () => true,
+      getFeedback: vi.fn().mockResolvedValue(feedback),
+    }
+
+    render(
+      <StrictMode>
+        <PracticeFlow
+          question={question}
+          session={makeSession({ status: 'first-review', attempts: [attempt] })}
+          service={createService({ applyAiFeedbackIfAnswerCurrent })}
+          audioFocus={createAudioFocus()}
+          textAi={textAi}
+          onExitGuardChange={() => undefined}
+          onChange={() => undefined}
+          onBack={() => undefined}
+        />
+      </StrictMode>,
+    )
+
+    await user.click(screen.getByRole('button', { name: '重试 AI 分析' }))
+
+    await waitFor(() => {
+      expect(applyAiFeedbackIfAnswerCurrent).toHaveBeenCalledTimes(1)
+      expect(screen.getByRole('button', { name: '进入第二次回答' })).toBeEnabled()
+    })
   })
 })

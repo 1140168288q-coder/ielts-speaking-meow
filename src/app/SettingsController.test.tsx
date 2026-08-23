@@ -145,8 +145,10 @@ function createHarness(options: {
 
 describe('SettingsController', () => {
   it('shows the fixed backend address read-only in locked builds, without any input or save button', async () => {
+    const user = userEvent.setup()
     const harness = createHarness({ locked: true })
     render(<SettingsController {...harness} />)
+    await user.click(screen.getByText('高级连接设置'))
     expect(screen.getByText(/https:\/\/fixed\.example\.com/)).toBeTruthy()
     expect(screen.getByText(/正式版本地址已固定/)).toBeTruthy()
     expect(screen.queryByLabelText('Backend 地址')).toBeNull()
@@ -159,11 +161,12 @@ describe('SettingsController', () => {
     const harness = createHarness({ locked: false })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
+    await user.click(screen.getByText('高级连接设置'))
 
     const address = screen.getByLabelText('Backend 地址')
     await user.clear(address)
     await user.type(address, 'http://192.168.1.50:8000')
-    await user.click(screen.getByRole('button', { name: /保存配置/ }))
+    await user.click(screen.getByRole('button', { name: /保存服务地址/ }))
 
     await waitFor(() => {
       expect(harness.saveConfig).toHaveBeenCalledWith('http://192.168.1.50:8000')
@@ -189,14 +192,16 @@ describe('SettingsController', () => {
         }),
       }),
     })
+    const user = userEvent.setup()
     render(<SettingsController {...harness} />)
+    await user.click(screen.getByText('高级连接设置'))
     await waitFor(() => {
       expect(screen.getByText(/deepseek-v4-flash/)).toBeTruthy()
       expect(screen.getAllByText(/已验证/).length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText(/vivi 2\.0/)).toBeTruthy()
     })
     expect(screen.queryByText(/火山流式语音识别/)).toBeNull()
-    expect(screen.getByText(/已连接 · Backend 1\.8\.0/)).toBeTruthy()
+    expect(screen.getByText(/服务版本：1\.8\.0/)).toBeTruthy()
   })
 
   it('shows 验证失败 instead of 已连接 when a provider verification failed', async () => {
@@ -214,7 +219,9 @@ describe('SettingsController', () => {
         }),
       }),
     })
+    const user = userEvent.setup()
     render(<SettingsController {...harness} />)
+    await user.click(screen.getByText('高级连接设置'))
     await waitFor(() => {
       expect(screen.getByText(/验证失败/)).toBeTruthy()
       expect(screen.getByText(/无权限访问\(403\)/)).toBeTruthy()
@@ -228,7 +235,7 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /测试云端连接/ }))
+    await user.click(screen.getByRole('button', { name: /重新检查连接/ }))
     expect(await screen.findByText(/连接正常/)).toBeTruthy()
     expect(harness.refreshHealth).toHaveBeenCalledTimes(2)
   })
@@ -240,7 +247,7 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /测试云端连接/ }))
+    await user.click(screen.getByRole('button', { name: /重新检查连接/ }))
     expect(await screen.findByText(/网络连接失败/)).toBeTruthy()
     expect(screen.getByText(/离线/)).toBeTruthy()
   })
@@ -252,6 +259,7 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
+    await user.click(screen.getByText('高级连接设置'))
     await user.click(screen.getByRole('button', { name: /验证上游服务/ }))
     await waitFor(() => expect(harness.verifyProviders).toHaveBeenCalledTimes(1))
     expect(await screen.findByText(/上游验证通过/)).toBeTruthy()
@@ -295,7 +303,7 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /试听云端音色/ }))
+    await user.click(screen.getByRole('button', { name: /试听自然音色/ }))
     expect(harness.preferredVoiceSpeak).not.toHaveBeenCalled()
     expect(await screen.findByText(/正在使用系统朗读/)).toBeTruthy()
   })

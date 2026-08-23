@@ -1,12 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Backend 化后的网络策略:
-  - Backend 地址可由用户在运行时配置。客户端校验只允许 localhost、.local
-    和私有局域网地址使用 HTTP，公网地址必须使用 HTTPS;
-  - Android 无法在静态 XML 中列出用户运行时填写的任意局域网 IP，因此底层
-    base-config 仍允许明文，实际可达范围由 BackendConfig 业务校验收紧;
-  - 第三方 API Key 不经过客户端网络栈,明文仅用于用户自己的 Backend。
--->
+<!-- Production default: require TLS for every destination. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

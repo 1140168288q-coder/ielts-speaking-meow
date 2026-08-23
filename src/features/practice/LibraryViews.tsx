@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Brain, Check, ChevronRight, Inbox, Play, Square } from 'lucide-react'
 import type {
   Question,
   SavedExpression,
@@ -11,6 +12,34 @@ import {
   formatDate,
   statusLabel,
 } from './format'
+
+export function LearnerMemoryPanel({ sessions }: { sessions: TrainingSession[] }) {
+  const recent = sessions
+    .slice()
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 12)
+  const problemThemes = [...new Set(recent.flatMap((item) => item.aiFeedback?.problems ?? []))].slice(0, 2)
+  const strengths = [...new Set(recent.flatMap((item) => item.aiFeedback?.strengths ?? []))].slice(0, 2)
+
+  return (
+    <section className="learner-memory-panel">
+      <span className="memory-icon"><Brain aria-hidden="true" size={21} /></span>
+      <div>
+        <p className="eyebrow">Learning Memory</p>
+        <h2>AI 对你的长期了解</h2>
+        <p>从真实练习与反馈自动归纳，可随时重建；它不是语料收藏，也不是生活素材库。</p>
+        {problemThemes.length || strengths.length ? (
+          <div className="memory-signals">
+            {problemThemes.map((item) => <span key={`problem:${item}`}>继续练 · {item}</span>)}
+            {strengths.map((item) => <span key={`strength:${item}`}>做得好 · {item}</span>)}
+          </div>
+        ) : (
+          <small>完成几次带 AI 反馈的练习后，这里会出现稳定趋势。</small>
+        )}
+      </div>
+    </section>
+  )
+}
 
 export function HistoryView({
   questions,
@@ -26,15 +55,17 @@ export function HistoryView({
   return (
     <section className="page-stack library-page">
       <div className="page-title">
-        <p className="eyebrow">本地训练记录</p>
-        <h1>每次练习都留得住</h1>
-        <p>练习、答案文本和个人语料默认只保存在这台设备。</p>
+        <p className="eyebrow">Learning trail</p>
+        <h1>看见第二遍的进步</h1>
+        <p>记录每次回答、反馈和二答完成情况；登录后可安全同步确认过的数据。</p>
       </div>
       {sessions.length ? (
         <div className="history-list">
           {sessions.map((session) => {
             const question = questions.find((item) => item.id === session.questionId)
             if (!question) return null
+            const firstAttempt = session.attempts.find((item) => item.attemptNumber === 1)
+            const secondAttempt = session.attempts.find((item) => item.attemptNumber === 2)
             return (
               <article key={session.id}>
                 <button
@@ -47,8 +78,14 @@ export function HistoryView({
                     <small>{question.topic} · {formatDate(session.updatedAt)}</small>
                     <strong>{question.prompt}</strong>
                     <em>{statusLabel[session.status]} · {session.attempts.length}/2 次回答</em>
+                    {firstAttempt ? (
+                      <span className="history-progress">
+                        <span>一答 {firstAttempt.metrics.wordCount} 词</span>
+                        {secondAttempt ? <span>二答 {secondAttempt.metrics.wordCount} 词</span> : <span>等待二答</span>}
+                      </span>
+                    ) : null}
                   </span>
-                  <b aria-hidden="true">›</b>
+                  <ChevronRight aria-hidden="true" size={18} />
                 </button>
                 <button
                   type="button"
@@ -219,9 +256,9 @@ export function ExpressionLibrary({
                       type="button"
                       onClick={() => void speak(item.id, item.text)}
                     >
-                      {speakingKey === `expression:${item.id}:${item.text}` ? '■ 停止' : '▶ 试听'}
+                      {speakingKey === `expression:${item.id}:${item.text}` ? <><Square aria-hidden="true" size={13} fill="currentColor" /> 停止</> : <><Play aria-hidden="true" size={14} fill="currentColor" /> 试听</>}
                     </button>
-                    <button type="button" disabled={busyId === item.id} onClick={() => markReviewed(item)}>✓ 已听读</button>
+                    <button type="button" disabled={busyId === item.id} onClick={() => markReviewed(item)}><Check aria-hidden="true" size={14} /> 已听读</button>
                     <button type="button" onClick={() => onPractice(item.questionId)}>用原题再练</button>
                     <button type="button" onClick={() => beginEdit(item)}>编辑</button>
                     <button type="button" className="expression-delete-action" disabled={busyId === item.id} onClick={() => deleteItem(item)}>删除</button>
@@ -244,7 +281,7 @@ export function ExpressionLibrary({
 export function EmptyState({ title, body }: { title: string; body: string }) {
   return (
     <div className="empty-state">
-      <span aria-hidden="true">=＾● ⋏ ●＾=</span>
+      <Inbox aria-hidden="true" size={28} />
       <h2>{title}</h2>
       <p>{body}</p>
     </div>

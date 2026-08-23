@@ -99,6 +99,18 @@ function Invoke-Checked {
     }
 }
 
+function Get-Sha256Hex([string] $Path) {
+    $Stream = [System.IO.File]::OpenRead($Path)
+    $Algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $Bytes = $Algorithm.ComputeHash($Stream)
+        return ([System.BitConverter]::ToString($Bytes)).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $Algorithm.Dispose()
+        $Stream.Dispose()
+    }
+}
+
 Push-Location $ProjectRoot
 try {
     Invoke-Checked $NpmCommand run lint
@@ -149,7 +161,7 @@ try {
     $ArtifactApk = Join-Path $ArtifactDirectory "ielts-speaking-meow-v$AppVersion-debug.apk"
     New-Item -ItemType Directory -Force -Path $ArtifactDirectory | Out-Null
     Copy-Item -LiteralPath $SourceApk -Destination $ArtifactApk -Force
-    $Hash = (Get-FileHash -LiteralPath $ArtifactApk -Algorithm SHA256).Hash.ToLowerInvariant()
+    $Hash = Get-Sha256Hex $ArtifactApk
 
     Write-Host "APK: $ArtifactApk"
     Write-Host "SHA256: $Hash"
@@ -167,7 +179,7 @@ try {
             throw 'apksigner.bat was not found; refusing to publish an unverified Release APK.'
         }
         Invoke-Checked $ApkSigner verify --verbose --print-certs $ArtifactReleaseApk
-        $ReleaseHash = (Get-FileHash -LiteralPath $ArtifactReleaseApk -Algorithm SHA256).Hash.ToLowerInvariant()
+        $ReleaseHash = Get-Sha256Hex $ArtifactReleaseApk
         Write-Host "RELEASE APK: $ArtifactReleaseApk"
         Write-Host "RELEASE SHA256: $ReleaseHash"
     }

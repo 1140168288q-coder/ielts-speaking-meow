@@ -1,6 +1,6 @@
-import mammoth from 'mammoth/mammoth.browser.js'
 import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 import type { PDFPageProxy } from 'pdfjs-dist'
+import type mammothBrowser from 'mammoth/mammoth.browser.js'
 import type {
   ImportExtractionMode,
   ImportFileFormat,
@@ -64,7 +64,7 @@ export class MaterialExtractor {
   }
 
   private async extractDocx(file: File): Promise<MaterialExtraction> {
-    let result: Awaited<ReturnType<typeof mammoth.extractRawText>>
+    let result: Awaited<ReturnType<typeof mammothBrowser.extractRawText>>
     try {
       const arrayBuffer = await file.arrayBuffer()
       if (import.meta.env.MODE === 'test') {
@@ -76,7 +76,10 @@ export class MaterialExtractor {
           buffer: Buffer.from(arrayBuffer),
         })
       } else {
-        result = await mammoth.extractRawText({ arrayBuffer })
+        const { default: browserMammoth } = await import(
+          'mammoth/mammoth.browser.js'
+        )
+        result = await browserMammoth.extractRawText({ arrayBuffer })
       }
     } catch {
       throw new Error('Word 文件无法读取，请确认它是有效的 .docx 文件。')

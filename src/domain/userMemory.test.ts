@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Question, SavedExpression, TrainingSession } from './models'
+import type { PersonalMaterial } from './personalMaterials'
 import {
   buildLearnerContext,
   buildLearnerMemory,
   findReusableExpressions,
+  findReusablePersonalMaterials,
 } from './userMemory'
 import { buildTutorContext, retrieveTutorKnowledge } from './tutorKnowledge'
 
@@ -56,6 +58,22 @@ const session: TrainingSession = {
   updatedAt: '2026-08-02T08:00:00.000Z',
 }
 
+const material: PersonalMaterial = {
+  id: 'material-1',
+  ownerId: 'owner-1',
+  title: 'A quiet riverside walk',
+  content: 'I often walk beside the Yangtze with my father on Sunday mornings.',
+  kind: 'experience',
+  topicTags: ['river', 'family'],
+  questionIds: [question.id],
+  sourceSessionId: session.id,
+  status: 'confirmed',
+  createdAt: '2026-08-01T08:00:00.000Z',
+  updatedAt: '2026-08-02T08:00:00.000Z',
+  version: 1,
+  deletedAt: null,
+}
+
 describe('userMemory', () => {
   it('reuses same-topic expressions before generic keyword matches', () => {
     const sameTopic = findReusableExpressions(question, [expression])
@@ -78,11 +96,21 @@ describe('userMemory', () => {
     expect(memory.topicPracticeCount).toBe(1)
     expect(memory.commonProblemThemes[0]).toContain('过去时')
 
-    const context = buildLearnerContext(question, [session], [expression])
+    const context = buildLearnerContext(question, [session], [expression], [material])
     expect(context).toContain('本机历史')
     expect(context).toContain('过去时')
     expect(context).toContain(expression.text)
+    expect(context).toContain(material.title)
     expect(context.length).toBeLessThan(1_201)
+  })
+
+  it('keeps personal materials separate and requires user confirmation', () => {
+    const candidate = { ...material, id: 'material-2', status: 'candidate' as const }
+    const matches = findReusablePersonalMaterials(question, [candidate, material])
+
+    expect(matches).toHaveLength(1)
+    expect(matches[0]?.material.id).toBe(material.id)
+    expect(matches[0]?.reason).toContain('关联')
   })
 })
 

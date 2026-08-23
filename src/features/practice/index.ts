@@ -1,3 +1,5 @@
 export { PracticeFlow } from './PracticeFlow'
 export { useTtsToggle } from './useTtsToggle'
-export { ExpressionLibrary, HistoryView } from './LibraryViews'
+export { ExpressionLibrary, HistoryView, LearnerMemoryPanel } from './LibraryViews'
+export { PersonalMaterialLibrary } from './PersonalMaterialLibrary'
+export type { PersonalMaterialLibraryProps } from './PersonalMaterialLibrary'

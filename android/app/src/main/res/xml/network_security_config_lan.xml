@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Selected for debug builds, or for a release explicitly built with
+  android-build.ps1 -AllowLanHttp after that script validates a private,
+  localhost or .local Backend URL. Android XML cannot express private CIDR
+  ranges, so the matching web runtime validation remains the second boundary.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

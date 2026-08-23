@@ -3,7 +3,15 @@ import json
 
 import httpx
 
-from tests.conftest import configured_settings
+from tests.conftest import authenticated_headers, configured_settings
+
+
+async def post_tts(client: httpx.AsyncClient, payload: dict) -> httpx.Response:
+    return await client.post(
+        "/v1/tts",
+        json=payload,
+        headers=await authenticated_headers(client),
+    )
 
 
 def tts_ok_handler() -> callable:
@@ -31,9 +39,10 @@ async def test_tts_happy_path(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/tts", json={"text": "Hello there."})
+        response = await post_tts(client, {"text": "Hello there."})
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/mpeg"
+    assert response.headers["cache-control"] == "private, max-age=86400"
     assert response.content == b"chunk1chunk2"
 
 
@@ -52,7 +61,7 @@ async def test_tts_forwards_rate_and_pitch(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/tts", json={
+        response = await post_tts(client, {
             "text": "Hello there.",
             "language": "en-US",
             "rate": 0.92,
@@ -69,7 +78,7 @@ async def test_tts_rejects_out_of_range_rate(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/tts", json={"text": "Hello", "rate": 3})
+        response = await post_tts(client, {"text": "Hello", "rate": 3})
     assert response.status_code == 400
 
 
@@ -79,7 +88,7 @@ async def test_tts_not_configured(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/tts", json={"text": "Hello"})
+        response = await post_tts(client, {"text": "Hello"})
     assert response.status_code == 503
 
 
@@ -88,7 +97,7 @@ async def test_tts_empty_text(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/tts", json={"text": ""})
+        response = await post_tts(client, {"text": ""})
     assert response.status_code == 400
 
 
@@ -104,7 +113,7 @@ async def test_tts_upstream_error_code(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/v1/tts", json={"text": "Hello"})
+        response = await post_tts(client, {"text": "Hello"})
     assert response.status_code == 502
 
 
@@ -122,7 +131,7 @@ async def test_tts_old_console_auth_headers(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        await client.post("/v1/tts", json={"text": "Hello"})
+        await post_tts(client, {"text": "Hello"})
     headers = captured["headers"]
     assert headers["X-Api-App-Id"] == "123456"
     assert headers["X-Api-Access-Key"] == "tok"

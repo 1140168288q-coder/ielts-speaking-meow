@@ -1,6 +1,6 @@
 import httpx
 
-from tests.conftest import configured_settings
+from tests.conftest import authenticated_headers, configured_settings
 
 
 async def test_root_explains_success_and_base_address(make_app):
@@ -92,7 +92,9 @@ async def test_health_verify_marks_deepseek_and_tts_verified(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/health/verify")
+        response = await client.post(
+            "/health/verify", headers=await authenticated_headers(client)
+        )
     assert response.status_code == 200
     providers = response.json()["providers"]
     assert providers["deepseek"]["status"] == "verified"
@@ -113,7 +115,9 @@ async def test_health_verify_failed_credentials_record_error(make_app):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post("/health/verify")
+        response = await client.post(
+            "/health/verify", headers=await authenticated_headers(client)
+        )
     providers = response.json()["providers"]
     assert providers["deepseek"]["status"] == "failed"
     assert "401" in providers["deepseek"]["lastError"]

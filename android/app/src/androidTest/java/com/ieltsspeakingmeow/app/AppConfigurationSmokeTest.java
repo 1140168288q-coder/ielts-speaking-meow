@@ -2,7 +2,6 @@ package com.ieltsspeakingmeow.app;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import android.Manifest;
 import android.content.Context;
@@ -34,7 +33,7 @@ public class AppConfigurationSmokeTest {
     }
 
     @Test
-    public void appDeclaresBothWebViewAudioCapturePermissions() throws Exception {
+    public void appDoesNotRequestMicrophonePermission() throws Exception {
         Context appContext = InstrumentationRegistry
             .getInstrumentation()
             .getTargetContext();
@@ -43,7 +42,6 @@ public class AppConfigurationSmokeTest {
             .getPackageInfo(APPLICATION_ID, PackageManager.GET_PERMISSIONS);
         List<String> permissions = Arrays.asList(packageInfo.requestedPermissions);
 
-        assertTrue(permissions.contains(Manifest.permission.RECORD_AUDIO));
-        assertTrue(permissions.contains(Manifest.permission.MODIFY_AUDIO_SETTINGS));
+        assertFalse(permissions.contains(Manifest.permission.RECORD_AUDIO));
     }
 }

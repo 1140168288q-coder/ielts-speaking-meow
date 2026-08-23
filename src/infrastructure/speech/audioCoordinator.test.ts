@@ -1,10 +1,7 @@
-import {
-  AudioFocusConflictError,
-  type AudioRecorder,
-  type AudioRecording,
-  type RecordingPlayback,
-  type TTSCapabilities,
-  type TTSProvider,
+import type {
+  RecordingPlayback,
+  TTSCapabilities,
+  TTSProvider,
 } from '../../ports/speech'
 import { AudioCoordinator } from './audioCoordinator'
 import {
@@ -20,17 +17,8 @@ const capabilities: TTSCapabilities = {
   style: false,
 }
 
-const recording: AudioRecording = {
-  blob: new Blob(['audio']),
-  mimeType: 'audio/webm',
-  durationMs: 1_000,
-  startedAt: 1_000,
-  endedAt: 2_000,
-}
-
 function createHarness() {
   const calls: string[] = []
-  let recorderState: AudioRecorder['state'] = 'idle'
   let finishTTS: (() => void) | undefined
   let finishPlayback: (() => void) | undefined
   const ttsSpeak = vi.fn(
@@ -69,85 +57,61 @@ function createHarness() {
       return Promise.resolve()
     }),
   }
-  const recorder: AudioRecorder = {
-    get state() {
-      return recorderState
-    },
-    isAvailable: () => true,
-    start: vi.fn(() => {
-      calls.push('recorder-start')
-      recorderState = 'recording'
-      return Promise.resolve()
-    }),
-    stop: vi.fn(() => {
-      calls.push('recorder-stop')
-      recorderState = 'idle'
-      return Promise.resolve(recording)
-    }),
-    cancel: vi.fn(() => {
-      recorderState = 'idle'
-      return Promise.resolve()
-    }),
-  }
-
   return {
     calls,
-    tts,
-    playback,
-    recorder,
-    ttsSpeak,
-    playbackPlay,
-    coordinator: new AudioCoordinator(tts, recorder, playback),
+    coordinator: new AudioCoordinator(tts, playback),
   }
 }
 
 describe('AudioCoordinator', () => {
-  it('stops TTS and answer playback before opening the microphone', async () => {
+  it('stops saved-audio playback before starting TTS', async () => {
     const { calls, coordinator } = createHarness()
 
-    await coordinator.startRecording()
+    const speaking = coordinator.speak({ text: 'Question' })
+    await vi.waitFor(() => {
+      expect(coordinator.state).toBe('tts')
+    })
 
-    expect(calls).toEqual(['tts-stop', 'recording-stop', 'recorder-start'])
-    expect(coordinator.state).toBe('recording')
+    expect(calls).toEqual(['recording-stop', 'tts-stop', 'tts-play'])
+    await coordinator.stopTTS()
+    await expect(speaking).resolves.toBeUndefined()
+    expect(coordinator.state).toBe('idle')
   })
 
-  it('rejects every playback path while recording', async () => {
-    const { coordinator, ttsSpeak, playbackPlay } = createHarness()
-    await coordinator.startRecording()
-
-    await expect(coordinator.speak({ text: 'Question' })).rejects.toBeInstanceOf(
-      AudioFocusConflictError,
-    )
-    await expect(coordinator.playRecording('answer.webm')).rejects.toBeInstanceOf(
-      AudioFocusConflictError,
-    )
-    expect(ttsSpeak).not.toHaveBeenCalled()
-    expect(playbackPlay).not.toHaveBeenCalled()
-  })
-
-  it('interrupts active TTS before starting a recording', async () => {
+  it('interrupts TTS before playing a saved historical recording', async () => {
     const { coordinator, calls } = createHarness()
     const speaking = coordinator.speak({ text: 'Question' })
     await vi.waitFor(() => {
       expect(coordinator.state).toBe('tts')
     })
 
-    await coordinator.startRecording()
+    const playback = coordinator.playRecording('file:///answer.webm')
+    await vi.waitFor(() => {
+      expect(coordinator.state).toBe('recording-playback')
+    })
     await expect(speaking).resolves.toBeUndefined()
 
     expect(calls.slice(-3)).toEqual([
       'tts-stop',
       'recording-stop',
-      'recorder-start',
+      'recording-play',
     ])
-    expect(coordinator.state).toBe('recording')
+    await coordinator.stopRecordingPlayback()
+    await expect(playback).resolves.toBeUndefined()
+    expect(coordinator.state).toBe('idle')
   })
 
-  it('returns a saved recording before releasing recording focus', async () => {
-    const { coordinator } = createHarness()
-    await coordinator.startRecording()
+  it('stops both playback providers through the shared boundary', async () => {
+    const { calls, coordinator } = createHarness()
+    const playback = coordinator.playRecording('file:///answer.webm')
+    await vi.waitFor(() => {
+      expect(coordinator.state).toBe('recording-playback')
+    })
 
-    await expect(coordinator.stopRecording()).resolves.toEqual(recording)
+    await coordinator.stopAllPlayback()
+
+    await expect(playback).resolves.toBeUndefined()
+    expect(calls.slice(-2)).toEqual(['tts-stop', 'recording-stop'])
     expect(coordinator.state).toBe('idle')
   })
 })

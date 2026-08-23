@@ -1,11 +1,7 @@
 import {
-  AudioFocusConflictError,
   type AudioFocus,
   type AudioFocusListener,
   type AudioFocusState,
-  type AudioRecorder,
-  type AudioRecording,
-  type RecordingOptions,
   type RecordingPlayback,
   type TTSProvider,
   type TTSRequest,
@@ -19,7 +15,6 @@ export class AudioCoordinator implements AudioFocus {
 
   constructor(
     private readonly tts: TTSProvider,
-    private readonly recorder: AudioRecorder,
     private readonly recordingPlayback: RecordingPlayback,
   ) {}
 
@@ -39,7 +34,6 @@ export class AudioCoordinator implements AudioFocus {
     let token = 0
 
     await this.exclusive(async () => {
-      this.assertPlaybackAllowed()
       token = ++this.activityToken
       await this.recordingPlayback.stop()
       await this.tts.stop()
@@ -73,7 +67,6 @@ export class AudioCoordinator implements AudioFocus {
     let token = 0
 
     await this.exclusive(async () => {
-      this.assertPlaybackAllowed()
       token = ++this.activityToken
       await this.tts.stop()
       await this.recordingPlayback.stop()
@@ -105,81 +98,12 @@ export class AudioCoordinator implements AudioFocus {
     })
   }
 
-  startRecording(options?: RecordingOptions): Promise<void> {
-    return this.exclusive(async () => {
-      if (this.recorder.state !== 'idle' || this.currentState === 'recording') {
-        throw new AudioFocusConflictError('A recording is already active')
-      }
-
-      this.activityToken += 1
-      await this.stopPlayers()
-
-      try {
-        await this.recorder.start(options)
-        this.setState('recording')
-      } catch (error) {
-        this.setState('idle')
-        throw error
-      }
-    })
-  }
-
-  stopRecording(): Promise<AudioRecording> {
-    return this.exclusive(async () => {
-      if (
-        this.currentState !== 'recording' ||
-        this.recorder.state !== 'recording'
-      ) {
-        throw new Error('No recording is active')
-      }
-
-      try {
-        return await this.recorder.stop()
-      } finally {
-        if (this.recorderIsIdle()) {
-          this.setState('idle')
-        }
-      }
-    })
-  }
-
-  cancelRecording(): Promise<void> {
-    return this.exclusive(async () => {
-      if (this.recorder.state === 'idle') {
-        if (this.currentState === 'recording') {
-          this.setState('idle')
-        }
-        return
-      }
-
-      try {
-        await this.recorder.cancel()
-      } finally {
-        if (this.recorderIsIdle()) {
-          this.setState('idle')
-        }
-      }
-    })
-  }
-
   stopAllPlayback(): Promise<void> {
     return this.exclusive(async () => {
       this.activityToken += 1
       await this.stopPlayers()
-      if (this.currentState !== 'recording') {
-        this.setState('idle')
-      }
+      this.setState('idle')
     })
-  }
-
-  private assertPlaybackAllowed(): void {
-    if (this.currentState === 'recording' || this.recorder.state !== 'idle') {
-      throw new AudioFocusConflictError()
-    }
-  }
-
-  private recorderIsIdle(): boolean {
-    return this.recorder.state === 'idle'
   }
 
   private async stopPlayers(): Promise<void> {

@@ -9,7 +9,7 @@ import {
   type ImportedQuestionRecord,
 } from '../../domain'
 import type { ImportStorage } from '../../ports/imports'
-import type { MaterialExtraction, MaterialExtractor } from './materialExtractor'
+import type { MaterialExtraction } from './materialExtractor'
 import { parseQuestionCandidates } from './questionCandidateParser'
 
 export interface ImportDraft {
@@ -21,7 +21,9 @@ export interface ImportDraft {
 
 export interface ImportMaterialServiceOptions {
   storage: ImportStorage
-  extractor: MaterialExtractor
+  extractor: {
+    extract(file: File): Promise<MaterialExtraction>
+  }
   now?: () => Date
   createId?: () => string
   /** 当前本地账号 userId;导入题默认隔离到当前账号。 */

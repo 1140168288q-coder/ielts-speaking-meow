@@ -1,66 +1,121 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useRef,
   useState,
 } from 'react'
+import type { ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpenText,
+  ChartNoAxesColumnIncreasing,
+  Home,
+  Lightbulb,
+  LibraryBig,
+  LoaderCircle,
+  Search,
+  SearchX,
+  Shuffle,
+  Upload,
+  UserRound,
+  Wifi,
+  WifiOff,
+} from 'lucide-react'
 import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core'
 import { createBrowserRuntime } from './app/runtime'
-import { ImportController } from './app/ImportController'
 import { SettingsController } from './app/SettingsController'
 import {
   ExpressionLibrary,
   HistoryView,
+  LearnerMemoryPanel,
+  PersonalMaterialLibrary,
   PracticeFlow,
 } from './features/practice'
+import { HomeView } from './features/home'
 import {
-  partLabel,
-  statusLabel,
-} from './features/practice/format'
-import {
-  legacyQuestionsById,
-  questionBank,
-  questionBankMeta,
-} from './data/questions'
-import {
-  DEFAULT_PRACTICE_TEXTS,
-  type PracticeTexts,
   type Question,
   type SavedExpression,
   type TrainingSession,
 } from './domain/models'
+import type { PersonalMaterial } from './domain/personalMaterials'
 import {
   recordBelongsToAccount,
   type AccountProfile,
 } from './domain/accounts'
-import { recommendQuestion } from './domain/progress'
-import { buildLearnerContext, findReusableExpressions } from './domain/userMemory'
+import {
+  buildLearnerContext,
+  findReusableExpressions,
+  findReusablePersonalMaterials,
+} from './domain/userMemory'
 import type { ImportedQuestionRecord } from './domain/imports'
 import type { AudioFocus } from './ports/speech'
-import { AccountView } from './features/accounts'
+import { AccountView, CloudAccountPanel } from './features/accounts'
+import {
+  CloudSyncCard,
+  type CloudSyncStatus,
+} from './features/accounts/CloudSyncCard'
+import type { CloudAccountSession } from './domain/cloudAccount'
+import { CloudSyncError } from './domain/cloudSync'
+import { AccountCloudSyncService } from './application/accountCloudSyncService'
 
+const ImportController = lazy(async () => {
+  const module = await import('./app/ImportController')
+  return { default: module.ImportController }
+})
+
+interface QuestionDataModule {
+  questionBank: Question[]
+  questionBankMeta: {
+    seasonLabel: string
+    counts: { 1: number; 2: number; 3: number }
+  }
+  legacyQuestionsById: Map<string, Question>
+}
 
 
 type AppView =
+  | 'home'
   | 'questions'
   | 'practice'
   | 'history'
   | 'expressions'
+  | 'materials'
   | 'accounts'
   | 'imports'
   | 'settings'
+
+type ThemePreference = 'system' | 'light' | 'dark'
+const THEME_STORAGE_KEY = 'ielts-speaking-meow:theme'
+
+function readThemePreference(): ThemePreference {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
+  } catch {
+    // Private browsing or an embedded WebView may deny localStorage access.
+  }
+  return 'system'
+}
 
 export const SAFE_PRACTICE_BACK_EVENT = 'ielts-speaking-meow:safe-practice-back'
 
 // eslint-disable-next-line react-refresh/only-export-components -- pure scroll behavior has a focused navigation regression test.
 export function resetViewScroll(): void {
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  // Some Android WebViews and embedded browser surfaces keep the root element's
+  // scroll offset even after window.scrollTo. Reset both roots so every primary
+  // navigation starts from the page heading.
+  document.documentElement.scrollTop = 0
+  document.body.scrollTop = 0
 }
 
 export type AndroidBackAction =
   | 'safe-practice-exit'
-  | 'questions'
+  | 'home'
   | 'browser-back'
   | 'exit-app'
 
@@ -72,10 +127,29 @@ export const resolveAndroidBackAction = (
   if (view === 'practice') {
     return 'safe-practice-exit'
   }
-  if (view !== 'questions') {
-    return 'questions'
+  if (view !== 'home') {
+    return 'home'
   }
   return canGoBack ? 'browser-back' : 'exit-app'
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure startup routing helper.
+export const resolveInitialView = (search: string): AppView => {
+  const params = new URLSearchParams(search)
+  const action = params.get('action')
+  const token = params.get('token')?.trim() ?? ''
+  const isAccountAction = action === 'verify-email' || action === 'reset-password'
+  return isAccountAction && token.length >= 32 && token.length <= 512
+    ? 'accounts'
+    : 'home'
+}
+
+function formatSyncDestination(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).host || '当前云端服务'
+  } catch {
+    return '当前云端服务'
+  }
 }
 
 /**
@@ -89,7 +163,7 @@ export const requestSafePracticeExit = async (
   exitGuardActive: boolean,
   onExit: () => void,
 ): Promise<boolean> => {
-  if (exitGuardActive || audioFocus.state === 'recording') {
+  if (exitGuardActive) {
     return false
   }
 
@@ -101,54 +175,70 @@ export const requestSafePracticeExit = async (
 export function App() {
   const [runtime] = useState(createBrowserRuntime)
 
-  const [view, setView] = useState<AppView>('questions')
+  const [view, setView] = useState<AppView>(() =>
+    resolveInitialView(globalThis.location?.search ?? ''),
+  )
+  const [libraryPart, setLibraryPart] = useState<1 | 2 | 3>(1)
   const [session, setSession] = useState<TrainingSession | null>(null)
   const [sessions, setSessions] = useState<TrainingSession[]>([])
   const [expressions, setExpressions] = useState<SavedExpression[]>([])
+  const [personalMaterials, setPersonalMaterials] = useState<PersonalMaterial[]>([])
+  const [questionData, setQuestionData] = useState<QuestionDataModule | null>(null)
   const [importedQuestions, setImportedQuestions] = useState<
     ImportedQuestionRecord[]
   >([])
   const [currentAccount, setCurrentAccount] = useState<AccountProfile | null>(
     null,
   )
+  const [cloudSession, setCloudSession] = useState<CloudAccountSession | null>(null)
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('idle')
+  const [cloudSyncMessage, setCloudSyncMessage] = useState('尚未同步。')
   const [loading, setLoading] = useState(true)
   const [storageError, setStorageError] = useState<string | null>(null)
   const [navigationNotice, setNavigationNotice] = useState<string | null>(null)
   const [practiceExitGuardActive, setPracticeExitGuardActive] = useState(false)
-  const [practiceTexts, setPracticeTexts] = useState<PracticeTexts>(
-    DEFAULT_PRACTICE_TEXTS,
-  )
   const [apiConnected, setApiConnected] = useState(false)
+  const [theme, setTheme] = useState<ThemePreference>(readThemePreference)
 
   const refreshLibrary = useCallback(async () => {
     const ownerId = runtime.accountService.getCurrentUserId()
-    const [nextSessions, nextExpressions, nextImportedQuestions] = await Promise.all([
+    const [nextSessions, nextExpressions, nextPersonalMaterials, nextImportedQuestions] = await Promise.all([
       runtime.practiceService.listSessions(),
       runtime.practiceService.listExpressions(),
+      runtime.personalMaterialService.list({ includeArchived: true }),
       runtime.storage.listImportedQuestions(),
     ])
     setSessions(nextSessions)
     setExpressions(nextExpressions)
+    setPersonalMaterials(nextPersonalMaterials)
     setImportedQuestions(
       nextImportedQuestions.filter((record) =>
         recordBelongsToAccount(record.ownerId, ownerId),
       ),
     )
-  }, [runtime.practiceService, runtime.storage, runtime.accountService])
+  }, [runtime.practiceService, runtime.personalMaterialService, runtime.storage, runtime.accountService])
 
   useEffect(() => {
     let active = true
     const load = async () => {
       try {
-        await runtime.initialize()
+        const [loadedQuestionData] = await Promise.all([
+          import('./data/questions'),
+          runtime.initialize(),
+        ])
         if (active) {
           setCurrentAccount(runtime.accountService.getCurrentAccount())
-        }
-        const storedTexts = await runtime.storage.getPracticeTexts()
-        if (active && storedTexts !== null) {
-          setPracticeTexts(storedTexts)
+          setQuestionData(loadedQuestionData)
         }
         await refreshLibrary()
+        void runtime.cloudAuthClient
+          .restoreSession(runtime.authTokenStore)
+          .then((restored) => {
+            if (active) setCloudSession(restored)
+          })
+          .catch(() => {
+            if (active) setCloudSession(null)
+          })
       } catch (error) {
         if (active) {
           setStorageError(
@@ -165,7 +255,6 @@ export function App() {
     void load()
     return () => {
       active = false
-      void runtime.audioFocus.cancelRecording()
       void runtime.audioFocus.stopAllPlayback()
       void runtime.storage.close()
     }
@@ -183,10 +272,25 @@ export function App() {
     return () => window.clearInterval(interval)
   }, [runtime.healthCache])
 
-  const updatePracticeTexts = (texts: PracticeTexts) => {
-    setPracticeTexts(texts)
-    void runtime.storage.savePracticeTexts(texts).catch(() => undefined)
-  }
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    const applyTheme = () => {
+      const resolved = theme === 'system'
+        ? (media?.matches ? 'dark' : 'light')
+        : theme
+      document.documentElement.dataset.theme = resolved
+      document.documentElement.style.colorScheme = resolved
+    }
+    applyTheme()
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+    } catch {
+      // Theme still works for this session when persistence is unavailable.
+    }
+    if (theme !== 'system' || !media) return
+    media.addEventListener?.('change', applyTheme)
+    return () => media.removeEventListener?.('change', applyTheme)
+  }, [theme])
 
   const openSession = (nextSession: TrainingSession) => {
     setPracticeExitGuardActive(false)
@@ -247,8 +351,62 @@ export function App() {
     setSession(null)
     setPracticeExitGuardActive(false)
     setNavigationNotice(null)
-    setView('questions')
+    setView('home')
     void refreshLibrary()
+  }
+
+  const handleCloudSessionChange = (nextSession: CloudAccountSession | null) => {
+    setCloudSession(nextSession)
+    setCloudSyncStatus('idle')
+    setCloudSyncMessage(nextSession ? '尚未同步。' : '')
+  }
+
+  const runCloudSync = async () => {
+    if (!cloudSession?.user.emailVerified) {
+      setCloudSyncStatus('error')
+      setCloudSyncMessage('请先验证邮箱，再同步资料。')
+      return
+    }
+
+    setCloudSyncStatus('syncing')
+    setCloudSyncMessage('正在比较本机与云端版本，本机数据会在成功前保留。')
+    try {
+      const syncService = new AccountCloudSyncService({
+        scopeId: cloudSession.user.id,
+        ownerId: runtime.accountService.getCurrentUserId(),
+        storage: runtime.storage,
+        gateway: runtime.cloudSyncClient,
+      })
+      const summary = await syncService.synchronize()
+      await refreshLibrary()
+
+      if (summary.status === 'conflict') {
+        setCloudSyncStatus('conflict')
+        setCloudSyncMessage(
+          `${summary.conflicts[0]?.message ?? '发现同步冲突。'} 已停止覆盖；本机资料仍保留。`,
+        )
+        return
+      }
+
+      setCloudSyncStatus('success')
+      setCloudSyncMessage(
+        `同步完成：上传 ${summary.uploaded} 项，恢复或更新 ${summary.downloaded} 项。`,
+      )
+    } catch (error) {
+      if (
+        error instanceof CloudSyncError &&
+        (error.code === 'unauthenticated' || error.code === 'session-expired')
+      ) {
+        handleCloudSessionChange(null)
+        setCloudSyncStatus('error')
+        setCloudSyncMessage('登录已失效，请重新登录后再试。本机资料没有丢失。')
+        return
+      }
+      setCloudSyncStatus('error')
+      setCloudSyncMessage(
+        `${error instanceof Error ? error.message : '同步失败。'} 本机资料与待同步项目仍保留，可稍后重试。`,
+      )
+    }
   }
 
   const navigateSafely = useCallback(
@@ -315,8 +473,8 @@ export function App() {
         case 'safe-practice-exit':
           window.dispatchEvent(new Event(SAFE_PRACTICE_BACK_EVENT))
           break
-        case 'questions':
-          navigateSafelyRef.current('questions')
+        case 'home':
+          navigateSafelyRef.current('home')
           break
         case 'browser-back':
           window.history.back()
@@ -344,17 +502,17 @@ export function App() {
   }, [])
 
   const allQuestions = [
-    ...questionBank,
+    ...(questionData?.questionBank ?? []),
     ...importedQuestions.map((record) => record.question),
   ]
   /** 历史记录允许引用 V1.8 之前的旧内置题;这些题不进入浏览/随机抽题。 */
   const questionsForHistory = [
     ...allQuestions,
-    ...legacyQuestionsById.values(),
+    ...(questionData === null ? [] : questionData.legacyQuestionsById.values()),
   ]
   const activeQuestion = session
     ? allQuestions.find((question) => question.id === session.questionId) ??
-      legacyQuestionsById.get(session.questionId) ??
+      questionData?.legacyQuestionsById.get(session.questionId) ??
       null
     : null
   const activeMemory = activeQuestion
@@ -369,8 +527,13 @@ export function App() {
           sessions,
           expressions,
         ),
+        personalMaterials: findReusablePersonalMaterials(
+          activeQuestion,
+          personalMaterials,
+          2,
+        ),
       }
-    : { reusableExpressions: [], learnerContext: '' }
+    : { reusableExpressions: [], learnerContext: '', personalMaterials: [] }
 
   return (
     <div className="app-shell">
@@ -378,8 +541,8 @@ export function App() {
         <button
           className="brand"
           type="button"
-          onClick={() => navigateSafely('questions')}
-          aria-label="回到题库"
+          onClick={() => navigateSafely('home')}
+          aria-label="回到首页"
         >
           <span className="brand-mark" aria-hidden="true">
             喵
@@ -396,10 +559,12 @@ export function App() {
             onClick={() => navigateSafely('accounts')}
             aria-label="打开账号页"
           >
-            {currentAccount?.displayName ?? '本机用户'}
+            <UserRound aria-hidden="true" size={15} />
+            {cloudSession?.user.email.split('@')[0] ?? currentAccount?.displayName ?? '本机用户'}
           </button>
           <span className={apiConnected ? 'api-badge ok' : 'api-badge down'}>
-            {apiConnected ? 'API连接成功' : 'API未连接'}
+            {apiConnected ? <Wifi aria-hidden="true" size={13} /> : <WifiOff aria-hidden="true" size={13} />}
+            {apiConnected ? '云端可用' : '离线可练'}
           </span>
         </span>
       </header>
@@ -425,15 +590,28 @@ export function App() {
       <main className="app-main">
         {loading ? (
           <LoadingView />
-        ) : view === 'questions' ? (
-          <QuestionLibrary
+        ) : questionData === null ? (
+          <StartupFailureView />
+        ) : view === 'home' ? (
+          <HomeView
             questions={allQuestions}
-            bankMeta={questionBankMeta}
             sessions={sessions}
-            practiceTexts={practiceTexts}
-            onPracticeTextsChange={updatePracticeTexts}
+            expressionCount={expressions.length}
+            accountName={currentAccount?.displayName ?? '本机用户'}
             onStart={(question) => void startQuestion(question)}
             onResume={openSession}
+            onOpenLibrary={(part) => {
+              if (part) setLibraryPart(part)
+              navigateSafely('questions')
+            }}
+            onOpenReview={() => navigateSafely('history')}
+          />
+        ) : view === 'questions' ? (
+          <QuestionLibrary
+            initialPart={libraryPart}
+            questions={allQuestions}
+            bankMeta={questionData.questionBankMeta}
+            onStart={(question) => void startQuestion(question)}
             onImport={() => navigateSafely('imports')}
           />
         ) : view === 'practice' && session && activeQuestion ? (
@@ -445,6 +623,7 @@ export function App() {
             audioFocus={runtime.audioFocus}
             textAi={runtime.textAi}
             reusableExpressions={activeMemory.reusableExpressions}
+            reusablePersonalMaterials={activeMemory.personalMaterials}
             learnerContext={activeMemory.learnerContext}
             onExpressionReused={(expressionId) =>
               void runtime.practiceService
@@ -457,50 +636,87 @@ export function App() {
             onBack={() => navigateSafely('questions')}
           />
         ) : view === 'history' ? (
-          <HistoryView
-            questions={questionsForHistory}
-            sessions={sessions}
-            onOpen={openSession}
-            onDelete={(sessionId) => void deleteSession(sessionId)}
-          />
+          <ReviewCenter active="history" onChange={navigateSafely}>
+            <LearnerMemoryPanel sessions={sessions} />
+            <HistoryView
+              questions={questionsForHistory}
+              sessions={sessions}
+              onOpen={openSession}
+              onDelete={(sessionId) => void deleteSession(sessionId)}
+            />
+          </ReviewCenter>
         ) : view === 'expressions' ? (
-          <ExpressionLibrary
-            expressions={expressions}
-            audioFocus={runtime.audioFocus}
-            onUpdate={updateExpression}
-            onDelete={deleteExpression}
-            onReviewed={markExpressionReviewed}
-            onPractice={(questionId) => {
-              const question = questionsForHistory.find((item) => item.id === questionId)
-              if (question) {
-                void startQuestion(question)
-              } else {
-                setStorageError('这条表达关联的原题已不存在，表达本身仍安全保留。')
-              }
-            }}
-          />
+          <ReviewCenter active="expressions" onChange={navigateSafely}>
+            <ExpressionLibrary
+              expressions={expressions}
+              audioFocus={runtime.audioFocus}
+              onUpdate={updateExpression}
+              onDelete={deleteExpression}
+              onReviewed={markExpressionReviewed}
+              onPractice={(questionId) => {
+                const question = questionsForHistory.find((item) => item.id === questionId)
+                if (question) {
+                  void startQuestion(question)
+                } else {
+                  setStorageError('这条表达关联的原题已不存在，表达本身仍安全保留。')
+                }
+              }}
+            />
+          </ReviewCenter>
+        ) : view === 'materials' ? (
+          <ReviewCenter active="materials" onChange={navigateSafely}>
+            <PersonalMaterialLibrary
+              materials={personalMaterials}
+              onCreate={async (input) => { await runtime.personalMaterialService.create(input); await refreshLibrary() }}
+              onUpdate={async (id, input) => { await runtime.personalMaterialService.update(id, input); await refreshLibrary() }}
+              onArchive={async (id) => { await runtime.personalMaterialService.archive(id); await refreshLibrary() }}
+              onRestore={async (id) => { await runtime.personalMaterialService.restore(id); await refreshLibrary() }}
+              onDelete={async (id) => { await runtime.personalMaterialService.delete(id); await refreshLibrary() }}
+            />
+          </ReviewCenter>
         ) : view === 'accounts' ? (
           <AccountView
             service={runtime.accountService}
             onSwitched={handleAccountSwitched}
+            onOpenSettings={() => navigateSafely('settings')}
+            cloudPanel={(
+              <>
+                <CloudAccountPanel
+                  client={runtime.cloudAuthClient}
+                  tokenStore={runtime.authTokenStore}
+                  onSessionChange={handleCloudSessionChange}
+                />
+                {cloudSession ? (
+                  <CloudSyncCard
+                    status={cloudSyncStatus}
+                    message={cloudSyncMessage}
+                    destination={formatSyncDestination(runtime.configStore.getBaseUrl())}
+                    emailVerified={cloudSession.user.emailVerified}
+                    onSync={() => void runCloudSync()}
+                  />
+                ) : null}
+              </>
+            )}
           />
         ) : view === 'imports' ? (
-          <ImportController
-            service={runtime.importService}
-            organizer={runtime.textAi}
-            existingQuestions={allQuestions}
-            onImported={(records) => {
-              setImportedQuestions((current) => [
-                ...current.filter(
-                  (existing) =>
-                    !records.some((record) => record.id === existing.id),
-                ),
-                ...records,
-              ])
-            }}
-            onStartQuestion={(question) => void startQuestion(question)}
-            onBack={() => navigateSafely('questions')}
-          />
+          <Suspense fallback={<LoadingView label="正在打开导入工具…" />}>
+            <ImportController
+              service={runtime.importService}
+              organizer={runtime.textAi}
+              existingQuestions={allQuestions}
+              onImported={(records) => {
+                setImportedQuestions((current) => [
+                  ...current.filter(
+                    (existing) =>
+                      !records.some((record) => record.id === existing.id),
+                  ),
+                  ...records,
+                ])
+              }}
+              onStartQuestion={(question) => void startQuestion(question)}
+              onBack={() => navigateSafely('questions')}
+            />
+          </Suspense>
         ) : (
           <SettingsController
             configStore={runtime.configStore}
@@ -510,6 +726,8 @@ export function App() {
             dataMaintenance={runtime.storage}
             backupService={runtime.backupService}
             onDataChanged={refreshLibrary}
+            theme={theme}
+            onThemeChange={setTheme}
           />
         )}
       </main>
@@ -521,14 +739,29 @@ export function App() {
   )
 }
 
-function LoadingView() {
+function LoadingView({ label = '正在打开本地练习记录…' }: { label?: string }) {
   return (
     <div className="loading-view" role="status">
-      <span className="loading-paw" aria-hidden="true">
-        ●
-      </span>
-      正在打开本地练习记录…
+      <LoaderCircle className="loading-paw" aria-hidden="true" size={20} />
+      {label}
     </div>
+  )
+}
+
+function StartupFailureView() {
+  return (
+    <section className="empty-state" role="alert">
+      <SearchX aria-hidden="true" size={24} />
+      <h2>应用数据没有完整载入</h2>
+      <p>题库或本地记录校验失败。你的本机数据没有被删除，可以重新载入后再试。</p>
+      <button
+        type="button"
+        className="primary-button"
+        onClick={() => window.location.reload()}
+      >
+        重新载入
+      </button>
+    </section>
   )
 }
 
@@ -539,56 +772,116 @@ function BottomNavigation({
   view: AppView
   onChange: (view: Exclude<AppView, 'practice'>) => void
 }) {
-  const items: Array<{ view: Exclude<AppView, 'practice'>; label: string; icon: string }> = [
-    { view: 'questions', label: '练习', icon: '◉' },
-    { view: 'history', label: '记录', icon: '↻' },
-    { view: 'expressions', label: '表达', icon: '✦' },
-    { view: 'accounts', label: '我的', icon: '◎' },
-    { view: 'settings', label: '设置', icon: '⚙' },
+  const items: Array<{
+    view: Exclude<AppView, 'practice' | 'expressions' | 'imports' | 'settings'>
+    label: string
+    icon: LucideIcon
+  }> = [
+    { view: 'home', label: '首页', icon: Home },
+    { view: 'questions', label: '题库', icon: LibraryBig },
+    { view: 'history', label: '复盘', icon: ChartNoAxesColumnIncreasing },
+    { view: 'accounts', label: '我的', icon: UserRound },
   ]
 
   return (
     <nav className="bottom-nav" aria-label="主导航">
-      {items.map((item) => (
-        <button
-          type="button"
-          key={item.view}
-          className={view === item.view ? 'active' : ''}
-          onClick={() => onChange(item.view)}
-        >
-          <span aria-hidden="true">{item.icon}</span>
-          {item.label}
-        </button>
-      ))}
+      {items.map((item) => {
+        const Icon = item.icon
+        const active = view === item.view ||
+          (item.view === 'history' && (view === 'expressions' || view === 'materials')) ||
+          (item.view === 'accounts' && view === 'settings')
+        return (
+          <button
+            type="button"
+            key={item.view}
+            className={active ? 'active' : ''}
+            onClick={() => onChange(item.view)}
+            aria-current={active ? 'page' : undefined}
+          >
+            <Icon aria-hidden="true" size={21} strokeWidth={active ? 2.4 : 2} />
+            {item.label}
+          </button>
+        )
+      })}
     </nav>
   )
 }
 
+function ReviewCenter({
+  active,
+  onChange,
+  children,
+}: {
+  active: 'history' | 'expressions' | 'materials'
+  onChange: (view: Exclude<AppView, 'practice'>) => void
+  children: ReactNode
+}) {
+  return (
+    <section className="review-center">
+      <div className="review-center-heading">
+        <div>
+          <p className="eyebrow">Review & reuse</p>
+          <h1>复盘中心</h1>
+          <p>回看练习，也把真正能复用的英语留下来。</p>
+        </div>
+      </div>
+      <nav className="review-tabs" aria-label="复盘内容">
+        <button
+          type="button"
+          className={active === 'history' ? 'active' : ''}
+          aria-current={active === 'history' ? 'page' : undefined}
+          onClick={() => onChange('history')}
+        >
+          <ChartNoAxesColumnIncreasing aria-hidden="true" size={17} />
+          练习记录
+        </button>
+        <button
+          type="button"
+          className={active === 'expressions' ? 'active' : ''}
+          aria-current={active === 'expressions' ? 'page' : undefined}
+          onClick={() => onChange('expressions')}
+        >
+          <BookOpenText aria-hidden="true" size={17} />
+          个人语料
+        </button>
+        <button
+          type="button"
+          className={active === 'materials' ? 'active' : ''}
+          onClick={() => onChange('materials')}
+        >
+          <Lightbulb aria-hidden="true" size={17} />
+          个人素材
+        </button>
+      </nav>
+      {children}
+    </section>
+  )
+}
+
 function QuestionLibrary({
+  initialPart,
   questions,
   bankMeta,
-  sessions,
-  practiceTexts,
-  onPracticeTextsChange,
   onStart,
-  onResume,
   onImport,
 }: {
+  initialPart: 1 | 2 | 3
   questions: Question[]
   bankMeta: { seasonLabel: string; counts: { 1: number; 2: number; 3: number } }
-  sessions: TrainingSession[]
-  practiceTexts: PracticeTexts
-  onPracticeTextsChange: (texts: PracticeTexts) => void
   onStart: (question: Question) => void
-  onResume: (session: TrainingSession) => void
   onImport: () => void
 }) {
-  const [part, setPart] = useState<1 | 2 | 3>(1)
+  const [part, setPart] = useState<1 | 2 | 3>(initialPart)
   const [query, setQuery] = useState('')
   const [newOnly, setNewOnly] = useState(false)
+  const [category, setCategory] = useState('all')
+  const [visibleLimit, setVisibleLimit] = useState(20)
   const [showFollowUpsFor, setShowFollowUpsFor] = useState<string | null>(null)
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const partQuestions = questions.filter((question) => question.part === part)
+  const categories = Array.from(
+    new Set(partQuestions.map((question) => question.category ?? '导入题目')),
+  )
   const visiblePartQuestions = partQuestions.filter((question) => {
     const matchesQuery =
       normalizedQuery.length === 0 ||
@@ -597,16 +890,16 @@ function QuestionLibrary({
       (question.category ?? '').toLocaleLowerCase().includes(normalizedQuery)
     // 只隐藏明确的旧题;导入题没有 new/old 标记,仍然可见。
     const matchesNew = !newOnly || question.isNew !== false
-    return matchesQuery && matchesNew
+    const matchesCategory = category === 'all' ||
+      (question.category ?? '导入题目') === category
+    return matchesQuery && matchesNew && matchesCategory
   })
   const questionById = new Map(questions.map((question) => [question.id, question]))
-  const groups = groupQuestions(visiblePartQuestions)
-  const resumable = sessions.find((item) => item.status !== 'completed')
-  const resumableQuestion = resumable
-    ? questionById.get(resumable.questionId) ??
-      legacyQuestionsById.get(resumable.questionId)
-    : undefined
-  const recommendation = recommendQuestion(questions, sessions)
+  const visibleQuestions = visiblePartQuestions.slice(0, visibleLimit)
+  const groups = groupQuestions(visibleQuestions)
+  const groupTotals = new Map(
+    groupQuestions(visiblePartQuestions).map((group) => [group.label, group.questions.length]),
+  )
 
   const pickRandom = () => {
     // eslint-disable-next-line react-hooks/purity -- 随机抽题只在用户点击时执行
@@ -617,10 +910,6 @@ function QuestionLibrary({
     }
   }
 
-  const setText = (field: keyof PracticeTexts, value: string) => {
-    onPracticeTextsChange({ ...practiceTexts, [field]: value })
-  }
-
   const toggleFollowUps = (questionId: string) => {
     setShowFollowUpsFor((current) =>
       current === questionId ? null : questionId,
@@ -628,77 +917,17 @@ function QuestionLibrary({
   }
 
   return (
-    <section className="page-stack">
-      <div className="hero-card">
-        <div className="hero-lines">
-          <input
-            className="hero-line hero-line-top"
-            type="text"
-            value={practiceTexts.top}
-            placeholder={DEFAULT_PRACTICE_TEXTS.top}
-            maxLength={200}
-            onChange={(event) => setText('top', event.target.value)}
-          />
-          <input
-            className="hero-line hero-line-middle"
-            type="text"
-            value={practiceTexts.middle}
-            placeholder={DEFAULT_PRACTICE_TEXTS.middle}
-            maxLength={200}
-            onChange={(event) => setText('middle', event.target.value)}
-          />
-          <input
-            className="hero-line hero-line-bottom"
-            type="text"
-            value={practiceTexts.bottom}
-            placeholder={DEFAULT_PRACTICE_TEXTS.bottom}
-            maxLength={200}
-            onChange={(event) => setText('bottom', event.target.value)}
-          />
-        </div>
-        <div className="hero-cat" aria-hidden="true">
-          <span>◕ᴗ◕</span>
-        </div>
-      </div>
-
-      {resumable && resumableQuestion ? (
-        <button
-          type="button"
-          className="resume-card"
-          onClick={() => onResume(resumable)}
-        >
-          <span className="resume-icon" aria-hidden="true">
-            ▶
-          </span>
-          <span>
-            <small>继续上次练习 · {partLabel(resumableQuestion.part)}</small>
-            <strong>{resumableQuestion.prompt}</strong>
-            <em>{statusLabel[resumable.status]}</em>
-          </span>
-          <span aria-hidden="true">›</span>
-        </button>
-      ) : null}
-
-      {recommendation ? (
-        <button
-          type="button"
-          className="question-recommendation"
-          onClick={() => onStart(recommendation.question)}
-        >
-          <span>
-            <small>根据本机练习记录推荐</small>
-            <strong>{recommendation.question.prompt}</strong>
-            <em>{recommendation.reason}</em>
-          </span>
-          <b aria-hidden="true">开始 →</b>
-        </button>
-      ) : null}
-
-      <div className="section-heading">
+    <section className="page-stack question-library-page">
+      <div className="question-library-heading">
         <div>
-          <p className="eyebrow">{bankMeta.seasonLabel} 季度题库</p>
-          <h2>选择一道单题</h2>
+          <p className="eyebrow">{bankMeta.seasonLabel} · Question bank</p>
+          <h1>选一道真正想练的题</h1>
+          <p>按 Part、主题和新旧题筛选。一次只加载少量结果，找题更快。</p>
         </div>
+        <button className="secondary-button compact" type="button" onClick={onImport}>
+          <Upload aria-hidden="true" size={16} />
+          导入
+        </button>
       </div>
 
       <div className="part-tabs" role="tablist" aria-label="IELTS Speaking 部分">
@@ -711,6 +940,8 @@ function QuestionLibrary({
             className={part === value ? 'active' : ''}
             onClick={() => {
               setPart(value)
+              setCategory('all')
+              setVisibleLimit(20)
               setShowFollowUpsFor(null)
             }}
           >
@@ -724,43 +955,69 @@ function QuestionLibrary({
         ))}
       </div>
 
-      <div className="question-filters">
+      <section className="question-filter-panel" aria-label="筛选题库">
         <label className="question-search">
-          <span>搜索题目或主题</span>
+          <Search aria-hidden="true" size={18} />
+          <span className="sr-only">搜索题目或主题</span>
           <input
             type="search"
             value={query}
-            placeholder="输入英文关键词"
-            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索题目或主题"
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setVisibleLimit(20)
+            }}
           />
         </label>
-        <button
-          type="button"
-          className={newOnly ? 'filter-toggle active' : 'filter-toggle'}
-          aria-pressed={newOnly}
-          onClick={() => setNewOnly((value) => !value)}
-        >
-          只看新题
-        </button>
-        <button
-          type="button"
-          className="secondary-button compact"
-          disabled={visiblePartQuestions.length === 0}
-          onClick={pickRandom}
-        >
-          随机一题
-        </button>
-        <button className="secondary-button compact" type="button" onClick={onImport}>
-          导入材料
-        </button>
-      </div>
+        <div className="question-filter-chips" aria-label="主题分类">
+          <button
+            type="button"
+            className={category === 'all' ? 'active' : ''}
+            aria-pressed={category === 'all'}
+            onClick={() => { setCategory('all'); setVisibleLimit(20) }}
+          >
+            全部
+          </button>
+          {categories.map((item) => (
+            <button
+              type="button"
+              key={item}
+              className={category === item ? 'active' : ''}
+              aria-pressed={category === item}
+              onClick={() => { setCategory(item); setVisibleLimit(20) }}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+        <div className="question-filter-actions">
+          <button
+            type="button"
+            className={newOnly ? 'filter-toggle active' : 'filter-toggle'}
+            aria-pressed={newOnly}
+            onClick={() => { setNewOnly((value) => !value); setVisibleLimit(20) }}
+          >
+            只看新题
+          </button>
+          <button
+            type="button"
+            className="secondary-button compact"
+            disabled={visiblePartQuestions.length === 0}
+            onClick={pickRandom}
+          >
+            <Shuffle aria-hidden="true" size={16} />
+            随机一题
+          </button>
+          <span>{visiblePartQuestions.length} 道结果</span>
+        </div>
+      </section>
 
       {groups.length ? (
         groups.map((group) => (
           <section className="question-group" key={group.label}>
             <div className="question-group-heading">
               <strong>{group.label}</strong>
-              <small>{group.questions.length} 题</small>
+              <small>{group.questions.length} / {groupTotals.get(group.label) ?? group.questions.length} 题</small>
             </div>
             <div className="question-list">
               {group.questions.map((question, index) => (
@@ -780,6 +1037,16 @@ function QuestionLibrary({
       ) : (
         <EmptyQuestionResult query={normalizedQuery} newOnly={newOnly} />
       )}
+      {visibleQuestions.length < visiblePartQuestions.length ? (
+        <button
+          type="button"
+          className="load-more-button"
+          onClick={() => setVisibleLimit((value) => value + 20)}
+        >
+          再显示 20 道
+          <small>已显示 {visibleQuestions.length} / {visiblePartQuestions.length}</small>
+        </button>
+      ) : null}
     </section>
   )
 }
@@ -828,7 +1095,7 @@ function QuestionRow({
             {question.category ?? '导入题目'}
             {followUps.length > 0 ? ` · 对应 Part 3 ${followUps.length} 道` : ''}
             {' · 开始练习 '}
-            <b aria-hidden="true">→</b>
+            <ArrowRight aria-hidden="true" size={14} />
           </span>
         </button>
       </article>
@@ -876,7 +1143,7 @@ function EmptyQuestionResult({
 }) {
   return (
     <div className="empty-state">
-      <span aria-hidden="true">=＾● ⋏ ●＾=</span>
+      <SearchX aria-hidden="true" size={28} />
       <h2>没有匹配的题目</h2>
       <p>
         {query ? `没有找到包含“${query}”的题目。` : ''}

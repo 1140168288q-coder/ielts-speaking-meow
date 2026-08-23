@@ -2,6 +2,7 @@ import {
   requestSafePracticeExit,
   resetViewScroll,
   resolveAndroidBackAction,
+  resolveInitialView,
 } from './App'
 import type { AudioFocusState } from './ports/speech'
 
@@ -14,17 +15,6 @@ function focus(state: AudioFocusState) {
 }
 
 describe('requestSafePracticeExit', () => {
-  it('blocks navigation while a recording-like activity is still active', async () => {
-    const { audioFocus, stopAllPlayback } = focus('recording')
-    const onExit = vi.fn()
-
-    await expect(
-      requestSafePracticeExit(audioFocus, false, onExit),
-    ).resolves.toBe(false)
-    expect(stopAllPlayback).not.toHaveBeenCalled()
-    expect(onExit).not.toHaveBeenCalled()
-  })
-
   it('also blocks while local persistence is pending', async () => {
     const { audioFocus, stopAllPlayback } = focus('idle')
     const onExit = vi.fn()
@@ -76,25 +66,27 @@ describe('resolveAndroidBackAction', () => {
     )
   })
 
-  it.each(['history', 'expressions'] as const)(
-    'returns from %s to the question library before exiting',
+  it.each(['questions', 'history', 'expressions', 'accounts', 'settings'] as const)(
+    'returns from %s to the home screen before exiting',
     (view) => {
-      expect(resolveAndroidBackAction(view, false)).toBe('questions')
+      expect(resolveAndroidBackAction(view, false)).toBe('home')
     },
   )
 
   it('uses WebView history from the root when one exists', () => {
-    expect(resolveAndroidBackAction('questions', true)).toBe('browser-back')
+    expect(resolveAndroidBackAction('home', true)).toBe('browser-back')
   })
 
   it('exits only from the root when WebView has no history', () => {
-    expect(resolveAndroidBackAction('questions', false)).toBe('exit-app')
+    expect(resolveAndroidBackAction('home', false)).toBe('exit-app')
   })
 })
 
 describe('resetViewScroll', () => {
   it('returns every top-level view to the top-left edge', () => {
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+    document.documentElement.scrollTop = 180
+    document.body.scrollTop = 180
 
     resetViewScroll()
 
@@ -103,7 +95,24 @@ describe('resetViewScroll', () => {
       left: 0,
       behavior: 'auto',
     })
+    expect(document.documentElement.scrollTop).toBe(0)
+    expect(document.body.scrollTop).toBe(0)
     scrollTo.mockRestore()
   })
 })
 
+describe('resolveInitialView', () => {
+  it.each(['verify-email', 'reset-password']) (
+    'opens the account screen for a valid %s email link',
+    (action) => {
+      expect(resolveInitialView(`?action=${action}&token=${'t'.repeat(43)}`)).toBe(
+        'accounts',
+      )
+    },
+  )
+
+  it('keeps malformed or unrelated links on the home screen', () => {
+    expect(resolveInitialView('?action=reset-password&token=short')).toBe('home')
+    expect(resolveInitialView('?topic=hometown')).toBe('home')
+  })
+})

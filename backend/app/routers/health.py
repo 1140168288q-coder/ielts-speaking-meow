@@ -6,8 +6,10 @@
 """
 import asyncio
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
+
+from .auth import get_current_auth
 
 router = APIRouter()
 
@@ -56,7 +58,7 @@ async def health(request: Request) -> dict:
     }
 
 
-@router.post("/health/verify")
+@router.post("/health/verify", dependencies=[Depends(get_current_auth)])
 async def verify_providers(request: Request) -> dict:
     """显式验证上游:DeepSeek 一次 32 token 的小规模补全(推理模型需要
     token 余量),TTS 合成一句 "Hello."。"""

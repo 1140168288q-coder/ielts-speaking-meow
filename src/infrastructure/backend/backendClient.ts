@@ -63,6 +63,8 @@ export interface BackendClientOptions {
   isNative?: () => boolean
   fetch?: typeof fetch
   nativeRequest?: (options: HttpOptions) => Promise<HttpResponse>
+  getAccessToken?: () => Promise<string | null>
+  onUnauthorized?: () => void | Promise<void>
 }
 
 /**
@@ -75,6 +77,8 @@ export class BackendClient {
   private readonly isNative: () => boolean
   private readonly fetchImplementation: typeof fetch
   private readonly nativeRequest: (options: HttpOptions) => Promise<HttpResponse>
+  private readonly getAccessToken: () => Promise<string | null>
+  private readonly onUnauthorized: () => void | Promise<void>
 
   constructor(options: BackendClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? resolveBackendUrl()).replace(/\/+$/, '')
@@ -83,6 +87,8 @@ export class BackendClient {
     this.fetchImplementation = options.fetch ?? globalThis.fetch.bind(globalThis)
     this.nativeRequest =
       options.nativeRequest ?? ((request) => CapacitorHttp.request(request))
+    this.getAccessToken = options.getAccessToken ?? (() => Promise.resolve(null))
+    this.onUnauthorized = options.onUnauthorized ?? (() => undefined)
   }
 
   get url(): string {
@@ -168,7 +174,7 @@ export class BackendClient {
         const response = await this.nativeRequest({
           url: this.buildUrl(path),
           method: 'POST',
-          headers: this.withRequestHeaders({ 'Content-Type': 'application/json' }),
+          headers: await this.withRequestHeaders({ 'Content-Type': 'application/json' }),
           data: body,
           responseType: 'arraybuffer',
           connectTimeout: timeoutMs,
@@ -197,7 +203,7 @@ export class BackendClient {
       const response = await this.nativeRequest({
         url: this.buildUrl(path),
         method: 'GET',
-        headers: this.withRequestHeaders({}),
+        headers: await this.withRequestHeaders({}),
         responseType: 'json',
         connectTimeout: timeoutMs,
         readTimeout: timeoutMs,
@@ -228,7 +234,7 @@ export class BackendClient {
       const response = await this.nativeRequest({
         url: this.buildUrl(path),
         method: options.method,
-        headers: this.withRequestHeaders(options.headers),
+        headers: await this.withRequestHeaders(options.headers),
         data: options.nativeBody,
         ...(options.nativeDataType !== undefined
           ? { dataType: options.nativeDataType }
@@ -267,6 +273,8 @@ export class BackendClient {
     try {
       const headers = new Headers(init.headers)
       headers.set('X-Request-ID', createRequestId())
+      const token = await this.getAccessToken()
+      if (token) headers.set('Authorization', `Bearer ${token}`)
       const response = await this.fetchImplementation(this.buildUrl(path), {
         ...init,
         headers,
@@ -287,13 +295,26 @@ export class BackendClient {
     return `${this.resolveBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`
   }
 
-  private withRequestHeaders(headers: Record<string, string>): Record<string, string> {
-    return { ...headers, 'X-Request-ID': createRequestId() }
+  private async withRequestHeaders(headers: Record<string, string>): Promise<Record<string, string>> {
+    const token = await this.getAccessToken()
+    return {
+      ...headers,
+      'X-Request-ID': createRequestId(),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
   }
 
   private assertSuccess(status: number, data: unknown): void {
     if (status >= 200 && status < 300) {
       return
+    }
+    if (status === 401) {
+      void this.onUnauthorized()
+      throw new ApiProviderError(
+        'request-failed',
+        '登录状态已过期，请重新登录后使用云端服务。',
+        false,
+      )
     }
     const envelope = readErrorEnvelope(data) as BackendErrorEnvelope | null
     const code = envelope?.error?.code

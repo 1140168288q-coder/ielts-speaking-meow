@@ -13,6 +13,7 @@ export default tseslint.config(
       'backend/.venv',
       '**/.pytest_cache',
       'backend/.pytest_cache',
+      'backend/.pytest_tmp',
       'backend/**/__pycache__',
       'artifacts',
     ],

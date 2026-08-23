@@ -3,6 +3,18 @@ import type {
   SavedExpression,
   TrainingSession,
 } from '../domain/models'
+import type { PersonalMaterial } from '../domain/personalMaterials'
+import type { CloudSyncEntityType, SyncOutboxOperation } from '../domain/cloudSync'
+
+export interface SyncEntityState {
+  version: number
+  syncedUpdatedAt: string | null
+}
+
+export interface ListPersonalMaterialsOptions {
+  /** 默认隐藏软删除墓碑；同步与恢复流程可显式读取。 */
+  includeDeleted?: boolean
+}
 
 /**
  * Durable, non-secret application data.
@@ -20,9 +32,54 @@ export interface LocalStorage {
   listExpressions(): Promise<SavedExpression[]>
   deleteExpression(expressionId: string): Promise<void>
 
+  upsertPersonalMaterial(material: PersonalMaterial): Promise<void>
+  getPersonalMaterial(
+    materialId: string,
+    ownerId: string,
+  ): Promise<PersonalMaterial | null>
+  listPersonalMaterials(
+    ownerId: string,
+    options?: ListPersonalMaterialsOptions,
+  ): Promise<PersonalMaterial[]>
+  /** 写入 deletedAt 墓碑，不物理删除记录。 */
+  deletePersonalMaterial(materialId: string, ownerId: string): Promise<void>
+
   /** 练习页顶部三行自定义文字;未保存过时返回 null(使用默认值)。 */
   getPracticeTexts(): Promise<PracticeTexts | null>
   savePracticeTexts(texts: PracticeTexts): Promise<void>
+}
+
+/**
+ * Durable cloud-sync metadata, scoped by cloud account id.
+ *
+ * This boundary deliberately does not claim to atomically persist a business
+ * entity and its outbox operation. Callers must persist the entity first and
+ * then enqueue; a future entity-specific transactional API is required before
+ * the two writes can be guaranteed atomic in IndexedDB.
+ */
+export interface CloudSyncStorage {
+  enqueueSyncOperation(
+    scopeId: string,
+    operation: SyncOutboxOperation,
+  ): Promise<'created' | 'already-enqueued'>
+  listSyncOperations(
+    scopeId: string,
+    limit?: number,
+  ): Promise<SyncOutboxOperation[]>
+  removeSyncOperation(scopeId: string, operationId: string): Promise<void>
+  getSyncCursor(scopeId: string): Promise<number>
+  setSyncCursor(scopeId: string, cursor: number): Promise<void>
+  getSyncEntityState(
+    scopeId: string,
+    entityType: CloudSyncEntityType,
+    entityId: string,
+  ): Promise<SyncEntityState>
+  setSyncEntityState(
+    scopeId: string,
+    entityType: CloudSyncEntityType,
+    entityId: string,
+    state: SyncEntityState,
+  ): Promise<void>
 }
 
 /**

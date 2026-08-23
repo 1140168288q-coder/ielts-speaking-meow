@@ -71,7 +71,7 @@ describe('IndexedDbStorage v1 to v2 migration', () => {
 
     await storage.close()
     const database = await openDatabase(databaseName)
-    expect(database.version).toBe(5)
+    expect(database.version).toBe(7)
     expect(Array.from(database.objectStoreNames).sort()).toEqual(
       [
         'accounts',
@@ -83,7 +83,10 @@ describe('IndexedDbStorage v1 to v2 migration', () => {
         'importSources',
         'importedFiles',
         'importedQuestions',
+        'personalMaterials',
         'sessions',
+        'syncOutbox',
+        'syncState',
         'ttsCache',
       ].sort(),
     )

@@ -1,11 +1,33 @@
 """服务端配置：全部来自环境变量，绝不硬编码密钥。"""
 from functools import lru_cache
+from typing import Literal
+from urllib.parse import urlsplit
 
+from pydantic import EmailStr, Field, SecretStr, TypeAdapter, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # ---- 账号与数据库 ----
+    database_url: str = "sqlite+aiosqlite:///./data/ielts_cat.db"
+    auth_session_ttl_seconds: int = Field(default=30 * 24 * 60 * 60, ge=60)
+    email_verification_token_ttl_seconds: int = Field(
+        default=24 * 60 * 60, ge=300
+    )
+    password_reset_token_ttl_seconds: int = Field(default=60 * 60, ge=300)
+
+    # ---- 账号邮件 ----
+    # APP_ACCOUNT_URL 是邮件链接的唯一来源，绝不使用请求 Host header 拼接。
+    app_account_url: str = ""
+    smtp_host: str = ""
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_user: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from: str = ""
+    smtp_tls_mode: Literal["starttls", "ssl"] = "starttls"
+    smtp_timeout_seconds: float = Field(default=15.0, gt=0, le=120)
 
     # ---- DeepSeek(Text AI)----
     deepseek_api_key: str = ""
@@ -29,6 +51,51 @@ class Settings(BaseSettings):
     # ---- 基础限流(默认关闭,预留接口)----
     rate_limit_enabled: bool = False
     rate_limit_per_minute: int = 30
+
+    @field_validator("database_url")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """接受常见部署平台给出的同步 URL，并统一切换到异步驱动。"""
+        value = value.strip()
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+asyncpg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if value.startswith("sqlite:///"):
+            return value.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+        return value
+
+    @field_validator("app_account_url")
+    @classmethod
+    def validate_app_account_url(cls, value: str) -> str:
+        value = value.strip().rstrip("/")
+        if not value:
+            return ""
+        parsed = urlsplit(value)
+        localhost = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed.scheme != "https" and not (parsed.scheme == "http" and localhost):
+            raise ValueError("APP_ACCOUNT_URL 必须使用 HTTPS（本机开发地址除外）")
+        if not parsed.netloc or parsed.username or parsed.password:
+            raise ValueError("APP_ACCOUNT_URL 必须是公开且不含凭证的绝对 URL")
+        if parsed.query or parsed.fragment:
+            raise ValueError("APP_ACCOUNT_URL 不得包含 query 或 fragment")
+        return value
+
+    @field_validator("smtp_host", "smtp_user")
+    @classmethod
+    def validate_smtp_text(cls, value: str) -> str:
+        value = value.strip()
+        if "\r" in value or "\n" in value:
+            raise ValueError("SMTP 配置不得包含换行符")
+        return value
+
+    @field_validator("smtp_from")
+    @classmethod
+    def validate_smtp_from(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            return ""
+        return str(TypeAdapter(EmailStr).validate_python(value))
 
     @property
     def volc_tts_auth_headers(self) -> dict[str, str]:

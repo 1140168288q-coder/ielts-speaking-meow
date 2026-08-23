@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Cloud, Headphones, Monitor, Moon, Sun } from 'lucide-react'
 import type {
   BackendConfigStore,
   BackendHealthCache,
@@ -24,6 +25,8 @@ export interface SettingsControllerProps {
   dataMaintenance: LocalDataMaintenance
   backupService: StorageBackupService
   onDataChanged: () => Promise<void>
+  theme?: 'system' | 'light' | 'dark'
+  onThemeChange?: (theme: 'system' | 'light' | 'dark') => void
 }
 
 type FeedbackTone = 'idle' | 'busy' | 'success' | 'error'
@@ -49,6 +52,8 @@ export function SettingsController({
   dataMaintenance,
   backupService,
   onDataChanged,
+  theme = 'system',
+  onThemeChange = () => undefined,
 }: SettingsControllerProps) {
   const [snapshot, setSnapshot] = useState<BackendHealthSnapshot>(() =>
     healthCache.getSnapshot(),
@@ -232,118 +237,143 @@ export function SettingsController({
 
   return (
     <div className="settings-panel">
-      <section className="settings-card">
-        <h2 className="section-heading">云端服务</h2>
-        <p className="settings-note">
-          Text AI 文本分析与 AI 语音均由你自己的云端服务提供。云端不可用时,
-          本地答案保存、本地规则提示与系统朗读仍可正常使用。
-        </p>
-        <ul className="settings-providers">
-          <li>
-            连接状态:{health === null ? '离线' : `已连接 · Backend ${health.version ?? '版本未知'}`}
-          </li>
-          <li>Backend 地址:{configStore.getBaseUrl()}</li>
-          {locked ? (
-            <li className="settings-meta">正式版本地址已固定，不能在设置页修改。</li>
-          ) : null}
-          <li>上次检查:{formatCheckedAt(snapshot.checkedAt)}</li>
-        </ul>
-        {locked ? null : (
-          <>
-            <label className="settings-field">
-              <span>Backend 地址</span>
-              <input
-                type="text"
-                value={addressDraft}
-                placeholder="http://192.168.0.26:8000"
-                onChange={(event) => setAddressDraft(event.target.value)}
-              />
-            </label>
-            <p className="settings-meta">
-              只需填写到端口，例如 http://192.168.0.26:8000；不要添加 /health。
-              如果粘贴了健康检查地址，保存时会自动纠正。
-            </p>
-            {usesPlainHttp ? (
-              <div className="inline-note" role="note">
-                HTTP 仅允许用于 localhost、.local 或私有局域网地址；公网部署必须使用 HTTPS。
-              </div>
-            ) : null}
-          </>
-        )}
-        <div className="settings-actions">
-          {locked ? null : (
+      <header className="settings-page-heading">
+        <p className="eyebrow">Settings</p>
+        <h1>设置</h1>
+        <p>常用选项放在前面；服务地址和供应商验证收在高级设置里。</p>
+      </header>
+      <section className="settings-card appearance-settings-card">
+        <div>
+          <p className="eyebrow">Appearance</p>
+          <h2>外观</h2>
+          <p className="settings-note">跟随系统，也可以单独固定浅色或深色。</p>
+        </div>
+        <div className="theme-options" role="radiogroup" aria-label="外观主题">
+          {([
+            ['system', '跟随系统', Monitor],
+            ['light', '浅色', Sun],
+            ['dark', '深色', Moon],
+          ] as const).map(([value, label, Icon]) => (
             <button
               type="button"
-              className="primary-button"
-              onClick={() => void saveConfig()}
-              disabled={busy}
+              role="radio"
+              key={value}
+              aria-checked={theme === value}
+              className={theme === value ? 'active' : ''}
+              onClick={() => onThemeChange(value)}
             >
-              保存配置
+              <Icon aria-hidden="true" size={18} />
+              {label}
             </button>
-          )}
+          ))}
+        </div>
+      </section>
+      <section className="settings-card">
+        <div className="settings-card-heading">
+          <span className="settings-card-icon"><Cloud aria-hidden="true" size={20} /></span>
+          <div>
+            <p className="eyebrow">Smart services</p>
+            <h2>AI 反馈与自然音色</h2>
+          </div>
+          <span className={health === null ? 'service-state offline' : 'service-state online'}>
+            {health === null ? '当前离线' : '服务正常'}
+          </span>
+        </div>
+        <p className="settings-note">
+          云端用于生成精简反馈和自然朗读。即使断网，答题、保存、本地提示和系统朗读仍然可用。
+        </p>
+        <div className="settings-actions">
           <button
             type="button"
-            className="secondary-button"
+            className="primary-button"
             onClick={() => void refreshHealth()}
             disabled={busy}
           >
-            {busy ? '检查中…' : '测试云端连接'}
+            {busy ? '检查中…' : '重新检查连接'}
           </button>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => void verifyUpstream()}
-            disabled={busy}
-          >
-            验证上游服务
-          </button>
-        </div>
-        {saveFeedback ? (
-          <span className={`settings-feedback ${saveFeedback.tone}`}>
-            {saveFeedback.text}
-          </span>
-        ) : null}
-        {healthFeedback ? (
-          <span className={`settings-feedback ${healthFeedback.tone}`}>
-            {healthFeedback.text}
-          </span>
-        ) : null}
-        {verifyFeedback ? (
-          <span className={`settings-feedback ${verifyFeedback.tone}`}>
-            {verifyFeedback.text}
-          </span>
-        ) : null}
-        {health !== null ? (
-          <ul className="settings-providers">
-            <li>DeepSeek(Text AI):{providerSummary(health.providers.deepseek)}</li>
-            <li>火山语音合成(TTS):{ttsSummary(health.providers.volc_tts)}</li>
-            <li>
-              当前实际播报来源:
-              {preferredVoice.isAvailable() ? '云端音色' : 'Android 系统音色'}
-            </li>
-          </ul>
-        ) : null}
-        {health?.providers.volc_tts?.configured ? (
-          <div className="settings-actions">
+          {health?.providers.volc_tts?.configured ? (
             <button
               type="button"
               className="secondary-button"
               onClick={() => void previewCloudVoice()}
               disabled={busy}
             >
-              试听云端音色
+              试听自然音色
             </button>
-            {cloudPreviewFeedback ? (
-              <span className={`settings-feedback ${cloudPreviewFeedback.tone}`}>
-                {cloudPreviewFeedback.text}
-              </span>
-            ) : null}
-          </div>
+          ) : null}
+        </div>
+        {healthFeedback ? (
+          <span className={`settings-feedback ${healthFeedback.tone}`}>
+            {healthFeedback.text}
+          </span>
         ) : null}
+        {cloudPreviewFeedback ? (
+          <span className={`settings-feedback ${cloudPreviewFeedback.tone}`}>
+            {cloudPreviewFeedback.text}
+          </span>
+        ) : null}
+        <details className="advanced-settings">
+          <summary>高级连接设置</summary>
+          <div className="advanced-settings-body">
+            <ul className="settings-providers">
+              <li>服务版本：{health?.version ?? '未连接'}</li>
+              <li>服务地址：{configStore.getBaseUrl()}</li>
+              <li>上次检查：{formatCheckedAt(snapshot.checkedAt)}</li>
+            </ul>
+            {locked ? (
+              <p className="settings-meta">正式版本地址已固定，不能在 App 内修改。</p>
+            ) : (
+              <>
+                <label className="settings-field">
+                  <span>Backend 地址</span>
+                  <input
+                    type="text"
+                    value={addressDraft}
+                    placeholder="http://192.168.0.26:8000"
+                    onChange={(event) => setAddressDraft(event.target.value)}
+                  />
+                </label>
+                <p className="settings-meta">
+                  填写到端口即可；公网部署必须使用 HTTPS。
+                </p>
+                {usesPlainHttp ? (
+                  <div className="inline-note" role="note">
+                    HTTP 仅用于 localhost、.local 或私有局域网地址。
+                  </div>
+                ) : null}
+              </>
+            )}
+            {health !== null ? (
+              <ul className="settings-providers">
+                <li>文本分析：{providerSummary(health.providers.deepseek)}</li>
+                <li>自然朗读：{ttsSummary(health.providers.volc_tts)}</li>
+                <li>当前播报：{preferredVoice.isAvailable() ? '云端音色' : '系统音色'}</li>
+              </ul>
+            ) : null}
+            <div className="settings-actions">
+              {locked ? null : (
+                <button type="button" className="secondary-button" onClick={() => void saveConfig()} disabled={busy}>
+                  保存服务地址
+                </button>
+              )}
+              <button type="button" className="secondary-button" onClick={() => void verifyUpstream()} disabled={busy}>
+                验证上游服务
+              </button>
+            </div>
+            {saveFeedback ? <span className={`settings-feedback ${saveFeedback.tone}`}>{saveFeedback.text}</span> : null}
+            {verifyFeedback ? <span className={`settings-feedback ${verifyFeedback.tone}`}>{verifyFeedback.text}</span> : null}
+          </div>
+        </details>
       </section>
 
       <section className="settings-card">
-        <h2 className="section-heading">本机能力</h2>
+        <div className="settings-card-heading">
+          <span className="settings-card-icon"><Headphones aria-hidden="true" size={20} /></span>
+          <div>
+            <p className="eyebrow">Playback</p>
+            <h2>系统朗读</h2>
+          </div>
+        </div>
         <ul className="settings-providers">
           <li>
             系统 TTS 引擎:

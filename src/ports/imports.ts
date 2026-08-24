@@ -16,7 +16,7 @@ export interface ImportStorage {
   getImportSource(sourceId: string): Promise<ImportSource | null>
   listImportSources(): Promise<ImportSource[]>
   getImportedFile(fileId: string): Promise<Blob | null>
-  listImportedQuestions(): Promise<ImportedQuestionRecord[]>
+  listImportedQuestions(ownerId: string): Promise<ImportedQuestionRecord[]>
 }
 
 export interface TtsCacheStorage {

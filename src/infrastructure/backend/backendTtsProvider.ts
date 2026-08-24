@@ -4,6 +4,7 @@ import {
 } from '../../domain'
 import type { TtsCacheStorage } from '../../ports/imports'
 import type {
+  PlaybackController,
   RecordingPlayback,
   TTSCapabilities,
   TTSProvider,
@@ -38,8 +39,10 @@ const CIRCUIT_BREAK_MS = 60_000
 export class BackendTtsProvider implements TTSProvider {
   readonly id = 'backend-tts'
   readonly capabilities = capabilities
+  readonly playbackController?: PlaybackController
   private generation = 0
   private trippedUntil = 0
+
 
   constructor(
     private readonly client: BackendClient,
@@ -47,7 +50,11 @@ export class BackendTtsProvider implements TTSProvider {
     private readonly playback: RecordingPlayback,
     private readonly health?: BackendHealthCache,
     private readonly now: () => number = () => Date.now(),
-  ) {}
+  ) {
+    if (playback.playbackController) {
+      this.playbackController = playback.playbackController
+    }
+  }
 
   isAvailable(): boolean {
     if (this.health) {

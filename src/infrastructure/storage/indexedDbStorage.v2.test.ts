@@ -4,6 +4,7 @@ import type {
   SavedExpression,
   TrainingSession,
 } from '../../domain'
+import { LOCAL_DEFAULT_USER_ID } from '../../domain/accounts'
 import type { ImportBundle } from '../../ports/imports'
 import { IndexedDbStorage } from './indexedDbStorage'
 
@@ -71,7 +72,7 @@ describe('IndexedDbStorage v1 to v2 migration', () => {
 
     await storage.close()
     const database = await openDatabase(databaseName)
-    expect(database.version).toBe(7)
+    expect(database.version).toBe(8)
     expect(Array.from(database.objectStoreNames).sort()).toEqual(
       [
         'accounts',
@@ -79,6 +80,7 @@ describe('IndexedDbStorage v1 to v2 migration', () => {
         'appMeta',
         'audio',
         'backendConfig',
+        'deletionTombstones',
         'expressions',
         'importSources',
         'importedFiles',
@@ -124,7 +126,7 @@ describe('IndexedDbStorage v1 to v2 migration', () => {
     expect(await reopened.getImportSource(bundle.source.id)).toEqual(
       bundle.source,
     )
-    expect(await reopened.listImportedQuestions()).toEqual(bundle.questions)
+    expect(await reopened.listImportedQuestions(LOCAL_DEFAULT_USER_ID)).toEqual(asDefaultOwned(bundle.questions))
     const restoredFile = await reopened.getImportedFile(
       bundle.source.originalFileId,
     )
@@ -212,7 +214,7 @@ describe('IndexedDbStorage v2 import integrity', () => {
     const reopened = createAdapter()
     expect(await reopened.listImportSources()).toEqual([bundle.source])
     expect(await reopened.getImportSource('corrupt-source')).toBeNull()
-    expect(await reopened.listImportedQuestions()).toEqual(bundle.questions)
+    expect(await reopened.listImportedQuestions(LOCAL_DEFAULT_USER_ID)).toEqual(asDefaultOwned(bundle.questions))
     expect(await reopened.getImportedFile('corrupt-file')).toBeNull()
     // V1.1 遗留的 apiConfigurations store 自 Backend 化后不再读写:
     // 即使其中有疑似密钥字段的历史记录,也不参与任何读取路径,原样保留。
@@ -282,7 +284,9 @@ describe('IndexedDbStorage v2 import integrity', () => {
     putSpy.mockRestore()
 
     expect(await storage.listImportSources()).toEqual([existing.source])
-    expect(await storage.listImportedQuestions()).toEqual(existing.questions)
+    expect(await storage.listImportedQuestions(LOCAL_DEFAULT_USER_ID)).toEqual(
+      asDefaultOwned(existing.questions),
+    )
     expect(
       await storage.getImportedFile(failing.source.originalFileId),
     ).toBeNull()
@@ -313,7 +317,7 @@ describe('IndexedDbStorage v2 import integrity', () => {
     )
 
     expect(await storage.listImportSources()).toEqual([])
-    expect(await storage.listImportedQuestions()).toEqual([])
+    expect(await storage.listImportedQuestions(LOCAL_DEFAULT_USER_ID)).toEqual([])
     expect(
       await storage.getImportedFile(wrongSize.source.originalFileId),
     ).toBeNull()
@@ -322,6 +326,15 @@ describe('IndexedDbStorage v2 import integrity', () => {
     ).toBeNull()
   })
 })
+
+function asDefaultOwned(
+  questions: ImportedQuestionRecord[],
+): ImportedQuestionRecord[] {
+  return questions.map((question) => ({
+    ...question,
+    ownerId: LOCAL_DEFAULT_USER_ID,
+  }))
+}
 
 function createImportBundle(
   marker: string,

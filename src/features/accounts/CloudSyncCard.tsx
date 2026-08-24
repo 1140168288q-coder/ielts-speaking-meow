@@ -8,12 +8,16 @@ export function CloudSyncCard({
   message,
   destination,
   emailVerified,
+  bindingRequired = false,
+  localProfileName = '当前本地资料身份',
   onSync,
 }: {
   status: CloudSyncStatus
   message: string
   destination: string
   emailVerified: boolean
+  bindingRequired?: boolean
+  localProfileName?: string
   onSync: () => void
 }) {
   const consentId = useId()
@@ -55,7 +59,9 @@ export function CloudSyncCard({
           />
           <span>
             {emailVerified
-              ? '我确认把上述三类资料同步到这个云端地址。'
+              ? bindingRequired
+                ? `我确认将“${localProfileName}”绑定到当前云账号，并同步上述三类资料。`
+                : '我确认把上述三类资料同步到这个已绑定的云账号。'
               : '请先验证邮箱，再确认同步范围。'}
           </span>
         </label>

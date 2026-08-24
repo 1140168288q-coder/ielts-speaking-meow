@@ -42,7 +42,7 @@ async def test_tts_happy_path(make_app):
         response = await post_tts(client, {"text": "Hello there."})
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/mpeg"
-    assert response.headers["cache-control"] == "private, max-age=86400"
+    assert response.headers["cache-control"] == "no-store"
     assert response.content == b"chunk1chunk2"
 
 

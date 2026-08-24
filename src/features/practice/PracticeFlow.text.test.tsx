@@ -10,7 +10,7 @@ import type {
   TrainingSession,
 } from '../../domain'
 import type { LLMProvider } from '../../ports/ai'
-import type { AudioFocus } from '../../ports/speech'
+import type { AudioFocus, TTSRequest } from '../../ports/speech'
 import { PracticeFlow } from './PracticeFlow'
 
 const question: Question = {
@@ -229,6 +229,51 @@ describe('PracticeFlow V1.7 text answer flow', () => {
         ]),
       ]),
     )
+  })
+
+
+  it('reads the full Part 2 cue card and exposes the playback bar', async () => {
+    const partTwoQuestion: Question = {
+      id: 'p2-helpful-person',
+      part: 2,
+      topic: 'People',
+      prompt: 'Describe a person who has helped you.',
+      cuePoints: [
+        'who this person is',
+        'how this person helped you',
+        'how you felt about the help',
+      ],
+    }
+    const audioFocus = createAudioFocus()
+
+    render(
+      <PracticeFlow
+        question={partTwoQuestion}
+        session={makeSession({ questionId: partTwoQuestion.id })}
+        service={createService()}
+        audioFocus={audioFocus}
+        textAi={createTextAi()}
+        onExitGuardChange={() => undefined}
+        onChange={() => undefined}
+        onBack={() => undefined}
+      />,
+    )
+
+    await waitFor(() => expect(
+      (audioFocus.speak as ReturnType<typeof vi.fn>).mock.calls.length,
+    ).toBeGreaterThan(0))
+    const spokenRequests = (
+      audioFocus.speak as ReturnType<typeof vi.fn>
+    ).mock.calls as Array<[TTSRequest]>
+    expect(spokenRequests.some(
+      ([request]) => request.text.includes('who this person is'),
+    )).toBe(true)
+    expect(spokenRequests.some(
+      ([request]) => request.text.includes('how you felt about the help'),
+    )).toBe(true)
+    expect(
+      screen.getByRole('region', { name: '语音播放器' }),
+    ).toBeInTheDocument()
   })
 
   it('releases AI loading and enables the second attempt under StrictMode', async () => {

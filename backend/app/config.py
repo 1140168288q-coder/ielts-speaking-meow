@@ -4,6 +4,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import EmailStr, Field, SecretStr, TypeAdapter, field_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +18,17 @@ class Settings(BaseSettings):
         default=24 * 60 * 60, ge=300
     )
     password_reset_token_ttl_seconds: int = Field(default=60 * 60, ge=300)
+
+    # ---- free plan 默认额度；0 表示该周期没有可用额度 ----
+    free_feedback_monthly_quota: int = Field(default=60, ge=0)
+    free_organize_monthly_quota: int = Field(default=10, ge=0)
+    free_tts_characters_monthly_quota: int = Field(default=100_000, ge=0)
+    free_provider_verify_daily_quota: int = Field(default=10, ge=0)
+
+    # ---- 同步协议安全边界（按 UTF-8 JSON 字节数）----
+    sync_max_item_bytes: int = Field(default=64 * 1024, ge=1024)
+    sync_max_batch_bytes: int = Field(default=512 * 1024, ge=1024)
+    sync_max_request_bytes: int = Field(default=640 * 1024, ge=1024)
 
     # ---- 账号邮件 ----
     # APP_ACCOUNT_URL 是邮件链接的唯一来源，绝不使用请求 Host header 拼接。
@@ -51,6 +63,14 @@ class Settings(BaseSettings):
     # ---- 基础限流(默认关闭,预留接口)----
     rate_limit_enabled: bool = False
     rate_limit_per_minute: int = 30
+
+    @model_validator(mode="after")
+    def validate_sync_limits(self) -> "Settings":
+        if self.sync_max_batch_bytes < self.sync_max_item_bytes:
+            raise ValueError("SYNC_MAX_BATCH_BYTES 不得小于 SYNC_MAX_ITEM_BYTES")
+        if self.sync_max_request_bytes < self.sync_max_batch_bytes:
+            raise ValueError("SYNC_MAX_REQUEST_BYTES 不得小于 SYNC_MAX_BATCH_BYTES")
+        return self
 
     @field_validator("database_url")
     @classmethod

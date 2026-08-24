@@ -1,0 +1,12 @@
+# Reproducible production dependency set for the V2 Backend image.
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+httpx==0.28.1
+pydantic==2.13.4
+pydantic-settings==2.15.0
+sqlalchemy[asyncio]==2.0.43
+alembic==1.17.2
+aiosqlite==0.21.0
+asyncpg==0.30.0
+pwdlib[argon2]==0.2.1
+email-validator==2.2.0

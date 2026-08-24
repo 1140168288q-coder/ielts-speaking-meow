@@ -113,7 +113,11 @@ export class PersonalMaterialService {
   async delete(materialId: string): Promise<void> {
     const ownerId = this.getCurrentUserId()
     await this.requireOwnedMaterial(materialId, ownerId)
-    await this.localStorage.deletePersonalMaterial(materialId, ownerId)
+    await this.localStorage.deletePersonalMaterial(
+      materialId,
+      ownerId,
+      this.now().toISOString(),
+    )
   }
 
   private async persistNew(

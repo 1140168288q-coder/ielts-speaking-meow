@@ -92,6 +92,40 @@ describe('AI feedback schema', () => {
     ).toBe(false)
   })
 
+
+  it('requires exactly the three product reference versions in order', () => {
+    expect(
+      aiFeedbackSchema.safeParse({
+        ...feedback,
+        referenceAnswers: feedback.referenceAnswers.slice(0, 2),
+      }).success,
+    ).toBe(false)
+    expect(
+      aiFeedbackSchema.safeParse({
+        ...feedback,
+        referenceAnswers: [
+          { label: '高级范文', text: 'A polished model answer.' },
+          ...feedback.referenceAnswers.slice(1),
+        ],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('rejects nested band-score and unsupported speech-performance claims', () => {
+    expect(
+      aiFeedbackSchema.safeParse({
+        ...feedback,
+        summary: 'Your answer is around IELTS Band 6.5.',
+      }).success,
+    ).toBe(false)
+    expect(
+      aiFeedbackSchema.safeParse({
+        ...feedback,
+        problems: ['你的发音和语速还需要提高。'],
+      }).success,
+    ).toBe(false)
+  })
+
   it('rejects fields outside the contract such as band scores or speech metrics', () => {
     const result = aiFeedbackSchema.safeParse({
       ...feedback,

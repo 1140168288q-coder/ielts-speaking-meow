@@ -1,9 +1,6 @@
-"""基础安全:请求关联 ID + 内存滑动窗口限流(默认关闭)。
-
-预留接口:将来需要更强限流(多实例/持久化)时替换此类即可,路由不用改。
-"""
-import time
+"""基础安全：请求关联 ID、响应边界与单实例限流。"""
 import re
+import time
 import uuid
 from collections import defaultdict, deque
 
@@ -28,8 +25,43 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class SensitiveResponseHeadersMiddleware(BaseHTTPMiddleware):
+    """保护私有响应，并在 JSON 解析前拒绝明显过大的同步请求。"""
+
+    def __init__(self, app, settings: Settings) -> None:
+        super().__init__(app)
+        self._sync_max_request_bytes = settings.sync_max_request_bytes
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path == "/v1/sync/push":
+            content_length = request.headers.get("Content-Length")
+            if content_length is not None:
+                try:
+                    too_large = int(content_length) > self._sync_max_request_bytes
+                except ValueError:
+                    too_large = True
+                if too_large:
+                    return JSONResponse(
+                        {
+                            "error": {
+                                "code": "payload-too-large",
+                                "message": "同步请求超过服务端允许的大小。",
+                            }
+                        },
+                        status_code=413,
+                    )
+
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        if request.url.path.startswith("/v1/") or request.url.path == "/health/verify":
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
+
 class SlidingWindowRateLimiter(BaseHTTPMiddleware):
-    """按客户端 IP 限流。单实例内存实现,重启后计数清零。"""
+    """按客户端 IP 限流。单实例内存实现，重启后计数清零。"""
 
     def __init__(self, app, settings: Settings) -> None:
         super().__init__(app)
@@ -48,7 +80,12 @@ class SlidingWindowRateLimiter(BaseHTTPMiddleware):
             recent.popleft()
         if len(recent) >= self._per_minute:
             return JSONResponse(
-                {"error": {"code": "rate-limited", "message": "请求过于频繁,请稍后再试。"}},
+                {
+                    "error": {
+                        "code": "rate-limited",
+                        "message": "请求过于频繁,请稍后再试。",
+                    }
+                },
                 status_code=429,
             )
         recent.append(now)

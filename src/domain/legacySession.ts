@@ -138,8 +138,8 @@ function migrateLegacyAiFeedback(value: unknown): AiFeedback {
       improvedAnswer.length > 0
         ? improvedAnswer
         : 'Keep your original answer and apply the suggestions above.',
-    referenceAnswers: versions.map((version) => ({
-      label: version.style,
+    referenceAnswers: versions.map((version, index) => ({
+      label: ['简单自然版', '自然提升版', '另一种表达版'][index] ?? '另一种表达版',
       text: version.text,
     })),
   })

@@ -14,6 +14,7 @@ import {
   type CloudAccountSession,
   type CloudAuthGateway,
 } from '../../domain/cloudAccount'
+import { CloudAccountManagement } from './CloudAccountManagement'
 
 type AuthMode =
   | 'login'
@@ -237,6 +238,19 @@ export function CloudAccountPanel({
       setStatus('idle')
     }
   }
+  const updateManagedSession = (next: CloudAccountSession) => {
+    setSession(next)
+    onSessionChangeRef.current(next)
+  }
+
+  const finishManagedSignOut = (nextMessage: string) => {
+    setSession(null)
+    setMessage(nextMessage)
+    setIsError(false)
+    setStatus('idle')
+    onSessionChangeRef.current(null)
+  }
+
 
   if (status === 'restoring') {
     return (
@@ -313,6 +327,14 @@ export function CloudAccountPanel({
             </div>
           ) : null}
 
+          <CloudAccountManagement
+            client={client}
+            tokenStore={tokenStore}
+            session={session}
+            onSessionUpdated={updateManagedSession}
+            onSignedOut={finishManagedSignOut}
+          />
+
           {message ? (
             <p className="notice" role={isError ? 'alert' : 'status'}>{message}</p>
           ) : null}
@@ -323,6 +345,7 @@ export function CloudAccountPanel({
             onClick={() => void logout()}
           >
             <LogOut aria-hidden="true" size={17} />
+
             {status === 'submitting' ? '正在处理…' : '退出云账号'}
           </button>
         </div>

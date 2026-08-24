@@ -203,7 +203,7 @@ export function PersonalMaterialLibrary({
             placeholder="搜索标题、内容或主题"
           />
         </label>
-        <div className="question-filter-chips" aria-label="素材类型筛选">
+        <div className="question-filter-chips" role="group" aria-label="素材类型筛选">
           <button
             type="button"
             className={kind === 'all' ? 'active' : ''}

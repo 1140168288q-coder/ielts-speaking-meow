@@ -7,6 +7,18 @@ export const cloudSyncEntityTypeSchema = z.enum([
   'user_setting',
 ])
 
+export const localDeletionEntityTypeSchema = z.enum(['session', 'expression'])
+
+export const localDeletionTombstoneSchema = z
+  .object({
+    id: z.string().trim().min(1).max(512),
+    ownerId: z.string().trim().min(1).max(120),
+    entityType: localDeletionEntityTypeSchema,
+    entityId: z.string().trim().min(1).max(240),
+    deletedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+
 export const cloudSyncPayloadSchema = z.record(z.string(), z.unknown())
 
 export const syncOutboxOperationSchema = z
@@ -67,6 +79,7 @@ export const syncPullResponseSchema = z
   .strict()
 
 export type CloudSyncEntityType = z.infer<typeof cloudSyncEntityTypeSchema>
+export type LocalDeletionTombstone = z.infer<typeof localDeletionTombstoneSchema>
 export type SyncPayload = z.infer<typeof cloudSyncPayloadSchema>
 export type SyncOutboxOperation = z.infer<typeof syncOutboxOperationSchema>
 export type SyncPushItem = z.infer<typeof syncPushItemSchema>

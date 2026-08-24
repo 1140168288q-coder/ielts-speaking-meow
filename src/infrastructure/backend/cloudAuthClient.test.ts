@@ -213,4 +213,97 @@ describe('CloudAuthClient', () => {
     await store.clearToken()
     expect(await store.getToken()).toBeNull()
   })
+  it('loads account capabilities and updates the cloud profile', async () => {
+    const overview = {
+      user: {
+        ...authPayload.user,
+        displayName: 'Mia',
+        status: 'active',
+        updatedAt: '2026-08-24T08:00:00+00:00',
+      },
+      billing: {
+        plan: 'free',
+        subscriptionStatus: 'none',
+        currentPeriodEnd: null,
+      },
+      capabilities: {
+        feedback: {
+          enabled: true,
+          source: 'plan:free',
+          reason: null,
+          quotaLimit: 30,
+          quotaUsed: 4,
+          quotaRemaining: 26,
+          period: 'month',
+          unit: 'request',
+          resetsAt: '2026-09-01T00:00:00+00:00',
+        },
+      },
+    }
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(overview))
+      .mockResolvedValueOnce(response({
+        ...overview,
+        user: { ...overview.user, displayName: 'Mia Chen' },
+      }))
+    const store = new MemoryTokenStore()
+    store.token = authPayload.accessToken
+    const client = createClient(fetch)
+
+    await expect(client.getAccountOverview(store)).resolves.toMatchObject({
+      billing: { plan: 'free' },
+      capabilities: { feedback: { quotaRemaining: 26 } },
+    })
+    await expect(client.updateProfile('  Mia Chen  ', store)).resolves.toMatchObject({
+      user: { displayName: 'Mia Chen' },
+    })
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://backend.test/v1/me',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ displayName: 'Mia Chen' }),
+      }),
+    )
+  })
+
+  it('revokes all sessions and deletes an account through explicit methods', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+    const store = new MemoryTokenStore()
+    store.token = authPayload.accessToken
+    const client = createClient(fetch)
+
+    await client.logoutAll(store)
+    expect(store.token).toBeNull()
+    expect(fetch.mock.calls[0]?.[0]).toBe('https://backend.test/v1/auth/logout-all')
+
+    store.token = authPayload.accessToken
+    await client.deleteAccount('correct password', store)
+    expect(store.token).toBeNull()
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://backend.test/v1/me',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ password: 'correct password' }),
+      }),
+    )
+  })
+
+  it('keeps the session when account deletion is rejected by password check', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response({
+      error: { code: 'invalid-password', message: '密码不正确。' },
+    }, 401))
+    const store = new MemoryTokenStore()
+    store.token = authPayload.accessToken
+
+    await expect(
+      createClient(fetch).deleteAccount('wrong password', store),
+    ).rejects.toMatchObject({ code: 'invalid-password', status: 401 })
+    expect(store.token).toBe(authPayload.accessToken)
+  })
+
 })

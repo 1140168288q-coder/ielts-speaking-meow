@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import httpx
 from sqlalchemy import func, select
 
+from tests.conftest import mark_email_verified
 from app.models import SyncChange, SyncEntity, SyncOperation
 
 
@@ -16,6 +17,7 @@ async def register(client: httpx.AsyncClient, email: str) -> str:
         json={"email": email, "password": "correct horse battery staple"},
     )
     assert response.status_code == 201
+    await mark_email_verified(client, email)
     return response.json()["accessToken"]
 
 
@@ -298,6 +300,7 @@ async def test_pull_cursor_is_incremental_monotonic_and_paginated(make_app):
     assert len(second_body["changes"]) == 2
     assert first_body["nextCursor"] < second_body["nextCursor"]
     assert empty_page.json() == {
+        "schemaVersion": 1,
         "changes": [],
         "nextCursor": second_body["nextCursor"],
         "hasMore": False,

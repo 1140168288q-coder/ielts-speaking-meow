@@ -1,3 +1,4 @@
+import { LOCAL_DEFAULT_USER_ID } from '../../domain/accounts'
 import type { SavedExpression, TrainingSession } from '../../domain/models'
 import { IndexedDbStorage } from './indexedDbStorage'
 
@@ -110,7 +111,11 @@ describe('IndexedDbStorage', () => {
       updatedExpression,
     ])
 
-    await reopenedStorage.deleteExpression(expressionFixture.id)
+    await reopenedStorage.deleteExpression(
+      expressionFixture.id,
+      LOCAL_DEFAULT_USER_ID,
+      UPDATED_AT,
+    )
     expect(await reopenedStorage.getExpression(expressionFixture.id)).toBeNull()
   })
 
@@ -257,7 +262,11 @@ describe('IndexedDbStorage', () => {
     })
     expect(before.audioBytes).toBeGreaterThan(0)
 
-    await expect(storage.deleteSessionWithAudio(sessionFixture.id)).resolves.toEqual({
+    await expect(storage.deleteSessionWithAudio(
+      sessionFixture.id,
+      LOCAL_DEFAULT_USER_ID,
+      UPDATED_AT,
+    )).resolves.toEqual({
       deletedAudio: 1,
     })
     expect(await storage.getSession(sessionFixture.id)).toBeNull()

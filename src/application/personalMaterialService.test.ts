@@ -34,13 +34,14 @@ class MemoryMaterialStorage {
   async deletePersonalMaterial(
     materialId: string,
     ownerId: string,
+    deletedAt: string,
   ): Promise<void> {
     const material = await this.getPersonalMaterial(materialId, ownerId)
     if (material === null) return
     this.materials.set(materialId, {
       ...material,
-      deletedAt: '2026-08-21T09:00:00.000Z',
-      updatedAt: '2026-08-21T09:00:00.000Z',
+      deletedAt,
+      updatedAt: deletedAt,
       version: material.version + 1,
     })
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   CloudSyncEntityType,
   CloudSyncGateway,
+  LocalDeletionTombstone,
   SyncChange,
   SyncOutboxOperation,
   SyncPullResponse,
@@ -185,7 +186,7 @@ describe('AccountCloudSyncService', () => {
     expect(storage.deletedExpressions).toEqual([])
   })
 
-  it('reports a session tombstone conflict and never deletes the session or advances the cursor', async () => {
+  it('applies a remote session tombstone and advances the cursor', async () => {
     const storage = new MemoryStorage()
     const session = makeSession('recorded-session', OWNER, true)
     storage.sessions.set(session.id, session)
@@ -198,12 +199,10 @@ describe('AccountCloudSyncService', () => {
 
     const summary = await createService(storage, gateway).synchronize()
 
-    expect(summary).toMatchObject({
-      status: 'conflict',
-      conflicts: [{ reason: 'session-delete-unsupported', entityId: session.id }],
-    })
-    expect(storage.sessions.get(session.id)).toEqual(session)
-    expect(await storage.getSyncCursor('cloud-account')).toBe(0)
+    expect(summary).toMatchObject({ status: 'synced', downloaded: 1 })
+    expect(storage.sessions.has(session.id)).toBe(false)
+    expect(storage.deletedSessions).toEqual([session.id])
+    expect(await storage.getSyncCursor('cloud-account')).toBe(1)
   })
 
   it('strictly rejects malformed remote records before changing local data', async () => {
@@ -246,8 +245,10 @@ class MemoryStorage implements LocalStorage, CloudSyncStorage {
   readonly sessions = new Map<string, TrainingSession>()
   readonly expressions = new Map<string, SavedExpression>()
   readonly materials = new Map<string, PersonalMaterial>()
+  readonly deletedSessions: string[] = []
   readonly deletedExpressions: string[] = []
   readonly deletedMaterials: string[] = []
+  private readonly tombstones = new Map<string, LocalDeletionTombstone>()
   private readonly operations = new Map<string, SyncOutboxOperation>()
   private readonly cursors = new Map<string, number>()
   private readonly states = new Map<string, SyncEntityState>()
@@ -264,6 +265,33 @@ class MemoryStorage implements LocalStorage, CloudSyncStorage {
       [...this.sessions.values()].map((value) => structuredClone(value)),
     )
   }
+  deleteSessionWithAudio(
+    id: string,
+    ownerId: string,
+    deletedAt: string | null,
+  ): Promise<{ deletedAudio: number }> {
+    const session = this.sessions.get(id)
+    if (session?.ownerId !== ownerId) {
+      return Promise.reject(new Error('The practice session could not be found.'))
+    }
+    const deletedAudio = session.attempts.reduce(
+      (count, attempt) => count + (attempt.audio === undefined ? 0 : 1),
+      0,
+    )
+    this.deletedSessions.push(id)
+    this.sessions.delete(id)
+    if (deletedAt !== null) {
+      const tombstone: LocalDeletionTombstone = {
+        id: [ownerId, 'session', id].join(':'),
+        ownerId,
+        entityType: 'session',
+        entityId: id,
+        deletedAt,
+      }
+      this.tombstones.set(tombstone.id, tombstone)
+    }
+    return Promise.resolve({ deletedAudio })
+  }
   upsertExpression(expression: SavedExpression): Promise<void> {
     this.expressions.set(expression.id, structuredClone(expression))
     return Promise.resolve()
@@ -276,9 +304,27 @@ class MemoryStorage implements LocalStorage, CloudSyncStorage {
       [...this.expressions.values()].map((value) => structuredClone(value)),
     )
   }
-  deleteExpression(id: string): Promise<void> {
+  deleteExpression(
+    id: string,
+    ownerId: string,
+    deletedAt: string | null,
+  ): Promise<void> {
+    const expression = this.expressions.get(id)
+    if (expression?.ownerId !== ownerId) {
+      return Promise.reject(new Error('Saved expression not found.'))
+    }
     this.deletedExpressions.push(id)
     this.expressions.delete(id)
+    if (deletedAt !== null) {
+      const tombstone: LocalDeletionTombstone = {
+        id: [ownerId, 'expression', id].join(':'),
+        ownerId,
+        entityType: 'expression',
+        entityId: id,
+        deletedAt,
+      }
+      this.tombstones.set(tombstone.id, tombstone)
+    }
     return Promise.resolve()
   }
   upsertPersonalMaterial(material: PersonalMaterial): Promise<void> {
@@ -304,14 +350,18 @@ class MemoryStorage implements LocalStorage, CloudSyncStorage {
         .map((value) => structuredClone(value)),
     )
   }
-  deletePersonalMaterial(id: string, ownerId: string): Promise<void> {
+  deletePersonalMaterial(
+    id: string,
+    ownerId: string,
+    deletedAt: string,
+  ): Promise<void> {
     const material = this.materials.get(id)
     if (material?.ownerId === ownerId) {
       this.deletedMaterials.push(id)
       this.materials.set(id, {
         ...material,
-        updatedAt: UPDATED_AT,
-        deletedAt: UPDATED_AT,
+        updatedAt: deletedAt,
+        deletedAt,
         version: material.version + 1,
       })
     }
@@ -320,6 +370,38 @@ class MemoryStorage implements LocalStorage, CloudSyncStorage {
   getPracticeTexts(): Promise<PracticeTexts | null> { return Promise.resolve(null) }
   savePracticeTexts(texts: PracticeTexts): Promise<void> {
     void texts
+    return Promise.resolve()
+  }
+  listLocalDeletionTombstones(ownerId: string): Promise<LocalDeletionTombstone[]> {
+    return Promise.resolve(
+      [...this.tombstones.values()]
+        .filter((tombstone) => tombstone.ownerId === ownerId)
+        .map((tombstone) => structuredClone(tombstone)),
+    )
+  }
+  removeLocalDeletionTombstone(
+    ownerId: string,
+    entityType: LocalDeletionTombstone['entityType'],
+    entityId: string,
+  ): Promise<void> {
+    const tombstone = [...this.tombstones.values()].find((candidate) =>
+      candidate.ownerId === ownerId &&
+      candidate.entityType === entityType &&
+      candidate.entityId === entityId,
+    )
+    if (tombstone !== undefined) this.tombstones.delete(tombstone.id)
+    return Promise.resolve()
+  }
+  commitPulledSyncChange(
+    scopeId: string,
+    change: SyncChange,
+    state: SyncEntityState,
+  ): Promise<void> {
+    this.states.set(
+      [scopeId, change.entityType, change.entityId].join(':'),
+      structuredClone(state),
+    )
+    this.cursors.set(scopeId, change.cursor)
     return Promise.resolve()
   }
 

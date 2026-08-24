@@ -28,15 +28,26 @@ def new_id() -> str:
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'suspended', 'deleted')", name="ck_users_status"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(Text)
+    display_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="active")
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 
@@ -155,3 +166,13 @@ class SyncOperation(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now
     )
+
+
+# Re-export commercial foundation models and ensure they join Base.metadata.
+from .commercial_models import (  # noqa: E402
+    AccountBillingState,
+    EntitlementOverride,
+    UsageCounter,
+    UsageEvent,
+    WebhookEvent,
+)

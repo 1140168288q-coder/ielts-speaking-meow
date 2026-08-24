@@ -163,6 +163,21 @@ export type PronunciationIssue = z.infer<typeof pronunciationIssueSchema>
 // DeepSeek 只分析用户提交的答案文本,绝不评价发音、语速、停顿、语调,
 // 也不给出任何 IELTS Band 分数或水平评分。
 
+const forbiddenAiAnalysisClaim =
+  /\b(?:ielts\s*)?band\b|\bpronunciation\b|\bintonation\b|\bspeech\s+rate\b|\bspeaking\s+speed\b|\bpauses?\b|发音|语速|语调|声调|停顿|口音|(?:雅思|能力|水平).{0,8}(?:分数|评分|等级|分段)/i
+
+const aiAnalysisText = (maximumLength: number) =>
+  nonEmptyText(maximumLength).refine(
+    (value) => !forbiddenAiAnalysisClaim.test(value),
+    'AI feedback must not include band scores or unsupported speech claims',
+  )
+
+const requiredReferenceLabels = [
+  '简单自然版',
+  '自然提升版',
+  '另一种表达版',
+] as const
+
 export const referenceAnswerSchema = z
   .object({
     /** 中文标签,如:简单自然版 / 自然提升版 / 另一种表达版。 */
@@ -174,14 +189,27 @@ export const referenceAnswerSchema = z
 export const aiFeedbackSchema = z
   .object({
     /** 用中文写的整体小结。 */
-    summary: nonEmptyText(500),
-    strengths: z.array(nonEmptyText(320)).max(3),
-    problems: z.array(nonEmptyText(320)).max(3),
-    grammarSuggestions: z.array(nonEmptyText(320)).max(3),
-    vocabularySuggestions: z.array(nonEmptyText(320)).max(3),
+    summary: aiAnalysisText(500),
+    strengths: z.array(aiAnalysisText(320)).max(3),
+    problems: z.array(aiAnalysisText(320)).max(3),
+    grammarSuggestions: z.array(aiAnalysisText(320)).max(3),
+    vocabularySuggestions: z.array(aiAnalysisText(320)).max(3),
     /** 保持用户原本水平和表达习惯的优化版回答。 */
     improvedAnswer: nonEmptyText(1_500),
-    referenceAnswers: z.array(referenceAnswerSchema).max(3),
+    referenceAnswers: z
+      .array(referenceAnswerSchema)
+      .length(3)
+      .superRefine((answers, context) => {
+        requiredReferenceLabels.forEach((label, index) => {
+          if (answers[index]?.label !== label) {
+            context.addIssue({
+              code: 'custom',
+              message: `Reference answer ${index + 1} must be labeled ${label}`,
+              path: [index, 'label'],
+            })
+          }
+        })
+      }),
   })
   .strict()
 

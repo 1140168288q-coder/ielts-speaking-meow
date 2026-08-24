@@ -76,6 +76,47 @@ export class AccountService {
     const accounts = await this.storage.listAccounts()
     return accounts.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   }
+  /**
+   * Persist the explicit one-to-one binding used by cloud sync.
+   * A local profile can never be silently repointed to another cloud user, and
+   * one cloud user cannot own two local data spaces on the same device.
+   */
+  async bindCurrentAccountToCloud(cloudAccountId: string): Promise<AccountProfile> {
+    const normalizedCloudId = cloudAccountId.trim()
+    if (normalizedCloudId.length === 0 || normalizedCloudId.length > 160) {
+      throw new Error('云端账号标识无效，请重新登录后再试。')
+    }
+    const current = this.current
+    if (current === null) {
+      throw new Error('本地资料身份尚未就绪，请重新打开 App 后再试。')
+    }
+    if (current.cloudAccountId === normalizedCloudId) return current
+    if (current.cloudAccountId) {
+      throw new Error(
+        '当前本地资料身份已绑定另一个云账号。请重新登录原云账号，或切换/新建本地资料身份后再同步。',
+      )
+    }
+
+    const existingBinding = (await this.storage.listAccounts()).find(
+      (account) =>
+        account.id !== current.id &&
+        account.cloudAccountId === normalizedCloudId,
+    )
+    if (existingBinding) {
+      throw new Error(
+        `这个云账号已绑定本机资料身份“${existingBinding.displayName}”。请先切换到该身份再同步。`,
+      )
+    }
+
+    const bound = accountProfileSchema.parse({
+      ...current,
+      cloudAccountId: normalizedCloudId,
+    })
+    await this.storage.upsertAccount(bound)
+    this.current = bound
+    return bound
+  }
+
 
   async createAccount(displayName: string, pin: string | null): Promise<AccountProfile> {
     const cleanName = displayName.trim()

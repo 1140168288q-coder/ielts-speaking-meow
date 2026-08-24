@@ -29,6 +29,40 @@ export interface TTSCapabilities {
   style: boolean
 }
 
+export type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused'
+
+export interface PlaybackSnapshot {
+  status: PlaybackStatus
+  positionSeconds: number
+  durationSeconds: number | null
+  canPause: boolean
+  canSeek: boolean
+  providerId: string | null
+}
+
+export type PlaybackListener = (snapshot: PlaybackSnapshot) => void
+
+/**
+ * Capability-aware controls for prepared audio. Providers such as Android
+ * System TTS may omit this boundary when they cannot expose reliable progress.
+ */
+export interface PlaybackController {
+  readonly snapshot: PlaybackSnapshot
+  subscribePlayback(listener: PlaybackListener): () => void
+  pause(): Promise<boolean>
+  resume(): Promise<boolean>
+  seekTo(positionSeconds: number): Promise<boolean>
+}
+
+export const IDLE_PLAYBACK_SNAPSHOT: PlaybackSnapshot = {
+  status: 'idle',
+  positionSeconds: 0,
+  durationSeconds: null,
+  canPause: false,
+  canSeek: false,
+  providerId: null,
+}
+
 /**
  * A provider owns one TTS playback at a time. `speak` resolves when playback
  * finishes or is deliberately stopped, and rejects only for a real failure.
@@ -36,6 +70,7 @@ export interface TTSCapabilities {
 export interface TTSProvider {
   readonly id: string
   readonly capabilities: TTSCapabilities
+  readonly playbackController?: PlaybackController
   isAvailable(): boolean
   speak(request: TTSRequest): Promise<void>
   stop(): Promise<void>
@@ -70,6 +105,7 @@ export interface RecordedAudioAnalyzer {
 
 /** Playback of an answer recording saved by V1.6 or earlier. */
 export interface RecordingPlayback {
+  readonly playbackController?: PlaybackController
   play(source: string): Promise<void>
   stop(): Promise<void>
 }
@@ -83,9 +119,14 @@ export type AudioFocusListener = (state: AudioFocusState) => void
  */
 export interface AudioFocus {
   readonly state: AudioFocusState
+  readonly ttsPlayback?: PlaybackSnapshot
   subscribe(listener: AudioFocusListener): () => void
+  subscribeTTSPlayback?(listener: PlaybackListener): () => void
   speak(request: TTSRequest): Promise<void>
   stopTTS(): Promise<void>
+  pauseTTS?(): Promise<boolean>
+  resumeTTS?(): Promise<boolean>
+  seekTTS?(positionSeconds: number): Promise<boolean>
   playRecording(source: string): Promise<void>
   stopRecordingPlayback(): Promise<void>
   stopAllPlayback(): Promise<void>

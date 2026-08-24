@@ -139,16 +139,14 @@ export class CloudSyncService {
 
       for (const change of page.changes) {
         await this.applyChange(change)
-        await this.storage.setSyncEntityState(
+        await this.storage.commitPulledSyncChange(
           this.scopeId,
-          change.entityType,
-          change.entityId,
+          change,
           {
             version: change.version,
             syncedUpdatedAt: readPayloadUpdatedAt(change.payload) ?? change.updatedAt,
           },
         )
-        await this.storage.setSyncCursor(this.scopeId, change.cursor)
         cursor = change.cursor
         applied += 1
       }

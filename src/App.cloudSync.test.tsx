@@ -26,14 +26,26 @@ const { cloudSession, runtimeFixture, syncConstructor, syncRun } = vi.hoisted(()
   }))
   const runtime = {
     initialize: vi.fn().mockResolvedValue(undefined),
+    setUserPreferences: vi.fn(),
     accountService: {
       getCurrentAccount: vi.fn().mockReturnValue({
         id: 'local-user',
+        userId: 'local-user',
         displayName: '本机用户',
         pinHash: null,
         createdAt: '2026-08-21T08:00:00+00:00',
+        lastLoginAt: '2026-08-21T08:00:00+00:00',
       }),
       getCurrentUserId: vi.fn().mockReturnValue('local-user'),
+      bindCurrentAccountToCloud: vi.fn().mockResolvedValue({
+        id: 'local-user',
+        userId: 'local-user',
+        displayName: '本机用户',
+        pinHash: null,
+        cloudAccountId: 'cloud-user-1',
+        createdAt: '2026-08-21T08:00:00+00:00',
+        lastLoginAt: '2026-08-21T08:00:00+00:00',
+      }),
     },
     practiceService: {
       listSessions: vi.fn().mockResolvedValue([]),
@@ -44,6 +56,8 @@ const { cloudSession, runtimeFixture, syncConstructor, syncRun } = vi.hoisted(()
     },
     storage: {
       listImportedQuestions: vi.fn().mockResolvedValue([]),
+      getUserPreferences: vi.fn().mockResolvedValue(null),
+      saveUserPreferences: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
     },
     audioFocus: {
@@ -58,6 +72,7 @@ const { cloudSession, runtimeFixture, syncConstructor, syncRun } = vi.hoisted(()
     },
     authTokenStore: {
       getToken: vi.fn().mockResolvedValue('token'),
+      clearToken: vi.fn().mockResolvedValue(undefined),
     },
     cloudSyncClient: {},
     configStore: {
@@ -117,22 +132,37 @@ describe('App cloud sync integration', () => {
       conflicts: [],
     })
     runtimeFixture.initialize.mockResolvedValue(undefined)
+    runtimeFixture.setUserPreferences.mockClear()
     runtimeFixture.accountService.getCurrentAccount.mockReturnValue({
       id: 'local-user',
       displayName: '本机用户',
+      userId: 'local-user',
       pinHash: null,
       createdAt: '2026-08-21T08:00:00+00:00',
+      lastLoginAt: '2026-08-21T08:00:00+00:00',
     })
     runtimeFixture.accountService.getCurrentUserId.mockReturnValue('local-user')
+    runtimeFixture.accountService.bindCurrentAccountToCloud.mockResolvedValue({
+      id: 'local-user',
+      userId: 'local-user',
+      displayName: '本机用户',
+      pinHash: null,
+      cloudAccountId: 'cloud-user-1',
+      createdAt: '2026-08-21T08:00:00+00:00',
+      lastLoginAt: '2026-08-21T08:00:00+00:00',
+    })
     runtimeFixture.practiceService.listSessions.mockResolvedValue([])
     runtimeFixture.practiceService.listExpressions.mockResolvedValue([])
     runtimeFixture.personalMaterialService.list.mockResolvedValue([])
     runtimeFixture.storage.listImportedQuestions.mockResolvedValue([])
     runtimeFixture.storage.close.mockResolvedValue(undefined)
+    runtimeFixture.storage.getUserPreferences.mockResolvedValue(null)
+    runtimeFixture.storage.saveUserPreferences.mockResolvedValue(undefined)
     runtimeFixture.audioFocus.stopAllPlayback.mockResolvedValue(undefined)
     runtimeFixture.healthCache.refresh.mockResolvedValue({ health: null })
     runtimeFixture.cloudAuthClient.restoreSession.mockResolvedValue(null)
     runtimeFixture.authTokenStore.getToken.mockResolvedValue('token')
+    runtimeFixture.authTokenStore.clearToken.mockResolvedValue(undefined)
     runtimeFixture.configStore.getBaseUrl.mockReturnValue('http://127.0.0.1:8000')
   })
 

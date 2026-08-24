@@ -2309,6 +2309,111 @@ textarea::placeholder {
   background: var(--mint-soft);
 }
 
+.tts-player-card {
+  position: sticky;
+  top: 72px;
+  z-index: 8;
+  display: grid;
+  gap: 10px;
+  padding: 13px 15px;
+  border: 1px solid color-mix(in srgb, var(--mint) 35%, var(--line));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 94%, var(--mint-soft));
+  box-shadow: 0 10px 30px rgba(42, 66, 58, 0.12);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.tts-player-heading,
+.tts-player-heading > div,
+.tts-player-actions {
+  display: flex;
+  align-items: center;
+}
+
+.tts-player-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tts-player-heading > div {
+  gap: 8px;
+  min-width: 0;
+}
+
+.tts-player-heading strong {
+  font-size: 13px;
+}
+
+.playback-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--mint);
+}
+
+.playback-dot.loading,
+.playback-dot.playing {
+  animation: playback-pulse 1.4s ease-in-out infinite;
+}
+
+.playback-dot.paused {
+  background: var(--muted);
+}
+
+.tts-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.tts-progress {
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--mint);
+  cursor: pointer;
+}
+
+.tts-progress:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.tts-player-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tts-player-actions small {
+  flex: 1 1 210px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@keyframes playback-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mint) 30%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tts-player-card {
+    transition: none;
+  }
+
+  .playback-dot {
+    animation: none;
+  }
+}
+
 .reference-answers h3 {
   margin: 0;
   font-size: 17px;

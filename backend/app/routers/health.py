@@ -1,15 +1,18 @@
-"""Backend 首页与健康检查(不返回任何密钥)。
+"""Backend 首页与健康检查（不返回任何密钥）。
 
-/health 展示每个供应商的:是否配置密钥、模型/资源 ID/音色、以及最近一次
-真实调用(或显式验证)的结果与时间。「有密钥」「Backend 可达」「上游已验证」
-是三个独立信号,客户端据此决定展示状态与降级策略。
+/health 展示每个供应商的配置、模型和最近一次真实调用/验证状态。
 """
 import asyncio
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .auth import get_current_auth
+from ..dependencies import get_db_session
+from ..services.auth_service import AuthContext
+from ..services.feature_authorization import FeatureKey, usage_identifiers
+from .auth import require_verified_user
 
 router = APIRouter()
 
@@ -58,10 +61,22 @@ async def health(request: Request) -> dict:
     }
 
 
-@router.post("/health/verify", dependencies=[Depends(get_current_auth)])
-async def verify_providers(request: Request) -> dict:
-    """显式验证上游:DeepSeek 一次 32 token 的小规模补全(推理模型需要
-    token 余量),TTS 合成一句 "Hello."。"""
+@router.post("/health/verify")
+async def verify_providers(
+    request: Request,
+    auth: Annotated[AuthContext, Depends(require_verified_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict:
+    """显式验证上游：DeepSeek 小规模补全 + TTS 合成一句 Hello。"""
+    request_id, idempotency_key = usage_identifiers(request)
+    await request.app.state.feature_authorization_service.consume(
+        db,
+        auth.user,
+        FeatureKey.PROVIDER_VERIFY,
+        units=1,
+        request_id=request_id,
+        idempotency_key=idempotency_key,
+    )
     services = request.app.state.services
     deepseek_task = services["deepseek"].verify()
     tts_task = services["volc_tts"].verify()

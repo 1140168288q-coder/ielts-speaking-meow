@@ -26,6 +26,8 @@ import {
   formatDuration,
   partLabel,
 } from './format'
+import { buildQuestionSpeechText } from './questionSpeech'
+import { TtsPlaybackBar } from './TtsPlaybackBar'
 import { useTtsToggle } from './useTtsToggle'
 
 type Stage =
@@ -63,6 +65,8 @@ export function PracticeFlow({
   reusableExpressions = [],
   reusablePersonalMaterials = [],
   learnerContext = '',
+  autoPlayQuestion = true,
+  feedbackDetail = 'focused',
   onExpressionReused = () => undefined,
   onExitGuardChange,
   onChange,
@@ -76,6 +80,8 @@ export function PracticeFlow({
   reusableExpressions?: ReusableExpression[]
   reusablePersonalMaterials?: ReusablePersonalMaterial[]
   learnerContext?: string
+  autoPlayQuestion?: boolean
+  feedbackDetail?: 'focused' | 'expanded'
   onExpressionReused?: (expressionId: string) => void | Promise<void>
   onExitGuardChange: (active: boolean) => void
   onChange: (session: TrainingSession) => void
@@ -92,7 +98,15 @@ export function PracticeFlow({
   const aiRequestGenerationRef = useRef(0)
   const aiRequestInFlightRef = useRef(false)
   const autoPlayedRef = useRef(false)
-  const { speakingKey, toggle: toggleTts } = useTtsToggle(audioFocus)
+  const {
+    speakingKey,
+    playback: ttsPlayback,
+    toggle: toggleTts,
+    pause: pauseTts,
+    resume: resumeTts,
+    seek: seekTts,
+    stop: stopTts,
+  } = useTtsToggle(audioFocus)
 
   const stage = deriveStage(session)
   const step = STAGE_STEP[stage]
@@ -100,6 +114,7 @@ export function PracticeFlow({
   const aiFeedback = session.aiFeedback
   const tutorContext = buildTutorContext(question)
   const tutorKnowledge = retrieveTutorKnowledge(question)
+  const spokenQuestion = buildQuestionSpeechText(question)
 
   useEffect(() => {
     sessionRef.current = session
@@ -121,10 +136,10 @@ export function PracticeFlow({
   // 进入答题界面自动播放一次题目;用户可随时用按钮重播或停止。
   // 计时器不会自动开始。
   useEffect(() => {
-    if (autoPlayedRef.current) return
+    if (autoPlayedRef.current || !autoPlayQuestion) return
     autoPlayedRef.current = true
-    void toggleTts(`question:${question.id}`, question.prompt).catch(() => undefined)
-    // 只在进入练习页时自动播放一次,失败静默(可手动重播)
+    void toggleTts(`question:${question.id}`, spokenQuestion).catch(() => undefined)
+    // 只在进入练习页时按用户偏好自动播放一次,失败静默(可手动重播)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -308,6 +323,13 @@ export function PracticeFlow({
     } catch {
       // 复用计数失败不影响答题
     }
+
+  }
+  const reusePersonalMaterial = (item: ReusablePersonalMaterial) => {
+    setInsertSeed((current) => ({
+      nonce: (current?.nonce ?? 0) + 1,
+      text: item.material.content,
+    }))
   }
 
   const firstAttempt = session.attempts.find(
@@ -323,7 +345,7 @@ export function PracticeFlow({
         <button type="button" className="icon-button" onClick={onBack} aria-label="返回题库">
           <ChevronLeft aria-hidden="true" size={21} />
         </button>
-        <div className="step-track" aria-label={`当前第 ${step} 步，共 4 步`}>
+        <div className="step-track" role="group" aria-label={`当前第 ${step} 步，共 4 步`}>
           {[1, 2, 3, 4].map((value) => (
             <span key={value} className={value <= step ? 'active' : ''} />
           ))}
@@ -335,8 +357,18 @@ export function PracticeFlow({
         question={question}
         playing={speakingKey === `question:${question.id}`}
         compact={stage !== 'first-answer'}
-        onToggle={() => void toggleSpeak(`question:${question.id}`, question.prompt)}
+        onToggle={() => void toggleSpeak(`question:${question.id}`, spokenQuestion)}
       />
+
+      {speakingKey ? (
+        <TtsPlaybackBar
+          playback={ttsPlayback}
+          onPause={() => void pauseTts()}
+          onResume={() => void resumeTts()}
+          onSeek={(positionSeconds) => void seekTts(positionSeconds)}
+          onStop={() => void stopTts()}
+        />
+      ) : null}
 
       {message ? <div className="notice" role="status">{message}</div> : null}
 
@@ -362,6 +394,7 @@ export function PracticeFlow({
               feedback={aiFeedback}
               playingKey={speakingKey}
               onToggle={(key, text) => void toggleSpeak(key, text)}
+              detail={feedbackDetail}
             />
           ) : (
             <LocalFeedbackCard busy={aiBusy} attempt={firstAttempt} />
@@ -403,7 +436,10 @@ export function PracticeFlow({
             />
           ) : null}
           {reusablePersonalMaterials.length ? (
-            <PersonalMaterialIdeasCard items={reusablePersonalMaterials} />
+            <PersonalMaterialIdeasCard
+              items={reusablePersonalMaterials}
+              onUse={reusePersonalMaterial}
+            />
           ) : null}
           {reusableExpressions.length ? (
             <ReusableMaterialCard
@@ -576,8 +612,10 @@ function ReusableMaterialCard({
 
 function PersonalMaterialIdeasCard({
   items,
+  onUse,
 }: {
   items: ReusablePersonalMaterial[]
+  onUse: (item: ReusablePersonalMaterial) => void
 }) {
   return (
     <section className="personal-material-ideas-card">
@@ -589,10 +627,17 @@ function PersonalMaterialIdeasCard({
         </div>
       </div>
       <div className="personal-material-ideas-list">
-        {items.map(({ material, reason }) => (
-          <article key={material.id}>
-            <div><strong>{material.title}</strong><small>{reason}</small></div>
-            <p>{material.content}</p>
+        {items.map((item) => (
+          <article key={item.material.id}>
+            <div><strong>{item.material.title}</strong><small>{item.reason}</small></div>
+            <p>{item.material.content}</p>
+            <button
+              type="button"
+              className="secondary-button compact"
+              onClick={() => onUse(item)}
+            >
+              + 插入答案
+            </button>
           </article>
         ))}
       </div>
@@ -829,10 +874,12 @@ function AiFeedbackCard({
   feedback,
   playingKey,
   onToggle,
+  detail,
 }: {
   feedback: AiFeedback
   playingKey: string | null
   onToggle: (key: string, text: string) => void
+  detail: 'focused' | 'expanded'
 }) {
   const [activeReferenceIndex, setActiveReferenceIndex] = useState(0)
   const topIssues = pickTopIssues(feedback)
@@ -871,7 +918,7 @@ function AiFeedbackCard({
       ) : null}
 
       {feedback.grammarSuggestions.length > 0 ? (
-        <details className="feedback-details grammar">
+        <details className="feedback-details grammar" open={detail === 'expanded'}>
           <summary>
             语法微修（{feedback.grammarSuggestions.length}）
           </summary>
@@ -884,7 +931,7 @@ function AiFeedbackCard({
       ) : null}
 
       {feedback.vocabularySuggestions.length > 0 ? (
-        <details className="feedback-details vocabulary">
+        <details className="feedback-details vocabulary" open={detail === 'expanded'}>
           <summary>
             词汇替换（{feedback.vocabularySuggestions.length}）
           </summary>
@@ -896,7 +943,7 @@ function AiFeedbackCard({
         </details>
       ) : null}
 
-      <details className="improved-answer-details">
+      <details className="improved-answer-details" open={detail === 'expanded'}>
         <summary>优化答案（保持你的水平，不是范文）</summary>
         <TtsSection
           title="优化答案"

@@ -105,7 +105,7 @@ describe('normalizeStoredTrainingSession', () => {
       'I like reading books because they help me relax.',
     )
     expect(session?.aiFeedback?.referenceAnswers).toHaveLength(3)
-    expect(session?.aiFeedback?.referenceAnswers[1]?.label).toBe('自然均衡')
+    expect(session?.aiFeedback?.referenceAnswers[1]?.label).toBe('自然提升版')
   })
 
   it('passes current V1.7 sessions through unchanged', () => {

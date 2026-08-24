@@ -43,6 +43,7 @@ import {
 } from './domain/models'
 import type { PersonalMaterial } from './domain/personalMaterials'
 import {
+  LOCAL_DEFAULT_USER_ID,
   recordBelongsToAccount,
   type AccountProfile,
 } from './domain/accounts'
@@ -51,6 +52,12 @@ import {
   findReusableExpressions,
   findReusablePersonalMaterials,
 } from './domain/userMemory'
+import {
+  createDefaultUserPreferences,
+  updateUserPreferences,
+  type UserPreferences,
+  type UserPreferencesUpdate,
+} from './domain/userPreferences'
 import type { ImportedQuestionRecord } from './domain/imports'
 import type { AudioFocus } from './ports/speech'
 import { AccountView, CloudAccountPanel } from './features/accounts'
@@ -199,6 +206,30 @@ export function App() {
   const [practiceExitGuardActive, setPracticeExitGuardActive] = useState(false)
   const [apiConnected, setApiConnected] = useState(false)
   const [theme, setTheme] = useState<ThemePreference>(readThemePreference)
+  const [preferences, setPreferences] = useState<UserPreferences>(() =>
+    createDefaultUserPreferences(LOCAL_DEFAULT_USER_ID),
+  )
+
+  const loadUserPreferences = useCallback(async (ownerId: string) => {
+    const stored = await runtime.storage.getUserPreferences(ownerId)
+    const next = stored ?? createDefaultUserPreferences(ownerId)
+    if (stored === null) await runtime.storage.saveUserPreferences(next)
+    runtime.setUserPreferences(next)
+    setPreferences(next)
+    setTheme(next.theme)
+    setLibraryPart(next.defaultPart)
+  }, [runtime])
+
+  const changeUserPreferences = useCallback(async (
+    update: UserPreferencesUpdate,
+  ) => {
+    const next = updateUserPreferences(preferences, update)
+    await runtime.storage.saveUserPreferences(next)
+    runtime.setUserPreferences(next)
+    setPreferences(next)
+    setTheme(next.theme)
+    if (update.defaultPart !== undefined) setLibraryPart(next.defaultPart)
+  }, [preferences, runtime])
 
   const refreshLibrary = useCallback(async () => {
     const ownerId = runtime.accountService.getCurrentUserId()
@@ -206,7 +237,7 @@ export function App() {
       runtime.practiceService.listSessions(),
       runtime.practiceService.listExpressions(),
       runtime.personalMaterialService.list({ includeArchived: true }),
-      runtime.storage.listImportedQuestions(),
+      runtime.storage.listImportedQuestions(ownerId),
     ])
     setSessions(nextSessions)
     setExpressions(nextExpressions)
@@ -226,8 +257,10 @@ export function App() {
           import('./data/questions'),
           runtime.initialize(),
         ])
+        const account = runtime.accountService.getCurrentAccount()
+        if (account !== null) await loadUserPreferences(account.userId)
         if (active) {
-          setCurrentAccount(runtime.accountService.getCurrentAccount())
+          setCurrentAccount(account)
           setQuestionData(loadedQuestionData)
         }
         await refreshLibrary()
@@ -256,9 +289,17 @@ export function App() {
     return () => {
       active = false
       void runtime.audioFocus.stopAllPlayback()
+
       void runtime.storage.close()
     }
-  }, [refreshLibrary, runtime])
+  }, [loadUserPreferences, refreshLibrary, runtime])
+
+  useEffect(() => {
+    document.documentElement.dataset.reduceMotion = preferences.reduceMotion
+      ? 'true'
+      : 'false'
+  }, [preferences.reduceMotion])
+
 
   // 右上角 API 状态由 /health 真实可达性驱动,定期重新检查保持新鲜。
   useEffect(() => {
@@ -282,11 +323,6 @@ export function App() {
       document.documentElement.style.colorScheme = resolved
     }
     applyTheme()
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
-    } catch {
-      // Theme still works for this session when persistence is unavailable.
-    }
     if (theme !== 'system' || !media) return
     media.addEventListener?.('change', applyTheme)
     return () => media.removeEventListener?.('change', applyTheme)
@@ -323,7 +359,7 @@ export function App() {
   const deleteSession = async (sessionId: string) => {
     if (!window.confirm('删除这次练习记录？此操作不可撤销。')) return
     try {
-      await runtime.storage.deleteSessionWithAudio(sessionId)
+      await runtime.practiceService.deleteSession(sessionId)
       if (session?.id === sessionId) setSession(null)
       await refreshLibrary()
     } catch (error) {
@@ -347,7 +383,15 @@ export function App() {
   }
 
   const handleAccountSwitched = (account: AccountProfile) => {
+    // Cloud tokens are device-global, while practice data is owner-scoped.
+    // Clear the local cloud session whenever the owner changes so a stale token
+    // can never silently sync into the newly selected local data space.
+    void runtime.authTokenStore.clearToken().catch(() => undefined)
+    handleCloudSessionChange(null)
     setCurrentAccount(account)
+    void loadUserPreferences(account.userId).catch((error: unknown) => {
+      setStorageError(error instanceof Error ? error.message : '偏好设置读取失败。')
+    })
     setSession(null)
     setPracticeExitGuardActive(false)
     setNavigationNotice(null)
@@ -371,6 +415,10 @@ export function App() {
     setCloudSyncStatus('syncing')
     setCloudSyncMessage('正在比较本机与云端版本，本机数据会在成功前保留。')
     try {
+      const boundAccount = await runtime.accountService.bindCurrentAccountToCloud(
+        cloudSession.user.id,
+      )
+      setCurrentAccount(boundAccount)
       const syncService = new AccountCloudSyncService({
         scopeId: cloudSession.user.id,
         ownerId: runtime.accountService.getCurrentUserId(),
@@ -515,7 +563,7 @@ export function App() {
       questionData?.legacyQuestionsById.get(session.questionId) ??
       null
     : null
-  const activeMemory = activeQuestion
+  const activeMemory = activeQuestion && preferences.memoryEnabled
     ? {
         reusableExpressions: findReusableExpressions(
           activeQuestion,
@@ -526,6 +574,8 @@ export function App() {
           activeQuestion,
           sessions,
           expressions,
+          preferences.sharePersonalMaterialsWithAi ? personalMaterials : [],
+          allQuestions,
         ),
         personalMaterials: findReusablePersonalMaterials(
           activeQuestion,
@@ -624,6 +674,8 @@ export function App() {
             textAi={runtime.textAi}
             reusableExpressions={activeMemory.reusableExpressions}
             reusablePersonalMaterials={activeMemory.personalMaterials}
+            autoPlayQuestion={preferences.autoPlayQuestion}
+            feedbackDetail={preferences.feedbackDetail}
             learnerContext={activeMemory.learnerContext}
             onExpressionReused={(expressionId) =>
               void runtime.practiceService
@@ -693,6 +745,8 @@ export function App() {
                     destination={formatSyncDestination(runtime.configStore.getBaseUrl())}
                     emailVerified={cloudSession.user.emailVerified}
                     onSync={() => void runCloudSync()}
+                    bindingRequired={currentAccount?.cloudAccountId == null}
+                    localProfileName={currentAccount?.displayName ?? '本机用户'}
                   />
                 ) : null}
               </>
@@ -727,7 +781,9 @@ export function App() {
             backupService={runtime.backupService}
             onDataChanged={refreshLibrary}
             theme={theme}
-            onThemeChange={setTheme}
+            onThemeChange={(nextTheme) => void changeUserPreferences({ theme: nextTheme })}
+            preferences={preferences}
+            onPreferencesChange={changeUserPreferences}
           />
         )}
       </main>
@@ -969,7 +1025,7 @@ function QuestionLibrary({
             }}
           />
         </label>
-        <div className="question-filter-chips" aria-label="主题分类">
+        <div className="question-filter-chips" role="group" aria-label="主题分类">
           <button
             type="button"
             className={category === 'all' ? 'active' : ''}

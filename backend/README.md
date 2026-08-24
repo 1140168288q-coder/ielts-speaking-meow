@@ -5,21 +5,23 @@
 Android 客户端只调用本服务，**任何第三方密钥只存在于本服务的环境变量中**。
 
 V1.7 起不再提供 STT 能力；客户端直接用手机系统键盘语音输入答案文本。
-V1.8 的 `/v1/feedback` 额外接受本地 RAG/长期记忆生成的可选
-`tutorContext` / `learnerContext`。Backend 持久化邮箱账号、邮箱验证状态、Argon2
-密码摘要、可撤销会话、一次性账号 token，以及已登录用户的通用增量同步实体与
-变更日志。
+V2.0 的 `/v1/feedback` 接受本地 RAG / 长期 Memory 生成的可选
+`tutorContext` / `learnerContext`。Backend 持久化邮箱账号、邮箱验证状态、
+Argon2 密码摘要、可撤销会话、一次性账号 token，以及已登录用户的通用增量同步
+实体与变更日志；同时提供 free / pro、feature entitlement、周期 quota、用量事件
+与未来支付 webhook 的数据模型基础。本版不接入真实支付。
 
 ## 架构
 
 ```
 Android 客户端
-    │  POST /v1/auth/register|login                           → 账号数据库
-    │  GET  /v1/auth/session / POST /v1/auth/logout           → 会话恢复/撤销
-    │  POST /v1/auth/*email-verification                      → 邮箱验证
-    │  POST /v1/auth/password-reset/*                         → 密码找回
-    │  POST /v1/sync/push / GET /v1/sync/pull                 → 用户数据增量同步
-    │  POST /v1/feedback(Part + 题目 + 答案文本 + 可选作答时间) → DeepSeek
+    │  POST /v1/auth/register|login                             → 账号数据库
+    │  GET  /v1/auth/session / POST /v1/auth/logout|logout-all  → 会话管理
+    │  POST /v1/auth/*email-verification                        → 邮箱验证
+    │  POST /v1/auth/password-reset/*                           → 密码找回
+    │  GET|PATCH|DELETE /v1/me                                  → 资料/能力/注销
+    │  POST /v1/sync/push / GET /v1/sync/pull                   → 用户数据增量同步
+    │  POST /v1/feedback(Part + 题目 + 答案文本 + 可选作答时间)  → DeepSeek
     │  POST /v1/tts(文本)                                       → 火山语音合成 2.0
     │  POST /v1/organize(导入材料)                              → DeepSeek(题目整理)
     ▼
@@ -38,19 +40,24 @@ FastAPI Backend(密钥在环境变量,日志脱敏)
 | POST | `/v1/auth/request-email-verification` | 需要 Bearer token；向当前未验证账号发送验证邮件，成功返回 204 |
 | POST | `/v1/auth/confirm-email-verification` | 公开；JSON `{token}`；消费一次性 token 并标记邮箱已验证，成功返回 204 |
 | POST | `/v1/auth/password-reset/request` | 公开；JSON `{email}`；无论邮箱是否存在、邮件是否配置/成功都统一返回 204 |
+| POST | `/v1/auth/logout-all` | 需要 Bearer token；撤销当前用户全部会话，成功返回 204 |
+| GET | `/v1/me` | 当前身份、billing 状态和各 feature 的启用原因、周期、用量、剩余额度 |
+| PATCH | `/v1/me` | JSON `{displayName}`；更新当前账号昵称 |
+| DELETE | `/v1/me` | JSON `{password}`；注销并匿名化账号、撤销会话、清除该用户云端同步数据 |
 | POST | `/v1/auth/password-reset/confirm` | 公开；JSON `{token, newPassword}`；修改密码并撤销该用户全部现有 session，成功返回 204 且不自动登录 |
 | POST | `/v1/sync/push` | `Authorization: Bearer <token>`；批量幂等提交本地变更 |
 | GET | `/v1/sync/pull?cursor=0&limit=200` | `Authorization: Bearer <token>`；按单调 cursor 增量拉取，limit 范围 1–500 |
 | GET | `/health` | 存活 + DeepSeek / TTS 详情:密钥是否配置、模型 / 音色、最近一次真实调用的验证状态(verified / unverified / failed + 时间),不含密钥 |
 | POST | `/health/verify` | 需要 Bearer token；真实小规模验证 DeepSeek 与 TTS 上游 |
-| POST | `/v1/feedback` | 需要 Bearer token；JSON `{part, question, answer, answerDurationSeconds?, tutorContext?, learnerContext?}` → V1.7 文本分析结构(`summary` / `strengths` / `problems` / `grammarSuggestions` / `vocabularySuggestions` / `improvedAnswer` / 恰好 3 个 `referenceAnswers`) |
+| POST | `/v1/feedback` | 需要已验证邮箱的 Bearer token；JSON `{part, question, answer, answerDurationSeconds?, tutorContext?, learnerContext?}` → V2.0 文本分析结构(`summary` / `strengths` / `problems` / `grammarSuggestions` / `vocabularySuggestions` / `improvedAnswer` / 恰好 3 个 `referenceAnswers`) |
 | POST | `/v1/tts` | 需要 Bearer token；JSON `{text, language?, rate?, pitch?}` → `audio/mpeg` 二进制；rate/pitch 映射火山 speed_ratio / pitch_ratio(0.5–2.0) |
 | POST | `/v1/organize` | 需要 Bearer token；JSON `{fileName, extractedText}` → `{questions: [...]}` |
 
-统一错误格式：`{"error": {"code": "...", "message": "..."}}`。
-错误码：`not-configured`(503)/ `provider-error`(502)/ `upstream-timeout`(504)/
-`invalid-request`(400)/ `invalid-account-token`(400)/ `rate-limited`(429)/ `email-already-registered`(409)/
-`invalid-credentials`(401)/ `invalid-session`(401)。
+统一错误格式：`{"error": {"code": "...", "message": "..."}}`。主要错误码：
+`not-configured`(503) / `provider-error`(502) / `upstream-timeout`(504) /
+`invalid-request`(400) / `invalid-account-token`(400) / `rate-limited`(429) /
+`quota-exceeded`(429) / `email-not-verified`(403) / `account-inactive`(403) /
+`email-already-registered`(409) / `invalid-credentials`(401) / `invalid-session`(401)。
 
 注册和登录返回：
 
@@ -63,13 +70,31 @@ FastAPI Backend(密钥在环境变量,日志脱敏)
     "id": "...",
     "email": "learner@example.com",
     "emailVerified": false,
-    "createdAt": "..."
+    "displayName": null,
+    "status": "active",
+    "createdAt": "...",
+    "updatedAt": "..."
   }
 }
 ```
 
 服务端只保存 token 的 SHA-256 摘要，数据库泄漏时不能直接取出可用 token。
-每次登录创建独立会话，退出只撤销当前会话；当前没有滑动续期或 refresh token。
+每次登录创建独立会话，普通退出只撤销当前会话；`logout-all` 可撤销该账号全部
+会话。当前没有滑动续期或 refresh token。
+
+## 账号能力、额度与生命周期
+
+`GET /v1/me` 是客户端展示身份和商业能力的唯一真实来源。当前默认 free plan，
+并为 feedback、organize、TTS 字符数、provider verify 配置独立周期 quota。
+邮箱未验证或账号非 active 时 capability 会返回明确原因，受保护能力不会执行。
+
+同一个 `Idempotency-Key` 的成功请求重试不会重复计费；复用该 key 提交不同内容
+会被拒绝。用量由服务端事务写入，不信任客户端计数。pro、entitlement override、
+subscription 状态和 webhook 去重/审计表已预留，但本版没有支付入口。
+
+删除账号必须再次校验密码。服务端会撤销全部会话、清除该用户的同步实体、变更日志
+与用量数据，并匿名化账号身份；客户端本地离线数据不会被后端远程删除，用户仍可在
+本机自行管理。
 
 ## 邮箱验证与密码找回
 
@@ -189,11 +214,11 @@ outbox。冲突不会由服务端静默覆盖；客户端应先采用 `current` 
   单次消费；
 - 会话由服务端校验绝对过期时间并支持立即撤销；
 - 密码重置成功后撤销该用户全部现有 session，且不会自动创建新 session；
-- `/v1/feedback`、`/v1/organize`、`/v1/tts`、`/health/verify` 与同步接口
-  都要求有效 Bearer session；普通 `/health` 和根连接页保持公开；
+- `/v1/me`、AI/TTS、provider verify 与同步接口都要求有效 Bearer session；
+  云端数据和上游能力还要求邮箱已验证；普通 `/health` 和根连接页保持公开；
 - TTS 音频响应只允许当前客户端私有缓存，不允许共享缓存保存用户文本对应音频；
 - 所有上游调用带超时；
-- 内存滑动窗口限流(默认关闭,`RATE_LIMIT_ENABLED` 开启)——预留接口。
+- 可选内存滑动窗口限流负责突发保护；持久化 feature quota 负责套餐用量控制。
 
 ## 本地运行
 
@@ -221,7 +246,7 @@ DATABASE_URL=postgresql+asyncpg://user:password@host:5432/ielts_cat
 AUTH_SESSION_TTL_SECONDS=2592000
 EMAIL_VERIFICATION_TOKEN_TTL_SECONDS=86400
 PASSWORD_RESET_TOKEN_TTL_SECONDS=3600
-APP_ACCOUNT_URL=https://app.example.com/account
+APP_ACCOUNT_URL=https://api.example.com
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=mailer-user
@@ -240,18 +265,18 @@ Windows 下也可以直接**双击 `start.bat`** 启动(监听 0.0.0.0，供同�
 测试：`.venv/Scripts/python -m pytest`（认证使用内存 SQLite，DeepSeek/TTS 用
 MockTransport，不需要真实数据库、上游服务或密钥）。
 
-## 部署到服务器
+## 家庭 Linux 生产部署
 
-1. 服务器安装 Python 3.12，拷贝本目录并备份现有数据库；
-2. `pip install -r requirements.lock.txt`，创建 `.env` 并填入密钥；
-3. 执行 `python -m alembic upgrade head`；
-4. 运行 `uvicorn app.main:app --host 0.0.0.0 --port 8000`(或配 systemd/宝塔面板常驻)；
-5. 客户端打包时把 `VITE_BACKEND_URL` 设为服务器地址。
+生产环境统一使用仓库根目录的 Docker Compose：PostgreSQL 与 Backend 在私有网络
+运行，Backend 默认不映射宿主机端口；公网 App 流量通过 Cloudflare Tunnel 的
+outbound-only HTTPS 通道进入，Tailscale 只用于管理员 SSH/维护。不要在路由器上
+直接开放数据库或 8000 端口。
 
-正式对外发布建议给服务器配 HTTPS 域名(如 Caddy 反向代理自动签发证书)；
-个人自用可通过私有局域网 IP + HTTP 访问；客户端拒绝公网 HTTP 地址。
+完整的首次部署、域名/Tunnel 人工步骤、升级、自动恢复、备份、校验和恢复演练见
+[`docs/DEPLOY_HOME_LINUX.md`](../docs/DEPLOY_HOME_LINUX.md)。本机调试可叠加
+`compose.local.yaml`，它也只监听 `127.0.0.1:8000`。
 
-## 尚未完成的生产能力
+## 已知生产限制
 
 - 未实现邮件模板品牌化、HTML 版本、发送队列和退信处理；这些不影响当前纯文本
   SMTP 验证/找回闭环；
@@ -261,7 +286,6 @@ MockTransport，不需要真实数据库、上游服务或密钥）。
   冲突会停止覆盖并保留本机资料，但尚未提供丰富的逐条合并决策界面；
 - Memory 仍应从同步后的练习、反馈、个人语料等事实数据派生，不单独同步第二份
   易失真的 Memory 快照；
-- 未实现“退出所有设备”、会话列表和设备命名；
 - 尚未在真实 PostgreSQL 服务上做迁移集成测试；当前自动化覆盖 SQLite 新库与
   未版本化旧库的无损升级；
 - 已有账户页同步状态、手动重试和冲突保护；尚未实现逐条合并决策、多设备离线同时

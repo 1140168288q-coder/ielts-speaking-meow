@@ -1617,3 +1617,308 @@ select:focus-visible {
 :root[data-theme="dark"] .theme-options button.active {
   color: var(--ds-primary);
 }
+
+.preference-settings-card {
+  gap: 14px;
+}
+
+.preference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.settings-field > span {
+  color: var(--ds-text-soft);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.settings-field input:not([type="range"]),
+.settings-field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--ds-line);
+  border-radius: 12px;
+  color: var(--ds-text);
+  background: var(--ds-surface-muted);
+  font: inherit;
+}
+
+.settings-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--ds-primary);
+}
+
+.settings-switch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--ds-line);
+  border-radius: 13px;
+  background: var(--ds-surface-muted);
+  cursor: pointer;
+}
+
+.settings-switch input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--ds-primary);
+}
+
+.settings-switch span,
+.settings-switch small {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-switch strong {
+  color: var(--ds-text);
+  font-size: 12px;
+}
+
+.settings-switch small {
+  color: var(--ds-text-soft);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.settings-switch:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:root[data-reduce-motion="true"] *,
+:root[data-reduce-motion="true"] *::before,
+:root[data-reduce-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (max-width: 620px) {
+  .preference-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.cloud-account-management {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ds-line);
+}
+
+.cloud-plan-card,
+.cloud-profile-form,
+.cloud-security-panel {
+  padding: 14px;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-muted);
+}
+
+.cloud-management-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cloud-management-heading h3,
+.cloud-security-action strong,
+.cloud-delete-form strong {
+  margin: 0;
+  font-size: 14px;
+}
+
+.cloud-quota-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cloud-quota-item {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-raised);
+}
+
+.cloud-quota-item > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cloud-quota-item strong {
+  font-size: 11px;
+}
+
+.cloud-quota-item span,
+.cloud-quota-item small {
+  color: var(--ds-text-soft);
+  font-size: 9px;
+}
+
+.cloud-quota-item progress {
+  width: 100%;
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  accent-color: var(--ds-primary);
+  overflow: hidden;
+}
+
+.cloud-unlimited-badge {
+  justify-self: start;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--ds-primary-strong) !important;
+  background: var(--ds-primary-soft);
+  font-weight: 760;
+}
+
+.cloud-profile-form {
+  display: grid;
+  gap: 10px;
+}
+
+.cloud-profile-form .secondary-button {
+  justify-self: start;
+}
+
+.cloud-security-panel {
+  padding: 0;
+  overflow: clip;
+}
+
+.cloud-security-panel summary {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.cloud-security-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.cloud-security-panel summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.cloud-security-panel summary small {
+  color: var(--ds-text-soft);
+  font-size: 9px;
+}
+
+.cloud-security-panel[open] summary {
+  border-bottom: 1px solid var(--ds-line);
+}
+
+.cloud-security-content {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  animation: ds-reveal 180ms ease-out;
+}
+
+.cloud-security-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.cloud-security-action p,
+.cloud-delete-form p {
+  margin: 4px 0 0;
+  color: var(--ds-text-soft);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.cloud-delete-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--ds-danger) 25%, var(--ds-line));
+}
+
+.cloud-delete-confirmation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  color: var(--ds-text-soft);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.cloud-delete-confirmation input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--ds-danger);
+}
+
+.danger-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  justify-self: start;
+  padding: 9px 13px;
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 48%, var(--ds-line));
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-danger);
+  background: color-mix(in srgb, var(--ds-danger) 8%, var(--ds-surface-raised));
+  font-weight: 780;
+}
+
+.danger-button:hover:not(:disabled) {
+  color: #fff;
+  background: var(--ds-danger);
+}
+
+@media (max-width: 620px) {
+  .cloud-quota-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-security-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cloud-security-action .secondary-button,
+  .danger-button {
+    width: 100%;
+  }
+}

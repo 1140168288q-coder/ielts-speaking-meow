@@ -12,10 +12,10 @@ import {
   type TrainingSession,
 } from '../domain/models'
 import { analyzeSpeech } from '../domain/speechAnalysis'
-import type { LocalStorage } from '../ports/storage'
+import type { LocalDataMaintenance, LocalStorage } from '../ports/storage'
 
 export interface PracticeServiceDependencies {
-  localStorage: LocalStorage
+  localStorage: LocalStorage & Pick<LocalDataMaintenance, 'deleteSessionWithAudio'>
   now?: () => Date
   createId?: () => string
   /** 当前本地账号 userId;切换账号后所有读写立即按新账号过滤。 */
@@ -44,7 +44,7 @@ const defaultCreateId = () => {
  * 历史录音数据仍由存储层原样保留,本服务不再读取或删除它们。
  */
 export class PracticeService {
-  private readonly localStorage: LocalStorage
+  private readonly localStorage: LocalStorage & Pick<LocalDataMaintenance, 'deleteSessionWithAudio'>
   private readonly now: () => Date
   private readonly createId: () => string
   private readonly getCurrentUserId: () => string
@@ -317,12 +317,24 @@ export class PracticeService {
     return updated
   }
 
+  async deleteSession(
+    sessionId: string,
+  ): Promise<{ deletedAudio: number }> {
+    await this.requireSession(sessionId)
+    return this.localStorage.deleteSessionWithAudio(
+      sessionId,
+      this.getCurrentUserId(),
+      this.now().toISOString(),
+    )
+  }
+
   async deleteExpression(expressionId: string): Promise<void> {
-    const existing = await this.localStorage.getExpression(expressionId)
-    if (!existing) {
-      throw new Error('Saved expression not found.')
-    }
-    await this.localStorage.deleteExpression(expressionId)
+    await this.requireExpression(expressionId)
+    await this.localStorage.deleteExpression(
+      expressionId,
+      this.getCurrentUserId(),
+      this.now().toISOString(),
+    )
   }
 
   async getSession(sessionId: string): Promise<TrainingSession | null> {

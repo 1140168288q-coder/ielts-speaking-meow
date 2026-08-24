@@ -1,7 +1,9 @@
 import type { Question } from './models'
+export const TUTOR_KNOWLEDGE_VERSION = '2026.08-v2'
+export type TutorKnowledgeSource = 'official-guidance' | 'product-authored'
 
 /**
- * 小型本地 IELTS 教学 RAG。V1.8 刻意不用向量库/embedding API:
+ * 小型本地 IELTS 教学 RAG。V2.0 刻意不用向量库/embedding API:
  * 知识库只有几十篇短文档,题库本身也是结构化文档,用“Part 匹配 +
  * 主题词重叠”的词汇检索已经足够稳定、零成本、离线可用。
  *
@@ -18,6 +20,9 @@ export interface TutorKnowledgeDoc {
   /** 英文主题关键词,用于与题目 topic/prompt 匹配。 */
   keywords: string[]
   tags: string[]
+  source: TutorKnowledgeSource
+  sourceUrl?: string
+  reviewedAt: string
 }
 
 export interface RetrievedKnowledgeDoc {
@@ -26,7 +31,12 @@ export interface RetrievedKnowledgeDoc {
   reason: string
 }
 
-const DOCS: TutorKnowledgeDoc[] = [
+type TutorKnowledgeSeed = Omit<
+  TutorKnowledgeDoc,
+  'source' | 'reviewedAt'
+> & Partial<Pick<TutorKnowledgeDoc, 'source' | 'reviewedAt'>>
+
+const RAW_DOCS: TutorKnowledgeSeed[] = [
   {
     id: 'part1-direct-answer',
     part: 1,
@@ -74,6 +84,192 @@ const DOCS: TutorKnowledgeDoc[] = [
     body: '多使用 people / some people / in many cities 这类概括表达，并比较不同人群或过去与现在，展示抽象讨论能力。',
     keywords: ['people', 'young', 'old', 'country', 'city', 'government'],
     tags: ['part3', 'coherence'],
+  },
+  {
+    id: 'part1-frequency-example',
+    part: 1,
+    title: '谈习惯时加频率和真实场景',
+    body: '不要只说 I like it。补充 how often、when 或 who with，例如每周末、下班后或和室友一起，让短回答也有个人信息。',
+    keywords: ['often', 'usually', 'weekend', 'daily', 'habit', 'free time'],
+    tags: ['part1', 'development'],
+  },
+  {
+    id: 'part1-past-and-now',
+    part: 1,
+    title: '变化题用“过去—现在—原因”',
+    body: '遇到 used to、when you were a child 或 changed 这类问题，先说过去，再说现在，最后用一句话解释变化原因。',
+    keywords: ['childhood', 'change', 'used', 'before', 'now', 'young'],
+    tags: ['part1', 'comparison'],
+  },
+  {
+    id: 'part1-specific-example',
+    part: 1,
+    title: '理由后面放一个很小的例子',
+    body: '例子不需要完整故事；一个地点、一次最近经历或一个具体物品，就能让回答更可信、更容易继续说。',
+    keywords: ['why', 'favorite', 'prefer', 'like', 'enjoy', 'example'],
+    tags: ['part1', 'example'],
+  },
+  {
+    id: 'part2-timeline',
+    part: 2,
+    title: '经历题用清楚的时间线',
+    body: '按 before、during、after 三段组织经历。每段只保留一个关键动作和感受，避免想到哪里说到哪里。',
+    keywords: ['experience', 'event', 'trip', 'time', 'occasion', 'happened'],
+    tags: ['part2', 'story'],
+  },
+  {
+    id: 'part2-person-details',
+    part: 2,
+    title: '人物题选择能证明特点的细节',
+    body: '先说明关系和认识方式，再讲一个具体行为来证明这个人的特点；不要连续罗列 kind、friendly、helpful 等形容词。',
+    keywords: ['person', 'friend', 'family', 'teacher', 'someone', 'people'],
+    tags: ['part2', 'person'],
+  },
+  {
+    id: 'part2-place-details',
+    part: 2,
+    title: '地点题把空间和活动连起来',
+    body: '说清位置、最显眼的区域以及你在那里做什么。用光线、声音、距离等一两个细节即可，不必堆很多形容词。',
+    keywords: ['place', 'city', 'building', 'park', 'home', 'shop'],
+    tags: ['part2', 'place'],
+  },
+  {
+    id: 'part2-object-details',
+    part: 2,
+    title: '物品题围绕用途和个人意义',
+    body: '介绍来源、外观或使用方式后，重点解释它为什么对你有用或有意义。个人联系比产品说明更适合口语。',
+    keywords: ['object', 'thing', 'gift', 'technology', 'clothes', 'book'],
+    tags: ['part2', 'object'],
+  },
+  {
+    id: 'part2-avoid-memorised-script',
+    part: 2,
+    title: '准备结构，不背整篇固定答案',
+    body: '固定稿很难自然适配不同 cue points。只复用自己的经历、短语和故事模块，并在当前题目下重新组织。',
+    keywords: ['describe', 'cue', 'answer', 'prepare', 'topic'],
+    tags: ['part2', 'planning', 'memory'],
+    source: 'official-guidance',
+    sourceUrl: 'https://ielts.org/news-and-insights/dont-overdo-it-how-to-ace-your-ielts-speaking-test',
+  },
+  {
+    id: 'part3-cause-effect',
+    part: 3,
+    title: '原因题补上结果链条',
+    body: '给出原因后继续说 therefore 或 this means，说明它会影响谁、造成什么结果；不要只列两个没有解释的原因。',
+    keywords: ['why', 'cause', 'effect', 'result', 'influence', 'impact'],
+    tags: ['part3', 'reasoning'],
+  },
+  {
+    id: 'part3-compare-groups',
+    part: 3,
+    title: '比较题先确定同一个比较维度',
+    body: '比较年轻人与老年人、城市与乡村时，选择便利、成本或习惯等同一维度，再解释差异，避免两个段落各说各的。',
+    keywords: ['difference', 'compare', 'young', 'old', 'city', 'country'],
+    tags: ['part3', 'comparison'],
+  },
+  {
+    id: 'part3-balanced-position',
+    part: 3,
+    title: '可以承认例外，但立场仍要清楚',
+    body: '先说主要判断，再用 although 或 it depends 补充条件，最后回到你的总体观点。平衡不等于模糊。',
+    keywords: ['agree', 'should', 'better', 'important', 'depends', 'opinion'],
+    tags: ['part3', 'position'],
+  },
+  {
+    id: 'part3-solutions-tradeoff',
+    part: 3,
+    title: '解决方案要说明执行者和代价',
+    body: '提出方案时说明谁来做、怎样做、可能有什么限制。一个解释完整的方案比三个口号更有说服力。',
+    keywords: ['solution', 'solve', 'government', 'problem', 'improve', 'should'],
+    tags: ['part3', 'solution'],
+  },
+  {
+    id: 'part3-careful-generalisation',
+    part: 3,
+    title: '不确定时使用有分寸的概括',
+    body: '用 many、some、tend to、in my experience 限定范围，避免把个人例子说成所有人的事实。',
+    keywords: ['people', 'society', 'always', 'everyone', 'generally', 'country'],
+    tags: ['part3', 'accuracy'],
+  },
+  {
+    id: 'subject-verb-agreement',
+    part: 'all',
+    title: '长句先守住主语和谓语',
+    body: '说长句前先确定真正主语是单数还是复数，再选择 is/are、has/have 或动词形式；其余细节可以拆成下一句。',
+    keywords: ['people', 'technology', 'government', 'family', 'activity'],
+    tags: ['grammar', 'agreement'],
+  },
+  {
+    id: 'natural-self-repair',
+    part: 'all',
+    title: '说错时短修正，然后继续',
+    body: '可以用 I mean 或 rather 立刻替换一个词，不必从整句开头重来。一次简短修正比反复重启更自然。',
+    keywords: ['answer', 'explain', 'experience', 'speaking'],
+    tags: ['coherence', 'repair'],
+  },
+  {
+    id: 'collocation-first',
+    part: 'all',
+    title: '记短语搭配，不孤立记难词',
+    body: '优先保存 make a decision、heavy traffic、keep in touch 这类可直接复用的搭配，并用自己的经历造句。',
+    keywords: ['work', 'traffic', 'friend', 'decision', 'communication'],
+    tags: ['vocabulary', 'collocation', 'memory'],
+  },
+  {
+    id: 'specific-verbs',
+    part: 'all',
+    title: '用具体动词替换空泛的 do 和 make',
+    body: '复盘时只挑一两个高频空泛动词，换成适合场景的 commute、organise、recommend、repair 等具体动词。',
+    keywords: ['work', 'travel', 'activity', 'technology', 'service'],
+    tags: ['vocabulary', 'precision'],
+  },
+  {
+    id: 'topic-technology',
+    part: 'all',
+    title: '科技题从使用场景谈影响',
+    body: '先说谁在什么场景使用，再讨论它节省的时间、带来的便利或代价；避免只说 technology is important。',
+    keywords: ['technology', 'internet', 'phone', 'computer', 'online', 'app'],
+    tags: ['topic', 'technology'],
+  },
+  {
+    id: 'topic-environment',
+    part: 'all',
+    title: '环境题连接个人选择和公共措施',
+    body: '个人习惯适合举小例子，基础设施和法规适合解释更大影响；说明两者如何配合。',
+    keywords: ['environment', 'pollution', 'waste', 'recycle', 'nature', 'energy'],
+    tags: ['topic', 'environment'],
+  },
+  {
+    id: 'topic-work-study',
+    part: 'all',
+    title: '工作学习题用真实任务来展开',
+    body: '与其罗列 useful、busy，不如说一次课程、项目、截止日期或团队合作，并说明它带来的具体感受或变化。',
+    keywords: ['work', 'study', 'school', 'job', 'teacher', 'student'],
+    tags: ['topic', 'work', 'study'],
+  },
+  {
+    id: 'topic-transport',
+    part: 'all',
+    title: '交通题比较时间、成本和可达性',
+    body: '选一到两个维度比较公共交通和私家车，再结合所在城市的真实距离或拥堵情况。',
+    keywords: ['transport', 'traffic', 'bus', 'train', 'car', 'travel'],
+    tags: ['topic', 'transport'],
+  },
+  {
+    id: 'topic-culture-media',
+    part: 'all',
+    title: '文化媒体题给出具体内容和受众',
+    body: '说清是哪种节目、传统、书或音乐，以及哪些人为什么会接触它，避免把 culture 或 media 当成空泛整体。',
+    keywords: ['culture', 'tradition', 'media', 'movie', 'music', 'book'],
+    tags: ['topic', 'culture', 'media'],
+  },
+  {
+    id: 'topic-health-lifestyle',
+    part: 'all',
+    title: '健康题聚焦可持续的小习惯',
+    body: '用睡眠、步行、饮食或运动的真实频率说明习惯，再谈现实限制，不提供医疗结论。',
+    keywords: ['health', 'exercise', 'sport', 'food', 'sleep', 'walking'],
+    tags: ['topic', 'health', 'lifestyle'],
   },
   {
     id: 'tense-consistency',
@@ -124,6 +320,18 @@ const DOCS: TutorKnowledgeDoc[] = [
     tags: ['memory', 'reuse'],
   },
 ]
+const DOCS: readonly TutorKnowledgeDoc[] = RAW_DOCS.map((seed) => {
+  const {
+    source = 'product-authored',
+    reviewedAt = '2026-08-24',
+    ...doc
+  } = seed
+  return { ...doc, source, reviewedAt }
+})
+
+export function listTutorKnowledgeDocuments(): readonly TutorKnowledgeDoc[] {
+  return DOCS
+}
 
 const STOP_WORDS = new Set([
   'a', 'an', 'the', 'and', 'or', 'but', 'of', 'to', 'in', 'on', 'at', 'for',

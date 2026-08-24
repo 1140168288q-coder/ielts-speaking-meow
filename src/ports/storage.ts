@@ -4,7 +4,12 @@ import type {
   TrainingSession,
 } from '../domain/models'
 import type { PersonalMaterial } from '../domain/personalMaterials'
-import type { CloudSyncEntityType, SyncOutboxOperation } from '../domain/cloudSync'
+import type {
+  CloudSyncEntityType,
+  LocalDeletionTombstone,
+  SyncChange,
+  SyncOutboxOperation,
+} from '../domain/cloudSync'
 
 export interface SyncEntityState {
   version: number
@@ -30,7 +35,11 @@ export interface LocalStorage {
   upsertExpression(expression: SavedExpression): Promise<void>
   getExpression(expressionId: string): Promise<SavedExpression | null>
   listExpressions(): Promise<SavedExpression[]>
-  deleteExpression(expressionId: string): Promise<void>
+  deleteExpression(
+    expressionId: string,
+    ownerId: string,
+    deletedAt: string | null,
+  ): Promise<void>
 
   upsertPersonalMaterial(material: PersonalMaterial): Promise<void>
   getPersonalMaterial(
@@ -42,7 +51,11 @@ export interface LocalStorage {
     options?: ListPersonalMaterialsOptions,
   ): Promise<PersonalMaterial[]>
   /** 写入 deletedAt 墓碑，不物理删除记录。 */
-  deletePersonalMaterial(materialId: string, ownerId: string): Promise<void>
+  deletePersonalMaterial(
+    materialId: string,
+    ownerId: string,
+    deletedAt: string,
+  ): Promise<void>
 
   /** 练习页顶部三行自定义文字;未保存过时返回 null(使用默认值)。 */
   getPracticeTexts(): Promise<PracticeTexts | null>
@@ -58,6 +71,14 @@ export interface LocalStorage {
  * the two writes can be guaranteed atomic in IndexedDB.
  */
 export interface CloudSyncStorage {
+  listLocalDeletionTombstones(
+    ownerId: string,
+  ): Promise<LocalDeletionTombstone[]>
+  removeLocalDeletionTombstone(
+    ownerId: string,
+    entityType: LocalDeletionTombstone['entityType'],
+    entityId: string,
+  ): Promise<void>
   enqueueSyncOperation(
     scopeId: string,
     operation: SyncOutboxOperation,
@@ -78,6 +99,16 @@ export interface CloudSyncStorage {
     scopeId: string,
     entityType: CloudSyncEntityType,
     entityId: string,
+    state: SyncEntityState,
+  ): Promise<void>
+  /**
+   * Atomically advances the pulled entity version and cursor. The business
+   * entity write happens first and is deliberately idempotent, so a crash
+   * before this commit safely replays the same remote change.
+   */
+  commitPulledSyncChange(
+    scopeId: string,
+    change: SyncChange,
     state: SyncEntityState,
   ): Promise<void>
 }
@@ -113,6 +144,10 @@ export interface StorageUsageSummary {
 /** Explicit user-controlled maintenance. No automatic action may delete recordings. */
 export interface LocalDataMaintenance {
   getStorageUsage(): Promise<StorageUsageSummary>
-  deleteSessionWithAudio(sessionId: string): Promise<{ deletedAudio: number }>
+  deleteSessionWithAudio(
+    sessionId: string,
+    ownerId: string,
+    deletedAt: string | null,
+  ): Promise<{ deletedAudio: number }>
   clearTtsCache(): Promise<number>
 }

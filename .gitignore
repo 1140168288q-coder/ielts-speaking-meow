@@ -23,8 +23,15 @@ android/keystore.properties
 artifacts/*.wav
 artifacts/*.mp3
 artifacts/android-acceptance/
+artifacts/ui-v2/
+artifacts/audit-baseline/
+artifacts/audit-final/
 artifacts/android-acceptance-v1.1/
 artifacts/v1.1-qa/
 .env
 .env.*
 !.env.example
+!.env.deploy.example
+secrets/
+backups/
+*.dump

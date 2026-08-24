@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from ..config import Settings
 from ..errors import not_configured, provider_error
 from .http_client import raise_for_upstream, timeout_guard
+from .feedback_policy import validate_feedback_policy
 from .verification import LastCallRecord
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ class TextFeedback(BaseModel):
 
     summary: str = Field(min_length=1, max_length=500)
     strengths: list[str] = Field(default_factory=list, max_length=3)
-    problems: list[str] = Field(default_factory=list, max_length=3)
+    problems: list[str] = Field(min_length=2, max_length=3)
     grammarSuggestions: list[str] = Field(default_factory=list, max_length=3)
     vocabularySuggestions: list[str] = Field(default_factory=list, max_length=3)
     improvedAnswer: str = Field(min_length=1, max_length=1_500)
@@ -280,7 +281,10 @@ class DeepSeekService:
 
         parsed = self._parse_json_content(content)
         try:
-            result = schema.model_validate(parsed).model_dump(mode="json")
+            validated = schema.model_validate(parsed)
+            result = validated.model_dump(mode="json")
+            if schema is TextFeedback:
+                validate_feedback_policy(result)
         except Exception:
             logger.warning("DeepSeek output failed schema validation")
             raise provider_error("Text AI 返回结构不完整,已保留本地结果。")

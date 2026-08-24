@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+SYNC_SCHEMA_VERSION = 1
 EntityType = Literal["session", "expression", "personal_material", "user_setting"]
 PushStatus = Literal["applied", "conflict", "rejected"]
 
@@ -18,6 +19,7 @@ class ApiModel(BaseModel):
         alias_generator=to_camel,
         populate_by_name=True,
         serialize_by_alias=True,
+        extra="forbid",
     )
 
 
@@ -27,10 +29,14 @@ class SyncPushItem(ApiModel):
     entity_id: str = Field(min_length=1, max_length=128)
     base_version: int = Field(ge=0)
     payload: dict[str, Any]
-    deleted_at: datetime | None
+    # V1 客户端以 deletedAt 非空表达删除；服务端只把它当布尔意图，
+    # 不信任其时间值，响应中的 deletedAt 始终由服务端生成。
+    deleted_at: datetime | None = None
 
 
 class SyncPushRequest(ApiModel):
+    # 缺省 1 是旧客户端迁移窗口；显式未知版本会被拒绝。
+    schema_version: Literal[1] = SYNC_SCHEMA_VERSION
     items: list[SyncPushItem] = Field(min_length=1, max_length=100)
 
 
@@ -58,10 +64,12 @@ class SyncPushResult(ApiModel):
 
 
 class SyncPushResponse(ApiModel):
+    schema_version: Literal[1] = SYNC_SCHEMA_VERSION
     results: list[SyncPushResult]
 
 
 class SyncPullResponse(ApiModel):
+    schema_version: Literal[1] = SYNC_SCHEMA_VERSION
     changes: list[SyncChangeResponse]
     next_cursor: int = Field(ge=0)
     has_more: bool

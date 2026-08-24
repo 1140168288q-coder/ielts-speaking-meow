@@ -53,11 +53,22 @@ def test_migration_upgrades_legacy_database_without_losing_users(tmp_path):
         "sync_changes",
         "sync_operations",
         "account_tokens",
+        "account_billing_states",
+        "entitlement_overrides",
+        "usage_events",
+        "usage_counters",
+        "webhook_events",
         "alembic_version",
     }.issubset(tables)
-    assert "email_verified_at" in user_columns
+    assert {
+        "email_verified_at",
+        "display_name",
+        "status",
+        "updated_at",
+        "deleted_at",
+    }.issubset(user_columns)
     assert user == ("legacy-user", "legacy@example.com")
-    assert revision == ("0002_account_recovery",)
+    assert revision == ("0003_v2_account_foundation",)
 
 
 @pytest.mark.asyncio
@@ -80,5 +91,12 @@ async def test_persistent_database_initialization_runs_migrations(tmp_path):
             "SELECT version_num FROM alembic_version"
         ).fetchone()
 
-    assert "account_tokens" in tables
-    assert revision == ("0002_account_recovery",)
+    assert {
+        "account_tokens",
+        "account_billing_states",
+        "entitlement_overrides",
+        "usage_events",
+        "usage_counters",
+        "webhook_events",
+    }.issubset(tables)
+    assert revision == ("0003_v2_account_foundation",)

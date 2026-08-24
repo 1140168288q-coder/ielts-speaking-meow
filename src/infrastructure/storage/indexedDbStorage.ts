@@ -1,4 +1,5 @@
 import {
+  LOCAL_DEFAULT_USER_ID,
   accountProfileSchema,
   backendConfigSchema,
   importedQuestionRecordSchema,
@@ -6,8 +7,10 @@ import {
   normalizeStoredTrainingSession,
   personalMaterialSchema,
   practiceTextsSchema,
+  recordBelongsToAccount,
   savedExpressionSchema,
   ttsCacheEntrySchema,
+  userPreferencesSchema,
   type AccountProfile,
   type BackendConfig,
   type ImportedQuestionRecord,
@@ -17,10 +20,15 @@ import {
   type SavedExpression,
   type TrainingSession,
   type TtsCacheEntry,
+  type UserPreferences,
 } from '../../domain'
 import {
+  localDeletionTombstoneSchema,
+  type SyncChange,
+  syncChangeSchema,
   syncOutboxOperationSchema,
   type CloudSyncEntityType,
+  type LocalDeletionTombstone,
   type SyncOutboxOperation,
 } from '../../domain/cloudSync'
 import type { AccountStorage } from '../../ports/accounts'
@@ -40,7 +48,7 @@ import type {
   StorageUsageSummary,
 } from '../../ports/storage'
 
-const DATABASE_VERSION = 7
+const DATABASE_VERSION = 8
 const DEFAULT_DATABASE_NAME = 'ielts-speaking-meow'
 const MAX_TTS_CACHE_ENTRIES = 40
 const MAX_TTS_CACHE_BYTES = 25 * 1024 * 1024
@@ -62,6 +70,7 @@ const STORES = {
   appMeta: 'appMeta',
   accounts: 'accounts',
   personalMaterials: 'personalMaterials',
+  deletionTombstones: 'deletionTombstones',
   syncOutbox: 'syncOutbox',
   syncState: 'syncState',
 } as const
@@ -73,6 +82,10 @@ const PERSONAL_MATERIAL_INDEXES = {
 
 const SYNC_OUTBOX_INDEXES = {
   scopeId: 'scopeId',
+} as const
+
+const DELETION_TOMBSTONE_INDEXES = {
+  ownerId: 'ownerId',
 } as const
 
 type StoreName = (typeof STORES)[keyof typeof STORES]
@@ -182,9 +195,55 @@ export class IndexedDbStorage
     return this.getAllParsed(STORES.expressions, savedExpressionSchema)
   }
 
-  async deleteExpression(expressionId: string): Promise<void> {
+  async deleteExpression(
+    expressionId: string,
+    ownerId: string,
+    deletedAt: string | null,
+  ): Promise<void> {
     assertStorageKey(expressionId, 'Expression')
-    await this.delete(STORES.expressions, expressionId)
+    assertStorageKey(ownerId, 'Expression owner')
+    const database = await this.getDatabase()
+
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(
+        [STORES.expressions, STORES.deletionTombstones],
+        'readwrite',
+      )
+      const expressions = transaction.objectStore(STORES.expressions)
+      const request = expressions.get(expressionId)
+      request.onsuccess = () => {
+        try {
+          const parsed = savedExpressionSchema.safeParse(request.result)
+          if (
+            !parsed.success ||
+            !recordBelongsToAccount(parsed.data.ownerId, ownerId)
+          ) {
+            throw new Error('Saved expression not found.')
+          }
+          if (deletedAt !== null) {
+            transaction.objectStore(STORES.deletionTombstones).put(
+              createLocalDeletionTombstone(
+                ownerId,
+                'expression',
+                expressionId,
+                deletedAt,
+              ),
+            )
+          }
+          expressions.delete(expressionId)
+        } catch (error) {
+          transaction.abort()
+          reject(toError(error))
+        }
+      }
+      request.onerror = () =>
+        reject(request.error ?? new Error('Unable to read the expression.'))
+      transaction.oncomplete = () => resolve()
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Expression deletion aborted.'))
+      transaction.onerror = () =>
+        reject(transaction.error ?? new Error('Expression deletion failed.'))
+    })
   }
 
   async upsertPersonalMaterial(material: PersonalMaterial): Promise<void> {
@@ -238,19 +297,75 @@ export class IndexedDbStorage
   async deletePersonalMaterial(
     materialId: string,
     ownerId: string,
+    deletedAt: string,
   ): Promise<void> {
-    const material = await this.getPersonalMaterial(materialId, ownerId)
-    if (material === null || material.deletedAt !== null) {
-      return
-    }
+    assertStorageKey(materialId, 'Personal material')
+    assertStorageKey(ownerId, 'Personal material owner')
+    const database = await this.getDatabase()
 
-    const deletedAt = new Date().toISOString()
-    await this.upsertPersonalMaterial({
-      ...material,
-      updatedAt: deletedAt,
-      version: material.version + 1,
-      deletedAt,
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(
+        STORES.personalMaterials,
+        'readwrite',
+      )
+      const store = transaction.objectStore(STORES.personalMaterials)
+      const request = store.get(materialId)
+      request.onsuccess = () => {
+        try {
+          const parsed = personalMaterialSchema.safeParse(request.result)
+          if (!parsed.success || parsed.data.ownerId !== ownerId) {
+            throw new Error('个人素材不存在，或不属于当前账号。')
+          }
+          if (parsed.data.deletedAt === deletedAt) return
+          store.put(personalMaterialSchema.parse({
+            ...parsed.data,
+            updatedAt: deletedAt,
+            version: parsed.data.version + 1,
+            deletedAt,
+          }))
+        } catch (error) {
+          transaction.abort()
+          reject(toError(error))
+        }
+      }
+      request.onerror = () =>
+        reject(request.error ?? new Error('Unable to read personal material.'))
+      transaction.oncomplete = () => resolve()
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Personal material deletion aborted.'))
+      transaction.onerror = () =>
+        reject(transaction.error ?? new Error('Personal material deletion failed.'))
     })
+  }
+
+  async listLocalDeletionTombstones(
+    ownerId: string,
+  ): Promise<LocalDeletionTombstone[]> {
+    assertStorageKey(ownerId, 'Deletion tombstone owner')
+    const values = await this.getAllByIndex<unknown>(
+      STORES.deletionTombstones,
+      DELETION_TOMBSTONE_INDEXES.ownerId,
+      ownerId,
+    )
+    return values.flatMap((value) => {
+      const parsed = localDeletionTombstoneSchema.safeParse(value)
+      return parsed.success && parsed.data.ownerId === ownerId
+        ? [parsed.data]
+        : []
+    })
+  }
+
+  async removeLocalDeletionTombstone(
+    ownerId: string,
+    entityType: LocalDeletionTombstone['entityType'],
+    entityId: string,
+  ): Promise<void> {
+    assertStorageKey(ownerId, 'Deletion tombstone owner')
+    assertStorageKey(entityId, 'Deletion tombstone entity')
+    await this.delete(
+      STORES.deletionTombstones,
+      localDeletionTombstoneId(ownerId, entityType, entityId),
+    )
   }
 
   async getPracticeTexts(): Promise<PracticeTexts | null> {
@@ -271,6 +386,39 @@ export class IndexedDbStorage
   async savePracticeTexts(texts: PracticeTexts): Promise<void> {
     const parsed = practiceTextsSchema.parse(texts)
     await this.put(STORES.appMeta, { id: 'practiceTexts', ...parsed })
+  }
+
+  async getUserPreferences(ownerId: string): Promise<UserPreferences | null> {
+    assertStorageKey(ownerId, 'User preferences owner')
+    const record = await this.get<unknown>(
+      STORES.appMeta,
+      ['userPreferences', ownerId].join(':'),
+    )
+    if (record === null || typeof record !== 'object') return null
+    const stored = record as Record<string, unknown>
+    const parsed = userPreferencesSchema.safeParse({
+      version: stored.version,
+      ownerId: stored.ownerId,
+      theme: stored.theme,
+      ttsVoiceMode: stored.ttsVoiceMode,
+      ttsRate: stored.ttsRate,
+      autoPlayQuestion: stored.autoPlayQuestion,
+      defaultPart: stored.defaultPart,
+      feedbackDetail: stored.feedbackDetail,
+      memoryEnabled: stored.memoryEnabled,
+      sharePersonalMaterialsWithAi: stored.sharePersonalMaterialsWithAi,
+      reduceMotion: stored.reduceMotion,
+      updatedAt: stored.updatedAt,
+    })
+    return parsed.success && parsed.data.ownerId === ownerId ? parsed.data : null
+  }
+
+  async saveUserPreferences(preferences: UserPreferences): Promise<void> {
+    const parsed = userPreferencesSchema.parse(preferences)
+    await this.put(STORES.appMeta, {
+      id: ['userPreferences', parsed.ownerId].join(':'),
+      ...parsed,
+    })
   }
 
   async enqueueSyncOperation(
@@ -412,6 +560,61 @@ export class IndexedDbStorage
       transaction.oncomplete = () => resolve()
       transaction.onabort = () => reject(transaction.error ?? new Error('Sync entity state transaction aborted.'))
       transaction.onerror = () => reject(transaction.error ?? new Error('Sync entity state transaction failed.'))
+    })
+  }
+
+  async commitPulledSyncChange(
+    scopeId: string,
+    change: SyncChange,
+    state: SyncEntityState,
+  ): Promise<void> {
+    assertStorageKey(scopeId, 'Sync scope')
+    const parsedChange = syncChangeSchema.parse(change)
+    if (
+      state.version !== parsedChange.version ||
+      !Number.isSafeInteger(state.version) ||
+      state.version < 1
+    ) {
+      throw new Error('Pulled sync entity state is inconsistent.')
+    }
+    const id = syncStateId(scopeId)
+    const database = await this.getDatabase()
+
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(STORES.syncState, 'readwrite')
+      const store = transaction.objectStore(STORES.syncState)
+      const request = store.get(id)
+      request.onsuccess = () => {
+        try {
+          const current = request.result === undefined
+            ? { id, scopeId, cursor: 0, entities: {} }
+            : parseStoredSyncState(request.result, scopeId)
+          if (parsedChange.cursor < current.cursor) {
+            throw new Error('Sync cursor cannot move backwards.')
+          }
+          store.put({
+            ...current,
+            cursor: parsedChange.cursor,
+            entities: {
+              ...current.entities,
+              [syncEntityStateKey(
+                parsedChange.entityType,
+                parsedChange.entityId,
+              )]: state,
+            },
+          } satisfies StoredSyncState)
+        } catch (error) {
+          transaction.abort()
+          reject(toError(error))
+        }
+      }
+      request.onerror = () =>
+        reject(request.error ?? new Error('Unable to read pulled sync state.'))
+      transaction.oncomplete = () => resolve()
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Pulled sync commit aborted.'))
+      transaction.onerror = () =>
+        reject(transaction.error ?? new Error('Pulled sync commit failed.'))
     })
   }
 
@@ -574,11 +777,40 @@ export class IndexedDbStorage
     return storedFile?.blob instanceof Blob ? storedFile.blob : null
   }
 
-  async listImportedQuestions(): Promise<ImportedQuestionRecord[]> {
-    return this.getAllParsed(
+  async listImportedQuestions(ownerId: string): Promise<ImportedQuestionRecord[]> {
+    assertStorageKey(ownerId, 'Imported question owner')
+    const records = await this.getAllParsed(
       STORES.importedQuestions,
       importedQuestionRecordSchema,
     )
+    const migrated: ImportedQuestionRecord[] = []
+    const visible = records.flatMap((record) => {
+      if (!recordBelongsToAccount(record.ownerId, ownerId)) return []
+      if (
+        record.ownerId === undefined &&
+        ownerId === LOCAL_DEFAULT_USER_ID
+      ) {
+        const normalized = importedQuestionRecordSchema.parse({
+          ...record,
+          ownerId: LOCAL_DEFAULT_USER_ID,
+        })
+        migrated.push(normalized)
+        return [normalized]
+      }
+      return [record]
+    })
+
+    if (migrated.length > 0) {
+      const database = await this.getDatabase()
+      const transaction = database.transaction(
+        STORES.importedQuestions,
+        'readwrite',
+      )
+      const store = transaction.objectStore(STORES.importedQuestions)
+      const requests = migrated.map((record) => requestResult(store.put(record)))
+      await Promise.all([...requests, transactionComplete(transaction)])
+    }
+    return visible
   }
 
   async getTtsCacheEntry(cacheId: string): Promise<{
@@ -664,27 +896,63 @@ export class IndexedDbStorage
 
   async deleteSessionWithAudio(
     sessionId: string,
+    ownerId: string,
+    deletedAt: string | null,
   ): Promise<{ deletedAudio: number }> {
     assertStorageKey(sessionId, 'Session')
-    const session = await this.getSession(sessionId)
-    const audioIds = [...new Set(
-      session?.attempts.flatMap((attempt) =>
-        attempt.audio ? [attempt.audio.id] : [],
-      ) ?? [],
-    )]
+    assertStorageKey(ownerId, 'Session owner')
     const database = await this.getDatabase()
-    const transaction = database.transaction(
-      [STORES.sessions, STORES.audio],
-      'readwrite',
-    )
-    const requests: Promise<unknown>[] = [
-      requestResult(transaction.objectStore(STORES.sessions).delete(sessionId)),
-      ...audioIds.map((audioId) =>
-        requestResult(transaction.objectStore(STORES.audio).delete(audioId)),
-      ),
-    ]
-    await Promise.all([...requests, transactionComplete(transaction)])
-    return { deletedAudio: audioIds.length }
+    let deletedAudio = 0
+
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(
+        [STORES.sessions, STORES.audio, STORES.deletionTombstones],
+        'readwrite',
+      )
+      const sessions = transaction.objectStore(STORES.sessions)
+      const request = sessions.get(sessionId)
+      request.onsuccess = () => {
+        try {
+          const session = normalizeStoredTrainingSession(request.result)
+          if (
+            session === null ||
+            !recordBelongsToAccount(session.ownerId, ownerId)
+          ) {
+            throw new Error('The practice session could not be found.')
+          }
+          const audioIds = [...new Set(
+            session.attempts.flatMap((attempt) =>
+              attempt.audio ? [attempt.audio.id] : [],
+            ),
+          )]
+          deletedAudio = audioIds.length
+          sessions.delete(sessionId)
+          const audio = transaction.objectStore(STORES.audio)
+          for (const audioId of audioIds) audio.delete(audioId)
+          if (deletedAt !== null) {
+            transaction.objectStore(STORES.deletionTombstones).put(
+              createLocalDeletionTombstone(
+                ownerId,
+                'session',
+                sessionId,
+                deletedAt,
+              ),
+            )
+          }
+        } catch (error) {
+          transaction.abort()
+          reject(toError(error))
+        }
+      }
+      request.onerror = () =>
+        reject(request.error ?? new Error('Unable to read the session.'))
+      transaction.oncomplete = () => resolve()
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Session deletion aborted.'))
+      transaction.onerror = () =>
+        reject(transaction.error ?? new Error('Session deletion failed.'))
+    })
+    return { deletedAudio }
   }
 
   async clearTtsCache(): Promise<number> {
@@ -948,6 +1216,27 @@ export class IndexedDbStorage
             { unique: false },
           )
         }
+        const deletionTombstoneStore = database.objectStoreNames.contains(
+          STORES.deletionTombstones,
+        )
+          ? request.transaction?.objectStore(STORES.deletionTombstones)
+          : database.createObjectStore(STORES.deletionTombstones, {
+              keyPath: 'id',
+            })
+        if (deletionTombstoneStore === undefined) {
+          throw new Error('The deletion tombstone store upgrade is unavailable.')
+        }
+        if (
+          !deletionTombstoneStore.indexNames.contains(
+            DELETION_TOMBSTONE_INDEXES.ownerId,
+          )
+        ) {
+          deletionTombstoneStore.createIndex(
+            DELETION_TOMBSTONE_INDEXES.ownerId,
+            'ownerId',
+            { unique: false },
+          )
+        }
         const syncOutboxStore = database.objectStoreNames.contains(
           STORES.syncOutbox,
         )
@@ -1008,6 +1297,29 @@ function assertStorageKey(value: string, entityName: string): void {
 
 function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value))
+}
+
+function localDeletionTombstoneId(
+  ownerId: string,
+  entityType: LocalDeletionTombstone['entityType'],
+  entityId: string,
+): string {
+  return JSON.stringify(['deleted', ownerId, entityType, entityId])
+}
+
+function createLocalDeletionTombstone(
+  ownerId: string,
+  entityType: LocalDeletionTombstone['entityType'],
+  entityId: string,
+  deletedAt: string,
+): LocalDeletionTombstone {
+  return localDeletionTombstoneSchema.parse({
+    id: localDeletionTombstoneId(ownerId, entityType, entityId),
+    ownerId,
+    entityType,
+    entityId,
+    deletedAt,
+  })
 }
 
 function syncRecordId(scopeId: string, operationId: string): string {

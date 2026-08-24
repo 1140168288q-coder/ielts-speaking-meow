@@ -33,6 +33,14 @@ def unauthorized(
     return BackendError(401, "invalid-session", message)
 
 
+def forbidden(code: str, message: str) -> BackendError:
+    return BackendError(403, code, message)
+
+
+def quota_exceeded(message: str = "本周期可用额度已用完。") -> BackendError:
+    return BackendError(429, "quota-exceeded", message)
+
+
 def conflict(code: str, message: str) -> BackendError:
     return BackendError(409, code, message)
 

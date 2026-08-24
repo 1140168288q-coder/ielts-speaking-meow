@@ -10,10 +10,12 @@ import {
   cloudAccountTokenSchema,
   cloudAccountSessionSchema,
   cloudAuthResponseSchema,
+  cloudAccountOverviewSchema,
   cloudCredentialsSchema,
   cloudPasswordResetSchema,
   type AuthTokenStore,
   type CloudAccountSession,
+  type CloudAccountOverview,
   type CloudAuthErrorCode,
   type CloudAuthGateway,
   type CloudCredentials,
@@ -114,6 +116,74 @@ export class CloudAuthClient implements CloudAuthGateway {
       await tokenStore.clearToken()
     }
   }
+  async getAccountOverview(
+    tokenStore: AuthTokenStore,
+  ): Promise<CloudAccountOverview> {
+    const token = await requireStoredToken(tokenStore)
+    const payload = await this.request(
+      '/v1/me',
+      'GET',
+      token,
+      undefined,
+      tokenStore,
+    )
+    return parsePayload(cloudAccountOverviewSchema, payload)
+  }
+
+  async updateProfile(
+    rawDisplayName: string | null,
+    tokenStore: AuthTokenStore,
+  ): Promise<CloudAccountOverview> {
+    const displayName = rawDisplayName?.trim() || null
+    const parsed = z.string().max(80).nullable().safeParse(displayName)
+    if (!parsed.success) {
+      throw new CloudAuthError('invalid-input', '昵称不能超过 80 个字符。')
+    }
+    const token = await requireStoredToken(tokenStore)
+    const payload = await this.request(
+      '/v1/me',
+      'PATCH',
+      token,
+      { displayName: parsed.data },
+      tokenStore,
+    )
+    return parsePayload(cloudAccountOverviewSchema, payload)
+  }
+
+  async logoutAll(tokenStore: AuthTokenStore): Promise<void> {
+    const token = await requireStoredToken(tokenStore)
+    try {
+      await this.request(
+        '/v1/auth/logout-all',
+        'POST',
+        token,
+        undefined,
+        tokenStore,
+      )
+    } finally {
+      await tokenStore.clearToken()
+    }
+  }
+
+  async deleteAccount(
+    password: string,
+    tokenStore: AuthTokenStore,
+  ): Promise<void> {
+    const parsed = z.string().min(8).max(128).safeParse(password)
+    if (!parsed.success) {
+      throw new CloudAuthError('invalid-input', '请输入当前云账号密码。')
+    }
+    const token = await requireStoredToken(tokenStore)
+    await this.request(
+      '/v1/me',
+      'DELETE',
+      token,
+      { password: parsed.data },
+      tokenStore,
+    )
+    await tokenStore.clearToken()
+  }
+
 
   async requestEmailVerification(tokenStore: AuthTokenStore): Promise<void> {
     const token = await requireStoredToken(tokenStore)
@@ -219,7 +289,7 @@ export class CloudAuthClient implements CloudAuthGateway {
 
   private async request(
     path: string,
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
     token: string | null,
     body: unknown,
     tokenStore: AuthTokenStore,
@@ -356,6 +426,21 @@ function mapBackendCode(
       message: '邮件服务尚未配置，请联系服务维护者。',
       retryable: true,
     }
+  }
+  if (backendCode === 'invalid-password') {
+    return { code: 'invalid-password', message: '云账号密码不正确。', retryable: false }
+  }
+  if (backendCode === 'account-inactive') {
+    return { code: 'account-inactive', message: '该账号当前不可用。', retryable: false }
+  }
+  if (
+    backendCode === 'feature-not-entitled' ||
+    backendCode === 'email-not-verified'
+  ) {
+    return { code: 'feature-not-entitled', message: '当前账号暂不能使用这项云端能力。', retryable: false }
+  }
+  if (backendCode === 'quota-exceeded') {
+    return { code: 'quota-exceeded', message: '本周期云端用量已用完。', retryable: false }
   }
   if (backendCode === 'rate-limited' || status === 429) {
     return { code: 'rate-limited', message: '操作太频繁，请稍后重试。', retryable: true }

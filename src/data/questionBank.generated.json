@@ -1,9 +1,11 @@
 {
   "format": "ielts-speaking-meow-question-bank",
-  "formatVersion": 1,
+  "formatVersion": 2,
+  "parserVersion": "2.2.0",
   "seasonLabel": "2026-05",
   "sourceFile": "更新版-2026年5-8月雅思口语新题库0526(1).pdf",
-  "generatedAt": "2026-08-19T12:44:31.623Z",
+  "sourceSha256": "02ea9e1fe4cdee302a8949552cfe7de6d260a7c498c0185b70aeaa677db896de",
+  "generatedAt": "2026-08-24T05:40:13.661Z",
   "counts": {
     "1": 256,
     "2": 60,
@@ -2843,8 +2845,8 @@
     {
       "id": "p2-describe-a-place-you-have-travelled-to-that--001",
       "part": 2,
-      "topic": "place you have travelled to that you",
-      "prompt": "Describe a place you have travelled to that you would like to recomme nd to others",
+      "topic": "place you have travelled to that you would like to recommend to others",
+      "prompt": "Describe a place you have travelled to that you would like to recommend to others",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "PLACE",
@@ -2867,7 +2869,7 @@
     {
       "id": "p3-where-do-people-in-your-country-often-go-for-001",
       "part": 3,
-      "topic": "place you have travelled to that you",
+      "topic": "place you have travelled to that you would like to recommend to others",
       "prompt": "Where do people in your country often go for holidays?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2878,7 +2880,7 @@
     {
       "id": "p3-what-is-the-ideal-length-for-a-holiday-001",
       "part": 3,
-      "topic": "place you have travelled to that you",
+      "topic": "place you have travelled to that you would like to recommend to others",
       "prompt": "What is the ideal length for a holiday?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2889,7 +2891,7 @@
     {
       "id": "p3-how-do-people-usually-plan-holidays-001",
       "part": 3,
-      "topic": "place you have travelled to that you",
+      "topic": "place you have travelled to that you would like to recommend to others",
       "prompt": "How do people usually plan holidays?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2900,7 +2902,7 @@
     {
       "id": "p3-is-it-important-to-plan-a-holiday-ahead-001",
       "part": 3,
-      "topic": "place you have travelled to that you",
+      "topic": "place you have travelled to that you would like to recommend to others",
       "prompt": "Is it important to plan a holiday ahead?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2911,7 +2913,7 @@
     {
       "id": "p3-why-do-many-countries-try-to-attract-people--001",
       "part": 3,
-      "topic": "place you have travelled to that you",
+      "topic": "place you have travelled to that you would like to recommend to others",
       "prompt": "Why do many countries try to attract people to visit?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2922,7 +2924,7 @@
     {
       "id": "p3-how-do-people-decide-when-to-travel-001",
       "part": 3,
-      "topic": "place you have travelled to that you",
+      "topic": "place you have travelled to that you would like to recommend to others",
       "prompt": "How do people decide when to travel?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2933,7 +2935,7 @@
     {
       "id": "p2-describe-a-home-that-you-like-to-visit-but-d-001",
       "part": 2,
-      "topic": "home that you like to visit but",
+      "topic": "home that you like to visit but do not want to live",
       "prompt": "Describe a home that you like to visit but do not want to live in",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -2957,7 +2959,7 @@
     {
       "id": "p3-do-chinese-people-like-to-visit-others-homes-001",
       "part": 3,
-      "topic": "home that you like to visit but",
+      "topic": "home that you like to visit but do not want to live",
       "prompt": "Do Chinese people like to visit others' homes?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2968,7 +2970,7 @@
     {
       "id": "p3-what-do-chinese-people-do-when-they-visit-ot-001",
       "part": 3,
-      "topic": "home that you like to visit but",
+      "topic": "home that you like to visit but do not want to live",
       "prompt": "What do Chinese people do when they visit others?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2979,7 +2981,7 @@
     {
       "id": "p3-what-kind-of-place-do-people-in-your-country-001",
       "part": 3,
-      "topic": "home that you like to visit but",
+      "topic": "home that you like to visit but do not want to live",
       "prompt": "What kind of place do people in your country like to live in?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -2990,7 +2992,7 @@
     {
       "id": "p3-what-s-the-difference-between-homes-in-citie-001",
       "part": 3,
-      "topic": "home that you like to visit but",
+      "topic": "home that you like to visit but do not want to live",
       "prompt": "What's the difference between homes in cities and those in the countryside?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3001,7 +3003,7 @@
     {
       "id": "p3-what-kind-of-gifts-do-people-usually-bring-w-001",
       "part": 3,
-      "topic": "home that you like to visit but",
+      "topic": "home that you like to visit but do not want to live",
       "prompt": "What kind of gifts do people usually bring when they visit others?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3012,7 +3014,7 @@
     {
       "id": "p3-how-often-do-you-visit-your-relatives-or-fri-001",
       "part": 3,
-      "topic": "home that you like to visit but",
+      "topic": "home that you like to visit but do not want to live",
       "prompt": "How often do you visit your relatives or friends?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3023,7 +3025,7 @@
     {
       "id": "p2-describe-a-place-you-would-like-to-visit-in--001",
       "part": 2,
-      "topic": "place you would like to visit in",
+      "topic": "place you would like to visit in your free time",
       "prompt": "Describe a place you would like to visit in your free time",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -3043,7 +3045,7 @@
     {
       "id": "p3-why-do-you-think-some-people-choose-not-to-t-001",
       "part": 3,
-      "topic": "place you would like to visit in",
+      "topic": "place you would like to visit in your free time",
       "prompt": "Why do you think some people choose not to travel abroad?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3054,7 +3056,7 @@
     {
       "id": "p3-do-you-think-a-gap-period-in-life-is-importa-001",
       "part": 3,
-      "topic": "place you would like to visit in",
+      "topic": "place you would like to visit in your free time",
       "prompt": "Do you think a gap period in life is important?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3252,7 +3254,8 @@
       "category": "PLACE",
       "isNew": false,
       "cuePoints": [
-        "Where it is When you visited it",
+        "Where it is",
+        "When you visited it",
         "How long you stayed there",
         "What you did there",
         "And explain why you enjoyed visiting it"
@@ -3425,8 +3428,8 @@
     {
       "id": "p2-describe-a-person-who-loves-to-grow-plants-e-001",
       "part": 2,
-      "topic": "person who loves to grow plants (e.",
-      "prompt": "Describe a person who loves to grow plants (e. g. vegetables, flowers) at home or in the garden",
+      "topic": "person who loves to grow plants at home or in the garden",
+      "prompt": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "PEOPLE",
@@ -3449,7 +3452,7 @@
     {
       "id": "p3-what-are-the-advantages-of-growing-vegetable-001",
       "part": 3,
-      "topic": "person who loves to grow plants (e.",
+      "topic": "person who loves to grow plants at home or in the garden",
       "prompt": "What are the advantages of growing vegetables or flowers at home?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3460,7 +3463,7 @@
     {
       "id": "p3-do-many-people-grow-vegetables-or-flowers-at-001",
       "part": 3,
-      "topic": "person who loves to grow plants (e.",
+      "topic": "person who loves to grow plants at home or in the garden",
       "prompt": "Do many people grow vegetables or flowers at home in your country?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3471,7 +3474,7 @@
     {
       "id": "p3-is-it-easy-to-grow-plants-at-home-001",
       "part": 3,
-      "topic": "person who loves to grow plants (e.",
+      "topic": "person who loves to grow plants at home or in the garden",
       "prompt": "Is it easy to grow plants at home?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3482,7 +3485,7 @@
     {
       "id": "p3-why-do-people-like-to-grow-plants-001",
       "part": 3,
-      "topic": "person who loves to grow plants (e.",
+      "topic": "person who loves to grow plants at home or in the garden",
       "prompt": "Why do people like to grow plants?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3493,7 +3496,7 @@
     {
       "id": "p3-why-do-some-people-prefer-to-grow-their-own--001",
       "part": 3,
-      "topic": "person who loves to grow plants (e.",
+      "topic": "person who loves to grow plants at home or in the garden",
       "prompt": "Why do some people prefer to grow their own fruits and vegetables instead of buying them from the market?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3504,7 +3507,7 @@
     {
       "id": "p3-do-you-think-students-should-learn-to-grow-p-001",
       "part": 3,
-      "topic": "person who loves to grow plants (e.",
+      "topic": "person who loves to grow plants at home or in the garden",
       "prompt": "Do you think students should learn to grow plant?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3515,7 +3518,7 @@
     {
       "id": "p2-describe-a-person-you-know-who-has-a-success-001",
       "part": 2,
-      "topic": "person you know who has a successful",
+      "topic": "person you know who has a successful business",
       "prompt": "Describe a person you know who has a successful business",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -3540,7 +3543,7 @@
     {
       "id": "p3-why-do-some-people-start-their-own-business-001",
       "part": 3,
-      "topic": "person you know who has a successful",
+      "topic": "person you know who has a successful business",
       "prompt": "Why do some people start their own business?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3551,7 +3554,7 @@
     {
       "id": "p3-should-governments-provide-financial-support-001",
       "part": 3,
-      "topic": "person you know who has a successful",
+      "topic": "person you know who has a successful business",
       "prompt": "Should governments provide financial support to start-ups?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3562,7 +3565,7 @@
     {
       "id": "p3-do-most-people-prefer-shopping-at-big-stores-001",
       "part": 3,
-      "topic": "person you know who has a successful",
+      "topic": "person you know who has a successful business",
       "prompt": "Do most people prefer shopping at big stores or small stores?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3573,7 +3576,7 @@
     {
       "id": "p3-what-makes-a-business-successful-001",
       "part": 3,
-      "topic": "person you know who has a successful",
+      "topic": "person you know who has a successful business",
       "prompt": "What makes a business successful?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3584,7 +3587,7 @@
     {
       "id": "p3-what-makes-a-business-fail-001",
       "part": 3,
-      "topic": "person you know who has a successful",
+      "topic": "person you know who has a successful business",
       "prompt": "What makes a business fail?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3595,7 +3598,7 @@
     {
       "id": "p3-is-it-easy-to-set-up-a-new-business-in-your--001",
       "part": 3,
-      "topic": "person you know who has a successful",
+      "topic": "person you know who has a successful business",
       "prompt": "Is it easy to set up a new business in your country?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3606,7 +3609,7 @@
     {
       "id": "p2-describe-a-person-who-is-good-at-learning-an-001",
       "part": 2,
-      "topic": "person who is good at learning and",
+      "topic": "person who is good at learning and speaking new languages",
       "prompt": "Describe a person who is good at learning and speaking new languages",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -3630,7 +3633,7 @@
     {
       "id": "p3-are-there-many-people-who-can-speak-foreign--001",
       "part": 3,
-      "topic": "person who is good at learning and",
+      "topic": "person who is good at learning and speaking new languages",
       "prompt": "Are there many people who can speak foreign languages in your country?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3641,7 +3644,7 @@
     {
       "id": "p3-does-speaking-other-languages-help-at-work-001",
       "part": 3,
-      "topic": "person who is good at learning and",
+      "topic": "person who is good at learning and speaking new languages",
       "prompt": "Does speaking other languages help at work?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3652,7 +3655,7 @@
     {
       "id": "p3-do-people-learn-any-languages-other-than-eng-001",
       "part": 3,
-      "topic": "person who is good at learning and",
+      "topic": "person who is good at learning and speaking new languages",
       "prompt": "Do people learn any languages other than English?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3663,7 +3666,7 @@
     {
       "id": "p3-why-is-it-easier-for-children-to-learn-new-t-001",
       "part": 3,
-      "topic": "person who is good at learning and",
+      "topic": "person who is good at learning and speaking new languages",
       "prompt": "Why is it easier for children to learn new things than for adults?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3674,7 +3677,7 @@
     {
       "id": "p3-how-do-people-learn-new-things-001",
       "part": 3,
-      "topic": "person who is good at learning and",
+      "topic": "person who is good at learning and speaking new languages",
       "prompt": "How do people learn new things?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3685,7 +3688,7 @@
     {
       "id": "p3-what-is-the-most-important-thing-for-learnin-001",
       "part": 3,
-      "topic": "person who is good at learning and",
+      "topic": "person who is good at learning and speaking new languages",
       "prompt": "What is the most important thing for learning a language well?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3696,13 +3699,15 @@
     {
       "id": "p2-describe-a-person-you-know-who-would-like-to-001",
       "part": 2,
-      "topic": "person you know who would like to",
-      "prompt": "Describe a person you know who would like to choose a career in the medical field (e. g. a doctor, a nurse)",
+      "topic": "person you know who would like to choose a career in the medical field",
+      "prompt": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "PEOPLE",
       "isNew": true,
       "cuePoints": [
+        "When you knew him/her",
+        "When he/she started to think about that",
         "What he/she would like to do",
         "And explain why he/she would like to choose this career"
       ],
@@ -3716,7 +3721,7 @@
     {
       "id": "p3-do-you-think-being-a-doctor-is-easy-or-diffi-001",
       "part": 3,
-      "topic": "person you know who would like to",
+      "topic": "person you know who would like to choose a career in the medical field",
       "prompt": "Do you think being a doctor is easy or difficult?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3727,7 +3732,7 @@
     {
       "id": "p3-do-you-think-learning-biology-is-interesting-001",
       "part": 3,
-      "topic": "person you know who would like to",
+      "topic": "person you know who would like to choose a career in the medical field",
       "prompt": "Do you think learning biology is interesting for children?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3738,7 +3743,7 @@
     {
       "id": "p3-why-do-some-children-want-to-become-doctors-001",
       "part": 3,
-      "topic": "person you know who would like to",
+      "topic": "person you know who would like to choose a career in the medical field",
       "prompt": "Why do some children want to become doctors?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3749,7 +3754,7 @@
     {
       "id": "p3-do-you-think-governments-should-put-a-large--001",
       "part": 3,
-      "topic": "person you know who would like to",
+      "topic": "person you know who would like to choose a career in the medical field",
       "prompt": "Do you think governments should put a large amount of money into medical research?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3868,7 +3873,7 @@
     {
       "id": "p2-describe-a-person-who-makes-plans-a-lot-and--001",
       "part": 2,
-      "topic": "person who makes plans a lot and",
+      "topic": "person who makes plans a lot and is good at planning",
       "prompt": "Describe a person who makes plans a lot and is good at planning",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -3892,7 +3897,7 @@
     {
       "id": "p3-do-you-think-it-s-important-to-plan-ahead-001",
       "part": 3,
-      "topic": "person who makes plans a lot and",
+      "topic": "person who makes plans a lot and is good at planning",
       "prompt": "Do you think it's important to plan ahead?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3903,7 +3908,7 @@
     {
       "id": "p3-what-activities-do-we-need-to-plan-ahead-001",
       "part": 3,
-      "topic": "person who makes plans a lot and",
+      "topic": "person who makes plans a lot and is good at planning",
       "prompt": "What activities do we need to plan ahead?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3914,7 +3919,7 @@
     {
       "id": "p3-do-you-think-children-should-plan-their-futu-001",
       "part": 3,
-      "topic": "person who makes plans a lot and",
+      "topic": "person who makes plans a lot and is good at planning",
       "prompt": "Do you think children should plan their future careers?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3925,7 +3930,7 @@
     {
       "id": "p3-should-children-ask-their-teachers-or-parent-001",
       "part": 3,
-      "topic": "person who makes plans a lot and",
+      "topic": "person who makes plans a lot and is good at planning",
       "prompt": "Should children ask their teachers or parents for advice when making plans?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3936,7 +3941,7 @@
     {
       "id": "p3-is-making-study-plans-popular-among-young-pe-001",
       "part": 3,
-      "topic": "person who makes plans a lot and",
+      "topic": "person who makes plans a lot and is good at planning",
       "prompt": "Is making study plans popular among young people?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -3947,7 +3952,7 @@
     {
       "id": "p3-do-you-think-choosing-a-college-major-is-clo-001",
       "part": 3,
-      "topic": "person who makes plans a lot and",
+      "topic": "person who makes plans a lot and is good at planning",
       "prompt": "Do you think choosing a college major is closely related to a future career?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4048,7 +4053,7 @@
     {
       "id": "p2-describe-one-of-your-friends-who-learned-som-001",
       "part": 2,
-      "topic": "Describe one of your friends who learned",
+      "topic": "one of your friends who learned something without a teacher",
       "prompt": "Describe one of your friends who learned something without a teacher",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -4072,7 +4077,7 @@
     {
       "id": "p3-is-it-necessary-to-keep-learning-after-gradu-001",
       "part": 3,
-      "topic": "Describe one of your friends who learned",
+      "topic": "one of your friends who learned something without a teacher",
       "prompt": "Is it necessary to keep learning after graduating from school?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4083,7 +4088,7 @@
     {
       "id": "p3-should-teachers-make-learning-in-their-class-001",
       "part": 3,
-      "topic": "Describe one of your friends who learned",
+      "topic": "one of your friends who learned something without a teacher",
       "prompt": "Should teachers make learning in their classes fun?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4094,7 +4099,7 @@
     {
       "id": "p3-do-you-think-there-are-too-many-subjects-for-001",
       "part": 3,
-      "topic": "Describe one of your friends who learned",
+      "topic": "one of your friends who learned something without a teacher",
       "prompt": "Do you think there are too many subjects for students to learn?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4105,7 +4110,7 @@
     {
       "id": "p3-is-it-better-to-focus-on-a-few-subjects-or-t-001",
       "part": 3,
-      "topic": "Describe one of your friends who learned",
+      "topic": "one of your friends who learned something without a teacher",
       "prompt": "Is it better to focus on a few subjects or to learn many subjects?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4116,7 +4121,7 @@
     {
       "id": "p3-do-you-think-enterprises-should-provide-trai-001",
       "part": 3,
-      "topic": "Describe one of your friends who learned",
+      "topic": "one of your friends who learned something without a teacher",
       "prompt": "Do you think enterprises should provide training for their employees?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4127,7 +4132,7 @@
     {
       "id": "p3-do-you-think-it-is-good-for-older-adults-to--001",
       "part": 3,
-      "topic": "Describe one of your friends who learned",
+      "topic": "one of your friends who learned something without a teacher",
       "prompt": "Do you think it is good for older adults to continue learning?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4318,7 +4323,7 @@
     {
       "id": "p2-describe-a-person-who-solved-a-problem-in-a--001",
       "part": 2,
-      "topic": "person who solved a problem in a",
+      "topic": "person who solved a problem in a smart way",
       "prompt": "Describe a person who solved a problem in a smart way",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -4342,7 +4347,7 @@
     {
       "id": "p3-do-you-think-children-are-born-smart-or-they-001",
       "part": 3,
-      "topic": "person who solved a problem in a",
+      "topic": "person who solved a problem in a smart way",
       "prompt": "Do you think children are born smart or they learn to become smart?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4353,7 +4358,7 @@
     {
       "id": "p3-how-do-children-become-smart-at-school-001",
       "part": 3,
-      "topic": "person who solved a problem in a",
+      "topic": "person who solved a problem in a smart way",
       "prompt": "How do children become smart at school?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4364,7 +4369,7 @@
     {
       "id": "p3-why-are-some-people-well-rounded-and-others--001",
       "part": 3,
-      "topic": "person who solved a problem in a",
+      "topic": "person who solved a problem in a smart way",
       "prompt": "Why are some people well-rounded and others only good at one thing?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4375,7 +4380,7 @@
     {
       "id": "p3-why-does-modern-society-need-talents-of-all--001",
       "part": 3,
-      "topic": "person who solved a problem in a",
+      "topic": "person who solved a problem in a smart way",
       "prompt": "Why does modern society need talents of all kinds?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4386,7 +4391,7 @@
     {
       "id": "p3-do-you-think-smart-children-are-happier-than-001",
       "part": 3,
-      "topic": "person who solved a problem in a",
+      "topic": "person who solved a problem in a smart way",
       "prompt": "Do you think smart children are happier than other children?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4397,7 +4402,7 @@
     {
       "id": "p3-is-it-important-for-schools-to-identify-and--001",
       "part": 3,
-      "topic": "person who solved a problem in a",
+      "topic": "person who solved a problem in a smart way",
       "prompt": "Is it important for schools to identify and develop each student’s talents?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4408,7 +4413,7 @@
     {
       "id": "p2-describe-a-person-who-likes-to-look-after-th-001",
       "part": 2,
-      "topic": "person who likes to look after the",
+      "topic": "person who likes to look after the natural world",
       "prompt": "Describe a person who likes to look after the natural world",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -4433,7 +4438,7 @@
     {
       "id": "p3-do-you-think-parents-should-teach-their-chil-001",
       "part": 3,
-      "topic": "person who likes to look after the",
+      "topic": "person who likes to look after the natural world",
       "prompt": "Do you think parents should teach their children how to protect the environment?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4444,7 +4449,7 @@
     {
       "id": "p3-what-laws-about-the-environment-are-effectiv-001",
       "part": 3,
-      "topic": "person who likes to look after the",
+      "topic": "person who likes to look after the natural world",
       "prompt": "What laws about the environment are effective in your country?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4455,7 +4460,7 @@
     {
       "id": "p3-which-do-you-think-people-prefer-rewards-or--001",
       "part": 3,
-      "topic": "person who likes to look after the",
+      "topic": "person who likes to look after the natural world",
       "prompt": "Which do you think people prefer, rewards or punishment, when it comes to government intervention in environmental protection?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4466,7 +4471,7 @@
     {
       "id": "p3-is-it-easy-for-children-in-cities-to-get-clo-001",
       "part": 3,
-      "topic": "person who likes to look after the",
+      "topic": "person who likes to look after the natural world",
       "prompt": "Is it easy for children in cities to get close to the natural world?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4477,7 +4482,7 @@
     {
       "id": "p3-what-can-people-do-to-protect-the-natural-wo-001",
       "part": 3,
-      "topic": "person who likes to look after the",
+      "topic": "person who likes to look after the natural world",
       "prompt": "What can people do to protect the natural world?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4488,7 +4493,7 @@
     {
       "id": "p3-is-it-important-to-teach-students-environmen-001",
       "part": 3,
-      "topic": "person who likes to look after the",
+      "topic": "person who likes to look after the natural world",
       "prompt": "Is it important to teach students environmental protection at school?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4499,7 +4504,7 @@
     {
       "id": "p2-describe-a-new-law-you-would-like-to-introdu-001",
       "part": 2,
-      "topic": "new law you would like to introduce",
+      "topic": "new law you would like to introduce in your country",
       "prompt": "Describe a new law you would like to introduce in your country",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -4524,7 +4529,7 @@
     {
       "id": "p3-what-rules-should-students-follow-at-school-001",
       "part": 3,
-      "topic": "new law you would like to introduce",
+      "topic": "new law you would like to introduce in your country",
       "prompt": "What rules should students follow at school?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4535,7 +4540,7 @@
     {
       "id": "p3-do-people-in-your-country-usually-obey-the-l-001",
       "part": 3,
-      "topic": "new law you would like to introduce",
+      "topic": "new law you would like to introduce in your country",
       "prompt": "Do people in your country usually obey the law?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4546,7 +4551,7 @@
     {
       "id": "p3-what-kinds-of-behavior-are-considered-as-goo-001",
       "part": 3,
-      "topic": "new law you would like to introduce",
+      "topic": "new law you would like to introduce in your country",
       "prompt": "What kinds of behavior are considered as good behavior?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4557,7 +4562,7 @@
     {
       "id": "p3-do-you-think-children-can-learn-about-the-la-001",
       "part": 3,
-      "topic": "new law you would like to introduce",
+      "topic": "new law you would like to introduce in your country",
       "prompt": "Do you think children can learn about the law outside of school?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4568,7 +4573,7 @@
     {
       "id": "p3-what-are-the-benefits-for-people-to-obey-rul-001",
       "part": 3,
-      "topic": "new law you would like to introduce",
+      "topic": "new law you would like to introduce in your country",
       "prompt": "What are the benefits for people to obey rules?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4579,7 +4584,7 @@
     {
       "id": "p3-how-can-parents-teach-children-to-obey-rules-001",
       "part": 3,
-      "topic": "new law you would like to introduce",
+      "topic": "new law you would like to introduce in your country",
       "prompt": "How can parents teach children to obey rules?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -4687,6 +4692,7 @@
       "category": "OBJECTS",
       "isNew": true,
       "cuePoints": [
+        "When it happened",
         "Where it happened",
         "Who you got the cake from",
         "And explain why it's a special cake"
@@ -4866,6 +4872,7 @@
       "category": "OBJECTS",
       "isNew": true,
       "cuePoints": [
+        "When this happened",
         "What made you change the plan",
         "What the new plan was",
         "And how you felt about the change"
@@ -4938,7 +4945,7 @@
       "id": "p3-do-you-think-people-like-the-process-of-maki-001",
       "part": 3,
       "topic": "plan that you had to change recently",
-      "prompt": "Do you think people like the process of making plans more,or the moment pf carrying them out?",
+      "prompt": "Do you think people like the process of making plans more, or the moment of carrying them out?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
       "category": "OBJECTS",
@@ -4955,6 +4962,7 @@
       "category": "OBJECTS",
       "isNew": true,
       "cuePoints": [
+        "When and where you watched it",
         "What it is about",
         "Why you watched it",
         "And explain how you feel about it"
@@ -5193,7 +5201,7 @@
     {
       "id": "p2-describe-an-environmental-law-you-would-like-001",
       "part": 2,
-      "topic": "environmental law you would like your country",
+      "topic": "environmental law you would like your country to introduce",
       "prompt": "Describe an environmental law you would like your country to introduce",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -5215,7 +5223,7 @@
     {
       "id": "p3-how-does-technology-affect-the-law-001",
       "part": 3,
-      "topic": "environmental law you would like your country",
+      "topic": "environmental law you would like your country to introduce",
       "prompt": "How does technology affect the law?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5226,7 +5234,7 @@
     {
       "id": "p3-what-kinds-of-rules-do-schools-in-china-have-001-002",
       "part": 3,
-      "topic": "environmental law you would like your country",
+      "topic": "environmental law you would like your country to introduce",
       "prompt": "What kinds of rules do schools in China have?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5237,7 +5245,7 @@
     {
       "id": "p3-will-there-be-a-law-that-is-universally-acce-001",
       "part": 3,
-      "topic": "environmental law you would like your country",
+      "topic": "environmental law you would like your country to introduce",
       "prompt": "Will there be a law that is universally accepted?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5248,7 +5256,7 @@
     {
       "id": "p3-what-environmental-laws-does-your-country-al-001",
       "part": 3,
-      "topic": "environmental law you would like your country",
+      "topic": "environmental law you would like your country to introduce",
       "prompt": "What environmental laws does your country already have?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5266,6 +5274,7 @@
       "category": "OBJECTS",
       "isNew": false,
       "cuePoints": [
+        "When and where you watched it",
         "Who you watched it with",
         "What it was about",
         "And explain why you watched this movie"
@@ -5348,7 +5357,7 @@
     {
       "id": "p2-describe-a-piece-of-technology-not-a-phone-t-001",
       "part": 2,
-      "topic": "piece of technology (not a phone) that",
+      "topic": "piece of technology (not a phone) that you would like to own",
       "prompt": "Describe a piece of technology (not a phone) that you would like to own",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -5372,7 +5381,7 @@
     {
       "id": "p3-what-are-the-differences-between-the-technol-001",
       "part": 3,
-      "topic": "piece of technology (not a phone) that",
+      "topic": "piece of technology (not a phone) that you would like to own",
       "prompt": "What are the differences between the technology of the past and that of today?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5383,7 +5392,7 @@
     {
       "id": "p3-what-technology-do-young-people-like-to-use-001",
       "part": 3,
-      "topic": "piece of technology (not a phone) that",
+      "topic": "piece of technology (not a phone) that you would like to own",
       "prompt": "What technology do young people like to use?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5394,7 +5403,7 @@
     {
       "id": "p3-what-are-the-differences-between-online-and--001",
       "part": 3,
-      "topic": "piece of technology (not a phone) that",
+      "topic": "piece of technology (not a phone) that you would like to own",
       "prompt": "What are the differences between online and face-to-face communication?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5405,7 +5414,7 @@
     {
       "id": "p3-do-you-think-technology-has-changed-the-way--001",
       "part": 3,
-      "topic": "piece of technology (not a phone) that",
+      "topic": "piece of technology (not a phone) that you would like to own",
       "prompt": "Do you think technology has changed the way people communicate?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5416,7 +5425,7 @@
     {
       "id": "p3-what-negative-effects-does-technology-have-o-001",
       "part": 3,
-      "topic": "piece of technology (not a phone) that",
+      "topic": "piece of technology (not a phone) that you would like to own",
       "prompt": "What negative effects does technology have on people's relationships?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5427,7 +5436,7 @@
     {
       "id": "p3-what-are-the-differences-between-making-frie-001",
       "part": 3,
-      "topic": "piece of technology (not a phone) that",
+      "topic": "piece of technology (not a phone) that you would like to own",
       "prompt": "What are the differences between making friends in real life and online?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5438,14 +5447,15 @@
     {
       "id": "p2-describe-something-important-that-has-been-k-001",
       "part": 2,
-      "topic": "Describe something important that has been kept",
+      "topic": "something important that has been kept in your family for a long time",
       "prompt": "Describe something important that has been kept in your family for a long time",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "OBJECTS",
       "isNew": false,
       "cuePoints": [
-        "What it is When your family had it",
+        "What it is",
+        "When your family had it",
         "How your family got it",
         "And explain why it is important to your family"
       ],
@@ -5461,7 +5471,7 @@
     {
       "id": "p3-what-things-do-families-keep-for-a-long-time-001",
       "part": 3,
-      "topic": "Describe something important that has been kept",
+      "topic": "something important that has been kept in your family for a long time",
       "prompt": "What things do families keep for a long time?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5472,7 +5482,7 @@
     {
       "id": "p3-what-s-the-difference-between-things-valued--001",
       "part": 3,
-      "topic": "Describe something important that has been kept",
+      "topic": "something important that has been kept in your family for a long time",
       "prompt": "What's the difference between things valued by people in the past and today?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5483,7 +5493,7 @@
     {
       "id": "p3-what-kinds-of-things-are-kept-in-museums-001",
       "part": 3,
-      "topic": "Describe something important that has been kept",
+      "topic": "something important that has been kept in your family for a long time",
       "prompt": "What kinds of things are kept in museums?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5494,7 +5504,7 @@
     {
       "id": "p3-what-s-the-influence-of-technology-on-museum-001",
       "part": 3,
-      "topic": "Describe something important that has been kept",
+      "topic": "something important that has been kept in your family for a long time",
       "prompt": "What's the influence of technology on museums?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5505,7 +5515,7 @@
     {
       "id": "p3-what-are-the-benefits-of-technology-for-lear-001",
       "part": 3,
-      "topic": "Describe something important that has been kept",
+      "topic": "something important that has been kept in your family for a long time",
       "prompt": "What are the benefits of technology for learning history?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5516,7 +5526,7 @@
     {
       "id": "p3-why-do-people-visit-museums-001",
       "part": 3,
-      "topic": "Describe something important that has been kept",
+      "topic": "something important that has been kept in your family for a long time",
       "prompt": "Why do people visit museums?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5527,7 +5537,7 @@
     {
       "id": "p2-describe-a-perfect-job-you-would-like-to-hav-001",
       "part": 2,
-      "topic": "perfect job you would like to have",
+      "topic": "perfect job you would like to have in the future",
       "prompt": "Describe a perfect job you would like to have in the future",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -5551,7 +5561,7 @@
     {
       "id": "p3-what-kind-of-job-can-be-called-a-dream-job-001",
       "part": 3,
-      "topic": "perfect job you would like to have",
+      "topic": "perfect job you would like to have in the future",
       "prompt": "What kind of job can be called a 'dream job '?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5562,7 +5572,7 @@
     {
       "id": "p3-what-jobs-do-children-want-to-do-when-they-g-001",
       "part": 3,
-      "topic": "perfect job you would like to have",
+      "topic": "perfect job you would like to have in the future",
       "prompt": "What jobs do children want to do when they grow up?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5573,7 +5583,7 @@
     {
       "id": "p3-do-people-s-ideal-jobs-change-as-they-grow-u-001",
       "part": 3,
-      "topic": "perfect job you would like to have",
+      "topic": "perfect job you would like to have in the future",
       "prompt": "Do people's ideal jobs change as they grow up?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5584,7 +5594,7 @@
     {
       "id": "p3-what-should-people-consider-when-choosing-jo-001",
       "part": 3,
-      "topic": "perfect job you would like to have",
+      "topic": "perfect job you would like to have in the future",
       "prompt": "What should people consider when choosing jobs?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5595,7 +5605,7 @@
     {
       "id": "p3-is-salary-the-main-reason-why-people-choose--001",
       "part": 3,
-      "topic": "perfect job you would like to have",
+      "topic": "perfect job you would like to have in the future",
       "prompt": "Is salary the main reason why people choose a certain job?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5606,7 +5616,7 @@
     {
       "id": "p3-what-kind-of-jobs-are-the-most-popular-in-yo-001",
       "part": 3,
-      "topic": "perfect job you would like to have",
+      "topic": "perfect job you would like to have in the future",
       "prompt": "What kind of jobs are the most popular in your country?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5617,7 +5627,7 @@
     {
       "id": "p2-describe-a-short-term-job-you-want-to-have-i-001",
       "part": 2,
-      "topic": "short-term job you want to have in",
+      "topic": "short-term job you want to have in a foreign country",
       "prompt": "Describe a short-term job you want to have in a foreign country",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -5641,7 +5651,7 @@
     {
       "id": "p3-what-short-term-jobs-do-young-people-do-in-o-001",
       "part": 3,
-      "topic": "short-term job you want to have in",
+      "topic": "short-term job you want to have in a foreign country",
       "prompt": "What short-term jobs do young people do in other countries?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5652,7 +5662,7 @@
     {
       "id": "p3-what-challenges-do-young-people-face-when-wo-001",
       "part": 3,
-      "topic": "short-term job you want to have in",
+      "topic": "short-term job you want to have in a foreign country",
       "prompt": "What challenges do young people face when working abroad?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5663,7 +5673,7 @@
     {
       "id": "p3-what-are-the-benefits-of-working-for-an-inte-001",
       "part": 3,
-      "topic": "short-term job you want to have in",
+      "topic": "short-term job you want to have in a foreign country",
       "prompt": "What are the benefits of working for an international company?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5674,7 +5684,7 @@
     {
       "id": "p3-what-personal-skills-are-required-to-work-in-001",
       "part": 3,
-      "topic": "short-term job you want to have in",
+      "topic": "short-term job you want to have in a foreign country",
       "prompt": "What personal skills are required to work in an international company?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5685,7 +5695,7 @@
     {
       "id": "p3-what-kind-of-work-can-young-people-do-in-for-001",
       "part": 3,
-      "topic": "short-term job you want to have in",
+      "topic": "short-term job you want to have in a foreign country",
       "prompt": "What kind of work can young people do in foreign countries?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5696,7 +5706,7 @@
     {
       "id": "p3-why-are-some-people-unwilling-to-work-in-oth-001",
       "part": 3,
-      "topic": "short-term job you want to have in",
+      "topic": "short-term job you want to have in a foreign country",
       "prompt": "Why are some people unwilling to work in other countries?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5707,7 +5717,7 @@
     {
       "id": "p2-describe-a-program-or-app-on-your-computer-o-001",
       "part": 2,
-      "topic": "program or app on your computer or",
+      "topic": "program or app on your computer or phone",
       "prompt": "Describe a program or app on your computer or phone",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -5715,7 +5725,9 @@
       "isNew": false,
       "cuePoints": [
         "What it is",
-        "How often you use it When/how you use it When/how you found it",
+        "How often you use it",
+        "When/how you use it",
+        "When/how you found it",
         "And explain how you feel about it"
       ],
       "relatedPart3Ids": [
@@ -5730,7 +5742,7 @@
     {
       "id": "p3-what-are-the-differences-between-old-and-you-001",
       "part": 3,
-      "topic": "program or app on your computer or",
+      "topic": "program or app on your computer or phone",
       "prompt": "What are the differences between old and young people when using apps?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5741,7 +5753,7 @@
     {
       "id": "p3-why-do-some-people-not-like-using-apps-001",
       "part": 3,
-      "topic": "program or app on your computer or",
+      "topic": "program or app on your computer or phone",
       "prompt": "Why do some people not like using apps?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5752,7 +5764,7 @@
     {
       "id": "p3-what-apps-are-popular-in-your-country-why-001",
       "part": 3,
-      "topic": "program or app on your computer or",
+      "topic": "program or app on your computer or phone",
       "prompt": "What apps are popular in your country? Why?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5763,7 +5775,7 @@
     {
       "id": "p3-should-parents-limit-their-children-s-use-of-001",
       "part": 3,
-      "topic": "program or app on your computer or",
+      "topic": "program or app on your computer or phone",
       "prompt": "Should parents limit their children's use of computer programs and computer games? Why and how?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5774,7 +5786,7 @@
     {
       "id": "p3-do-you-think-young-people-are-more-and-more--001",
       "part": 3,
-      "topic": "program or app on your computer or",
+      "topic": "program or app on your computer or phone",
       "prompt": "Do you think young people are more and more reliant on these programs?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5785,7 +5797,7 @@
     {
       "id": "p3-what-do-you-think-about-some-countries-banni-001",
       "part": 3,
-      "topic": "program or app on your computer or",
+      "topic": "program or app on your computer or phone",
       "prompt": "What do you think about some countries banning children from using social media?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5796,7 +5808,7 @@
     {
       "id": "p2-describe-an-item-on-which-you-spent-more-tha-001",
       "part": 2,
-      "topic": "item on which you spent more than",
+      "topic": "item on which you spent more than expected",
       "prompt": "Describe an item on which you spent more than expected",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -5820,7 +5832,7 @@
     {
       "id": "p3-do-you-often-buy-more-than-you-expected-001",
       "part": 3,
-      "topic": "item on which you spent more than",
+      "topic": "item on which you spent more than expected",
       "prompt": "Do you often buy more than you expected?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5831,7 +5843,7 @@
     {
       "id": "p3-what-do-you-think-young-people-spend-most-of-001",
       "part": 3,
-      "topic": "item on which you spent more than",
+      "topic": "item on which you spent more than expected",
       "prompt": "What do you think young people spend most of their money on?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5842,7 +5854,7 @@
     {
       "id": "p3-do-you-think-it-is-important-to-save-money-w-001",
       "part": 3,
-      "topic": "item on which you spent more than",
+      "topic": "item on which you spent more than expected",
       "prompt": "Do you think it is important to save money? Why?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5853,7 +5865,7 @@
     {
       "id": "p3-do-people-buy-things-they-don-t-need-001",
       "part": 3,
-      "topic": "item on which you spent more than",
+      "topic": "item on which you spent more than expected",
       "prompt": "Do people buy things they don't need?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5864,7 +5876,7 @@
     {
       "id": "p3-do-you-think-it-is-the-rich-people-s-respons-001",
       "part": 3,
-      "topic": "item on which you spent more than",
+      "topic": "item on which you spent more than expected",
       "prompt": "Do you think it is the rich people's responsibility to donate money to people in need?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -5875,7 +5887,7 @@
     {
       "id": "p3-what-kind-of-things-are-people-happy-to-pay--001",
       "part": 3,
-      "topic": "item on which you spent more than",
+      "topic": "item on which you spent more than expected",
       "prompt": "What kind of things are people happy to pay a high price for?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6163,15 +6175,16 @@
       "category": "EVENTS",
       "isNew": true,
       "cuePoints": [
-        "What the problem was When and where you faced it",
+        "What the problem was",
+        "When and where you faced it",
         "How challenging it was",
         "And explain how you solved it"
       ],
       "relatedPart3Ids": [
         "p3-what-are-the-advantages-and-disadvantages-of-001-004",
         "p3-do-you-think-people-today-should-learn-about-001",
-        "p3-should-children-learn-to-use-al-001",
-        "p3-how-can-al-help-in-our-lives-001",
+        "p3-should-children-learn-to-use-ai-001",
+        "p3-how-can-ai-help-in-our-lives-001",
         "p3-do-you-think-students-are-overly-reliant-on--001",
         "p3-what-can-teachers-do-to-stop-students-relyin-001"
       ]
@@ -6191,7 +6204,7 @@
       "id": "p3-do-you-think-people-today-should-learn-about-001",
       "part": 3,
       "topic": "challenging technological problem you faced",
-      "prompt": "Do you think people today should learn about Al technology?",
+      "prompt": "Do you think people today should learn about AI technology?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
       "category": "EVENTS",
@@ -6199,10 +6212,10 @@
       "part2QuestionId": "p2-describe-a-challenging-technological-problem-001"
     },
     {
-      "id": "p3-should-children-learn-to-use-al-001",
+      "id": "p3-should-children-learn-to-use-ai-001",
       "part": 3,
       "topic": "challenging technological problem you faced",
-      "prompt": "Should children learn to use Al?",
+      "prompt": "Should children learn to use AI?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
       "category": "EVENTS",
@@ -6210,10 +6223,10 @@
       "part2QuestionId": "p2-describe-a-challenging-technological-problem-001"
     },
     {
-      "id": "p3-how-can-al-help-in-our-lives-001",
+      "id": "p3-how-can-ai-help-in-our-lives-001",
       "part": 3,
       "topic": "challenging technological problem you faced",
-      "prompt": "How can Al help in our lives?",
+      "prompt": "How can AI help in our lives?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
       "category": "EVENTS",
@@ -6245,13 +6258,14 @@
     {
       "id": "p2-describe-a-special-day-out-that-cost-you-lit-001",
       "part": 2,
-      "topic": "special day out that cost you little",
+      "topic": "special day out that cost you little money/didn't cost you much",
       "prompt": "Describe a special day out that cost you little money/didn't cost you much",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "EVENTS",
       "isNew": true,
       "cuePoints": [
+        "When the day was",
         "Where you went",
         "How much you spent",
         "And explain how you feel about the day"
@@ -6268,7 +6282,7 @@
     {
       "id": "p3-do-people-like-to-spend-their-leisure-time-o-001",
       "part": 3,
-      "topic": "special day out that cost you little",
+      "topic": "special day out that cost you little money/didn't cost you much",
       "prompt": "Do people like to spend their leisure time out in your country?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6279,7 +6293,7 @@
     {
       "id": "p3-how-do-people-spend-their-leisure-time-in-yo-001",
       "part": 3,
-      "topic": "special day out that cost you little",
+      "topic": "special day out that cost you little money/didn't cost you much",
       "prompt": "How do people spend their leisure time in your country?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6290,7 +6304,7 @@
     {
       "id": "p3-how-does-technology-affect-the-way-people-sp-001",
       "part": 3,
-      "topic": "special day out that cost you little",
+      "topic": "special day out that cost you little money/didn't cost you much",
       "prompt": "How does technology affect the way people spend their leisure time?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6301,7 +6315,7 @@
     {
       "id": "p3-do-you-think-only-old-people-have-time-for-l-001",
       "part": 3,
-      "topic": "special day out that cost you little",
+      "topic": "special day out that cost you little money/didn't cost you much",
       "prompt": "Do you think only old people have time for leisure?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6312,7 +6326,7 @@
     {
       "id": "p3-why-do-people-like-to-have-days-off-001",
       "part": 3,
-      "topic": "special day out that cost you little",
+      "topic": "special day out that cost you little money/didn't cost you much",
       "prompt": "Why do people like to have days off?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6323,7 +6337,7 @@
     {
       "id": "p3-going-out-to-have-holidays-is-tiring-why-do--001",
       "part": 3,
-      "topic": "special day out that cost you little",
+      "topic": "special day out that cost you little money/didn't cost you much",
       "prompt": "Going out to have holidays is tiring. Why do people still want to do it?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6341,6 +6355,7 @@
       "category": "EVENTS",
       "isNew": true,
       "cuePoints": [
+        "When it was",
         "What you did",
         "Why you got up early",
         "And how you felt about it"
@@ -6423,7 +6438,7 @@
     {
       "id": "p2-describe-a-time-when-you-organized-a-happy-e-001",
       "part": 2,
-      "topic": "time when you organized a happy event",
+      "topic": "time when you organized a happy event successfully",
       "prompt": "Describe a time when you organized a happy event successfully",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -6447,7 +6462,7 @@
     {
       "id": "p3-how-can-parents-help-children-to-be-organize-001",
       "part": 3,
-      "topic": "time when you organized a happy event",
+      "topic": "time when you organized a happy event successfully",
       "prompt": "How can parents help children to be organized?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6458,7 +6473,7 @@
     {
       "id": "p3-on-what-occasions-do-people-need-to-be-organ-001",
       "part": 3,
-      "topic": "time when you organized a happy event",
+      "topic": "time when you organized a happy event successfully",
       "prompt": "On what occasions do people need to be organized?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6469,7 +6484,7 @@
     {
       "id": "p3-does-everything-need-to-be-well-prepared-001",
       "part": 3,
-      "topic": "time when you organized a happy event",
+      "topic": "time when you organized a happy event successfully",
       "prompt": "Does everything need to be well prepared?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6480,7 +6495,7 @@
     {
       "id": "p3-do-people-need-others-help-when-organizing-t-001",
       "part": 3,
-      "topic": "time when you organized a happy event",
+      "topic": "time when you organized a happy event successfully",
       "prompt": "Do people need others' help when organizing things?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6491,7 +6506,7 @@
     {
       "id": "p3-how-would-you-feel-when-you-were-not-well-pr-001",
       "part": 3,
-      "topic": "time when you organized a happy event",
+      "topic": "time when you organized a happy event successfully",
       "prompt": "How would you feel when you were not well prepared for something?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6502,7 +6517,7 @@
     {
       "id": "p3-do-you-prefer-to-prepare-and-organize-an-act-001",
       "part": 3,
-      "topic": "time when you organized a happy event",
+      "topic": "time when you organized a happy event successfully",
       "prompt": "Do you prefer to prepare and organize an activity or just take part in an activity?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6520,7 +6535,8 @@
       "category": "EVENTS",
       "isNew": true,
       "cuePoints": [
-        "What it was When and where you watched it",
+        "What it was",
+        "When and where you watched it",
         "Who you watched it with",
         "And explain why you liked it"
       ],
@@ -6692,7 +6708,7 @@
     {
       "id": "p2-describe-a-time-when-you-sent-a-message-or-a-001",
       "part": 2,
-      "topic": "time when you sent a message or",
+      "topic": "time when you sent a message or an email to someone but received no reply",
       "prompt": "Describe a time when you sent a message or an email to someone but received no reply for a long time",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -6716,7 +6732,7 @@
     {
       "id": "p3-in-what-situations-do-people-spend-a-long-ti-001",
       "part": 3,
-      "topic": "time when you sent a message or",
+      "topic": "time when you sent a message or an email to someone but received no reply",
       "prompt": "In what situations do people spend a long time responding to others' messages?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6727,7 +6743,7 @@
     {
       "id": "p3-in-what-situations-do-people-not-respond-to--001",
       "part": 3,
-      "topic": "time when you sent a message or",
+      "topic": "time when you sent a message or an email to someone but received no reply",
       "prompt": "In what situations do people not respond to messages at all?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6738,7 +6754,7 @@
     {
       "id": "p3-what-would-you-do-if-you-did-not-receive-a-r-001",
       "part": 3,
-      "topic": "time when you sent a message or",
+      "topic": "time when you sent a message or an email to someone but received no reply",
       "prompt": "What would you do if you did not receive a reply after sending out a message?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6749,7 +6765,7 @@
     {
       "id": "p3-why-do-some-people-prefer-sending-a-message--001",
       "part": 3,
-      "topic": "time when you sent a message or",
+      "topic": "time when you sent a message or an email to someone but received no reply",
       "prompt": "Why do some people prefer sending a message instead of making a call?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6760,7 +6776,7 @@
     {
       "id": "p3-how-do-you-show-your-respect-in-your-message-001",
       "part": 3,
-      "topic": "time when you sent a message or",
+      "topic": "time when you sent a message or an email to someone but received no reply",
       "prompt": "How do you show your respect in your messages?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6771,7 +6787,7 @@
     {
       "id": "p3-why-do-some-people-feel-angry-when-others-do-001",
       "part": 3,
-      "topic": "time when you sent a message or",
+      "topic": "time when you sent a message or an email to someone but received no reply",
       "prompt": "Why do some people feel angry when others don't reply to their message?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6782,13 +6798,14 @@
     {
       "id": "p2-describe-a-time-when-you-were-stuck-in-a-tra-001",
       "part": 2,
-      "topic": "time when you were stuck in a",
+      "topic": "time when you were stuck in a traffic jam for a very long time",
       "prompt": "Describe a time when you were stuck in a traffic jam for a very long time",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "EVENTS",
       "isNew": true,
       "cuePoints": [
+        "When it happened",
         "Where you were stuck",
         "What you did while waiting",
         "And explain how you felt in the traffic jam"
@@ -6805,7 +6822,7 @@
     {
       "id": "p3-how-can-we-solve-the-traffic-jam-problem-001",
       "part": 3,
-      "topic": "time when you were stuck in a",
+      "topic": "time when you were stuck in a traffic jam for a very long time",
       "prompt": "How can we solve the traffic jam problem?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6816,7 +6833,7 @@
     {
       "id": "p3-do-you-think-developing-public-transport-can-001",
       "part": 3,
-      "topic": "time when you were stuck in a",
+      "topic": "time when you were stuck in a traffic jam for a very long time",
       "prompt": "Do you think developing public transport can solve traffic jam problems?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6827,7 +6844,7 @@
     {
       "id": "p3-do-you-think-the-high-ways-will-help-reduce--001",
       "part": 3,
-      "topic": "time when you were stuck in a",
+      "topic": "time when you were stuck in a traffic jam for a very long time",
       "prompt": "Do you think the high ways will help reduce traffic jams?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6838,7 +6855,7 @@
     {
       "id": "p3-what-are-good-ways-to-manage-traffic-001",
       "part": 3,
-      "topic": "time when you were stuck in a",
+      "topic": "time when you were stuck in a traffic jam for a very long time",
       "prompt": "What are good ways to manage traffic?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6849,7 +6866,7 @@
     {
       "id": "p3-do-you-like-to-use-public-transport-001",
       "part": 3,
-      "topic": "time when you were stuck in a",
+      "topic": "time when you were stuck in a traffic jam for a very long time",
       "prompt": "Do you like to use public transport?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6860,7 +6877,7 @@
     {
       "id": "p3-would-you-rather-be-in-a-car-or-a-bus-in-a-t-001",
       "part": 3,
-      "topic": "time when you were stuck in a",
+      "topic": "time when you were stuck in a traffic jam for a very long time",
       "prompt": "Would you rather be in a car or a bus in a traffic jam?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6871,13 +6888,14 @@
     {
       "id": "p2-describe-a-time-when-you-changed-an-importan-001",
       "part": 2,
-      "topic": "time when you changed an important opinion",
+      "topic": "time when you changed an important opinion of yours",
       "prompt": "Describe a time when you changed an important opinion of yours",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "EVENTS",
       "isNew": true,
       "cuePoints": [
+        "When you changed your opinion",
         "What the original opinion was",
         "Why you changed it",
         "And explain how you felt about the experience"
@@ -6892,7 +6910,7 @@
     {
       "id": "p3-when-do-most-children-begin-to-have-their-ow-001",
       "part": 3,
-      "topic": "time when you changed an important opinion",
+      "topic": "time when you changed an important opinion of yours",
       "prompt": "When do most children begin to have their own opinions?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6903,7 +6921,7 @@
     {
       "id": "p3-whose-opinions-are-more-important-to-childre-001",
       "part": 3,
-      "topic": "time when you changed an important opinion",
+      "topic": "time when you changed an important opinion of yours",
       "prompt": "Whose opinions are more important to children, their parents or teachers?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6914,7 +6932,7 @@
     {
       "id": "p3-do-children-communicate-more-with-teachers-o-001",
       "part": 3,
-      "topic": "time when you changed an important opinion",
+      "topic": "time when you changed an important opinion of yours",
       "prompt": "Do children communicate more with teachers or with parents?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6925,7 +6943,7 @@
     {
       "id": "p3-who-do-young-people-like-to-share-opinions-w-001",
       "part": 3,
-      "topic": "time when you changed an important opinion",
+      "topic": "time when you changed an important opinion of yours",
       "prompt": "Who do young people like to share opinions with?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6936,7 +6954,7 @@
     {
       "id": "p2-describe-a-time-when-a-person-did-something--001",
       "part": 2,
-      "topic": "time when a person did something to",
+      "topic": "time when a person did something to help you solve a problem",
       "prompt": "Describe a time when a person did something to help you solve a problem",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -6955,7 +6973,7 @@
     {
       "id": "p3-how-important-is-it-for-schools-to-help-chil-001",
       "part": 3,
-      "topic": "time when a person did something to",
+      "topic": "time when a person did something to help you solve a problem",
       "prompt": "How important is it for schools to help children become smarter?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -6966,13 +6984,14 @@
     {
       "id": "p2-describe-a-time-when-you-felt-proud-of-a-fam-001",
       "part": 2,
-      "topic": "time when you felt proud of a",
+      "topic": "time when you felt proud of a family member",
       "prompt": "Describe a time when you felt proud of a family member",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "EVENTS",
       "isNew": false,
       "cuePoints": [
+        "When it happened",
         "Who the person is",
         "What the person did",
         "And explain why you felt proud of him/her"
@@ -6989,7 +7008,7 @@
     {
       "id": "p3-when-would-parents-feel-proud-of-their-child-001",
       "part": 3,
-      "topic": "time when you felt proud of a",
+      "topic": "time when you felt proud of a family member",
       "prompt": "When would parents feel proud of their children?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7000,7 +7019,7 @@
     {
       "id": "p3-should-parents-reward-children-why-and-how-001",
       "part": 3,
-      "topic": "time when you felt proud of a",
+      "topic": "time when you felt proud of a family member",
       "prompt": "Should parents reward children? Why and how?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7011,7 +7030,7 @@
     {
       "id": "p3-is-it-good-to-reward-children-too-often-why-001",
       "part": 3,
-      "topic": "time when you felt proud of a",
+      "topic": "time when you felt proud of a family member",
       "prompt": "Is it good to reward children too often? Why?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7022,7 +7041,7 @@
     {
       "id": "p3-on-what-occasions-would-adults-be-proud-of-t-001",
       "part": 3,
-      "topic": "time when you felt proud of a",
+      "topic": "time when you felt proud of a family member",
       "prompt": "On what occasions would adults be proud of themselves?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7033,7 +7052,7 @@
     {
       "id": "p3-do-rewards-help-a-child-become-better-001",
       "part": 3,
-      "topic": "time when you felt proud of a",
+      "topic": "time when you felt proud of a family member",
       "prompt": "Do rewards help a child become better?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7044,7 +7063,7 @@
     {
       "id": "p3-what-do-you-think-about-children-working-har-001",
       "part": 3,
-      "topic": "time when you felt proud of a",
+      "topic": "time when you felt proud of a family member",
       "prompt": "What do you think about children working hard just for grades?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7062,6 +7081,7 @@
       "category": "EVENTS",
       "isNew": false,
       "cuePoints": [
+        "When it was",
         "Why you needed to use imagination",
         "How difficult or easy it was",
         "And explain how you felt about it"
@@ -7151,6 +7171,7 @@
       "category": "EVENTS",
       "isNew": false,
       "cuePoints": [
+        "When it happened",
         "Who you were with",
         "What happened",
         "And explain why most people were smiling"
@@ -7233,13 +7254,14 @@
     {
       "id": "p2-describe-an-occasion-when-you-were-not-allow-001",
       "part": 2,
-      "topic": "occasion when you were not allowed to",
+      "topic": "occasion when you were not allowed to use your mobile phone",
       "prompt": "Describe an occasion when you were not allowed to use your mobile phone",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
       "category": "EVENTS",
       "isNew": false,
       "cuePoints": [
+        "When it was",
         "Where it was",
         "Why you were not allowed to use your mobile phone",
         "And how you felt about it"
@@ -7256,7 +7278,7 @@
     {
       "id": "p3-how-do-young-and-old-people-use-mobile-phone-001",
       "part": 3,
-      "topic": "occasion when you were not allowed to",
+      "topic": "occasion when you were not allowed to use your mobile phone",
       "prompt": "How do young and old people use mobile phones differently?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7267,7 +7289,7 @@
     {
       "id": "p3-what-positive-and-negative-impact-do-mobile--001",
       "part": 3,
-      "topic": "occasion when you were not allowed to",
+      "topic": "occasion when you were not allowed to use your mobile phone",
       "prompt": "What positive and negative impact do mobile phones have on friendship?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7278,7 +7300,7 @@
     {
       "id": "p3-is-it-a-waste-of-time-to-take-pictures-with--001",
       "part": 3,
-      "topic": "occasion when you were not allowed to",
+      "topic": "occasion when you were not allowed to use your mobile phone",
       "prompt": "Is it a waste of time to take pictures with mobile phones?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7289,7 +7311,7 @@
     {
       "id": "p3-do-you-think-it-is-necessary-to-have-laws-on-001",
       "part": 3,
-      "topic": "occasion when you were not allowed to",
+      "topic": "occasion when you were not allowed to use your mobile phone",
       "prompt": "Do you think it is necessary to have laws on the use of mobile phones?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7300,7 +7322,7 @@
     {
       "id": "p3-what-are-examples-of-good-and-poor-phone-man-001",
       "part": 3,
-      "topic": "occasion when you were not allowed to",
+      "topic": "occasion when you were not allowed to use your mobile phone",
       "prompt": "What are examples of good and poor phone manners?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7311,7 +7333,7 @@
     {
       "id": "p3-how-does-the-internet-benefit-people-001",
       "part": 3,
-      "topic": "occasion when you were not allowed to",
+      "topic": "occasion when you were not allowed to use your mobile phone",
       "prompt": "How does the internet benefit people?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7329,6 +7351,7 @@
       "category": "EVENTS",
       "isNew": false,
       "cuePoints": [
+        "When it was To whom you gave the advice",
         "What the advice was",
         "And explain why you gave the advice"
       ],
@@ -7410,7 +7433,7 @@
     {
       "id": "p2-describe-an-event-you-attended-in-which-you--001",
       "part": 2,
-      "topic": "event you attended in which you didn't",
+      "topic": "event you attended in which you didn't enjoy the music played",
       "prompt": "Describe an event you attended in which you didn't enjoy the music played",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -7434,7 +7457,7 @@
     {
       "id": "p3-what-kind-of-music-events-do-people-like-tod-001",
       "part": 3,
-      "topic": "event you attended in which you didn't",
+      "topic": "event you attended in which you didn't enjoy the music played",
       "prompt": "What kind of music events do people like today?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7445,7 +7468,7 @@
     {
       "id": "p3-do-you-think-children-should-receive-some-mu-001",
       "part": 3,
-      "topic": "event you attended in which you didn't",
+      "topic": "event you attended in which you didn't enjoy the music played",
       "prompt": "Do you think children should receive some musical education?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7456,7 +7479,7 @@
     {
       "id": "p3-what-are-the-differences-between-old-and-you-001-002",
       "part": 3,
-      "topic": "event you attended in which you didn't",
+      "topic": "event you attended in which you didn't enjoy the music played",
       "prompt": "What are the differences between old and young people's music preferences?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7467,7 +7490,7 @@
     {
       "id": "p3-what-kind-of-music-events-are-there-in-your--001",
       "part": 3,
-      "topic": "event you attended in which you didn't",
+      "topic": "event you attended in which you didn't enjoy the music played",
       "prompt": "What kind of music events are there in your country?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7478,7 +7501,7 @@
     {
       "id": "p3-why-do-many-people-like-listening-to-music-w-001",
       "part": 3,
-      "topic": "event you attended in which you didn't",
+      "topic": "event you attended in which you didn't enjoy the music played",
       "prompt": "Why do many people like listening to music while doing sports?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7489,7 +7512,7 @@
     {
       "id": "p3-what-are-the-differences-between-listening-t-001",
       "part": 3,
-      "topic": "event you attended in which you didn't",
+      "topic": "event you attended in which you didn't enjoy the music played",
       "prompt": "What are the differences between listening to music at home and at a live concert?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7500,7 +7523,7 @@
     {
       "id": "p2-describe-a-time-when-you-encouraged-someone--001",
       "part": 2,
-      "topic": "time when you encouraged someone to do",
+      "topic": "time when you encouraged someone to do something that he/she didn't want to do",
       "prompt": "Describe a time when you encouraged someone to do something that he/she didn't want to do",
       "difficulty": "developing",
       "source": "雅思口语喵内置题库",
@@ -7524,7 +7547,7 @@
     {
       "id": "p3-how-can-leaders-encourage-their-employees-001",
       "part": 3,
-      "topic": "time when you encouraged someone to do",
+      "topic": "time when you encouraged someone to do something that he/she didn't want to do",
       "prompt": "How can leaders encourage their employees?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7535,7 +7558,7 @@
     {
       "id": "p3-when-should-parents-encourage-their-children-001",
       "part": 3,
-      "topic": "time when you encouraged someone to do",
+      "topic": "time when you encouraged someone to do something that he/she didn't want to do",
       "prompt": "When should parents encourage their children?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7546,7 +7569,7 @@
     {
       "id": "p3-what-kind-of-encouragement-should-parents-gi-001",
       "part": 3,
-      "topic": "time when you encouraged someone to do",
+      "topic": "time when you encouraged someone to do something that he/she didn't want to do",
       "prompt": "What kind of encouragement should parents give?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7557,7 +7580,7 @@
     {
       "id": "p3-do-you-think-some-people-are-better-than-oth-001",
       "part": 3,
-      "topic": "time when you encouraged someone to do",
+      "topic": "time when you encouraged someone to do something that he/she didn't want to do",
       "prompt": "Do you think some people are better than others at persuading?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7568,7 +7591,7 @@
     {
       "id": "p3-should-children-do-everything-their-parents--001",
       "part": 3,
-      "topic": "time when you encouraged someone to do",
+      "topic": "time when you encouraged someone to do something that he/she didn't want to do",
       "prompt": "Should children do everything their parents ask them to do?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7579,7 +7602,7 @@
     {
       "id": "p3-how-can-employers-encourage-their-staff-001",
       "part": 3,
-      "topic": "time when you encouraged someone to do",
+      "topic": "time when you encouraged someone to do something that he/she didn't want to do",
       "prompt": "How can employers encourage their staff?",
       "difficulty": "stretch",
       "source": "雅思口语喵内置题库",
@@ -7598,7 +7621,8 @@
       "isNew": false,
       "cuePoints": [
         "Who you would like to go with",
-        "Where you would like to go When you would like to go",
+        "Where you would like to go",
+        "When you would like to go",
         "And explain why you would like to go by bicycle/motorcycle/car"
       ],
       "relatedPart3Ids": [

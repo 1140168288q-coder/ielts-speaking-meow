@@ -104,6 +104,15 @@ class MemoryPersistence implements LocalStorage {
     return Promise.resolve()
   }
 
+  deleteSessionWithAudio(
+    sessionId: string,
+    ownerId: string,
+  ): Promise<{ deletedAudio: number }> {
+    const session = this.sessions.get(sessionId)
+    if (session?.ownerId === ownerId) this.sessions.delete(sessionId)
+    return Promise.resolve({ deletedAudio: 0 })
+  }
+
   getPracticeTexts(): Promise<PracticeTexts | null> {
     return Promise.resolve(this.texts)
   }

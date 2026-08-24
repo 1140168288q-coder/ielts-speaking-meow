@@ -1,4 +1,4 @@
-# Reproducible direct dependency set verified for 雅思口语喵 v1.8.
+# Reproducible direct dependency set verified for 雅思口语喵 v2.0.
 # Install with: python -m pip install -r requirements.lock.txt
 fastapi==0.141.1
 uvicorn[standard]==0.52.1

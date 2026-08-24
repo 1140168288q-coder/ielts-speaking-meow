@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import {
   backendConfigSchema,
+  normalizeBackendBaseUrl,
   type BackendConfig,
 } from '../../domain'
 import type { BackendConfigStorage } from '../../ports/backend'
@@ -35,13 +36,6 @@ export function allowsLanHttp(): boolean {
  * 用户经常会把浏览器测试用的 /health 地址直接粘贴到设置页。BackendClient
  * 自己还会追加 /health，因此这里统一还原为服务基地址。
  */
-export function normalizeBackendBaseUrl(value: string): string {
-  return value
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/health$/i, '')
-}
-
 export function resolveBackendUrl(): string {
   const configured = import.meta.env.VITE_BACKEND_URL as string | undefined
   const hasConfigured = (configured ?? '').trim().length > 0

@@ -158,6 +158,27 @@ class MemorySyncStorage implements CloudSyncStorage {
   private readonly cursors = new Map<string, number>()
   private readonly entityStates = new Map<string, SyncEntityState>()
 
+  listLocalDeletionTombstones() {
+    return Promise.resolve([])
+  }
+
+  removeLocalDeletionTombstone() {
+    return Promise.resolve()
+  }
+
+  commitPulledSyncChange(
+    scopeId: string,
+    change: SyncChange,
+    state: SyncEntityState,
+  ): Promise<void> {
+    this.entityStates.set(
+      `${scopeId}:${change.entityType}:${change.entityId}`,
+      state,
+    )
+    this.cursors.set(scopeId, change.cursor)
+    return Promise.resolve()
+  }
+
   async enqueueSyncOperation(
     scopeId: string,
     operation: SyncOutboxOperation,

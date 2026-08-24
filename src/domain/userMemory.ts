@@ -44,9 +44,13 @@ export function buildLearnerMemory(
   sessions: TrainingSession[],
   expressions: SavedExpression[],
   materials: PersonalMaterial[] = [],
+  knownQuestions: Question[] = [],
 ): LearnerMemory {
+  const questionsById = new Map(
+    [question, ...knownQuestions].map((item) => [item.id, item]),
+  )
   const topicPracticeCount = sessions.filter((session) =>
-    session.questionId === question.id,
+    questionsById.get(session.questionId)?.topic === question.topic,
   ).length
   const commonProblemThemes = collectProblemThemes(sessions)
   const recentStrengths = collectStrengths(sessions)
@@ -164,12 +168,14 @@ export function buildLearnerContext(
   sessions: TrainingSession[],
   expressions: SavedExpression[],
   consentedMaterials: PersonalMaterial[] = [],
+  knownQuestions: Question[] = [],
 ): string {
   const memory = buildLearnerMemory(
     question,
     sessions,
     expressions,
     consentedMaterials,
+    knownQuestions,
   )
   const lines: string[] = []
   lines.push(

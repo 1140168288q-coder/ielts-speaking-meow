@@ -16,15 +16,22 @@ import {
   type PersonalMaterial,
 } from '../domain/personalMaterials'
 import { recordBelongsToAccount } from '../domain/accounts'
-import type { CloudSyncStorage, LocalStorage, SyncEntityState } from '../ports/storage'
+import type {
+  CloudSyncStorage,
+  LocalDataMaintenance,
+  LocalStorage,
+  SyncEntityState,
+} from '../ports/storage'
 import { CloudSyncService } from './cloudSyncService'
 
-type AccountSyncStorage = LocalStorage & CloudSyncStorage
+type AccountSyncStorage = LocalStorage & CloudSyncStorage & Pick<
+  LocalDataMaintenance,
+  'deleteSessionWithAudio'
+>
 
 export type SyncConflictReason =
   | 'concurrent-change'
   | 'foreign-local-owner'
-  | 'session-delete-unsupported'
 
 export interface SyncConflict {
   entityType: CloudSyncEntityType
@@ -134,6 +141,8 @@ export class AccountCloudSyncService {
       }
     }
 
+    await this.clearSyncedDeletionTombstones()
+
     const finalPullConflict = await this.pullUntilSettled()
     if (finalPullConflict !== null) {
       return conflictSummary(this.downloaded, queued, uploaded, finalPullConflict)
@@ -171,6 +180,9 @@ export class AccountCloudSyncService {
     const materials = await this.storage.listPersonalMaterials(this.ownerId, {
       includeDeleted: true,
     })
+    const tombstones = await this.storage.listLocalDeletionTombstones(
+      this.ownerId,
+    )
 
     for (const session of sessions) {
       queued += await this.queueIfChanged(
@@ -198,6 +210,18 @@ export class AccountCloudSyncService {
         material.updatedAt,
         sanitizeMaterial(material),
         material.deletedAt,
+      )
+    }
+    for (const tombstone of tombstones) {
+      queued += await this.queueIfChanged(
+        tombstone.entityType,
+        tombstone.entityId,
+        tombstone.deletedAt,
+        {
+          id: tombstone.entityId,
+          updatedAt: tombstone.deletedAt,
+        },
+        tombstone.deletedAt,
       )
     }
 
@@ -239,14 +263,6 @@ export class AccountCloudSyncService {
     if (change.entityType === 'user_setting') {
       throw invalidRemotePayload('云端返回了此服务不支持的数据类型。')
     }
-    if (change.entityType === 'session' && change.deletedAt !== null) {
-      throw new ApplyConflictError({
-        entityType: change.entityType,
-        entityId: change.entityId,
-        reason: 'session-delete-unsupported',
-        message: '云端要求删除练习记录，但本机无法在保留历史录音的前提下安全删除。',
-      })
-    }
 
     const state = await this.storage.getSyncEntityState(
       this.scopeId,
@@ -274,6 +290,18 @@ export class AccountCloudSyncService {
     this.assertLocalOwner(current?.ownerId, change, current !== null)
     this.assertNotConcurrentlyModified(current?.updatedAt ?? null, state, change)
 
+    if (change.deletedAt !== null) {
+      validateDeletionPayload(change)
+      if (current !== null) {
+        await this.storage.deleteSessionWithAudio(
+          change.entityId,
+          this.ownerId,
+          null,
+        )
+      }
+      return
+    }
+
     const remote = parseOwnerlessPayload(
       trainingSessionSchema,
       change,
@@ -291,16 +319,24 @@ export class AccountCloudSyncService {
     this.assertLocalOwner(current?.ownerId, change, current !== null)
     this.assertNotConcurrentlyModified(expressionUpdatedAt(current), state, change)
 
+    if (change.deletedAt !== null) {
+      validateDeletionPayload(change)
+      if (current !== null) {
+        await this.storage.deleteExpression(
+          change.entityId,
+          this.ownerId,
+          null,
+        )
+      }
+      return
+    }
+
     const remote = parseOwnerlessPayload(
       savedExpressionSchema,
       change,
       this.ownerId,
       { updatedAt: change.updatedAt },
     )
-    if (change.deletedAt !== null) {
-      await this.storage.deleteExpression(change.entityId)
-      return
-    }
     await this.storage.upsertExpression(remote)
   }
 
@@ -314,20 +350,44 @@ export class AccountCloudSyncService {
     )
     this.assertNotConcurrentlyModified(current?.updatedAt ?? null, state, change)
 
+    if (change.deletedAt !== null) {
+      validateDeletionPayload(change)
+      if (current !== null) {
+        await this.storage.deletePersonalMaterial(
+          change.entityId,
+          this.ownerId,
+          change.deletedAt,
+        )
+      }
+      return
+    }
+
     const remote = parseOwnerlessPayload(
       personalMaterialSchema,
       change,
       this.ownerId,
     )
-    if (change.deletedAt !== null) {
-      await this.storage.deletePersonalMaterial(change.entityId, this.ownerId)
-      // The storage boundary uses a local soft-delete timestamp. Replacing it with
-      // the validated cloud tombstone prevents that local implementation detail
-      // from being queued back as a new user edit.
-      await this.storage.upsertPersonalMaterial(remote)
-      return
-    }
     await this.storage.upsertPersonalMaterial(remote)
+  }
+
+  private async clearSyncedDeletionTombstones(): Promise<void> {
+    const tombstones = await this.storage.listLocalDeletionTombstones(
+      this.ownerId,
+    )
+    for (const tombstone of tombstones) {
+      const state = await this.storage.getSyncEntityState(
+        this.scopeId,
+        tombstone.entityType,
+        tombstone.entityId,
+      )
+      if (state.syncedUpdatedAt === tombstone.deletedAt) {
+        await this.storage.removeLocalDeletionTombstone(
+          this.ownerId,
+          tombstone.entityType,
+          tombstone.entityId,
+        )
+      }
+    }
   }
 
   private assertLocalOwner(
@@ -350,7 +410,12 @@ export class AccountCloudSyncService {
     state: SyncEntityState,
     change: SyncChange,
   ): void {
-    if (localUpdatedAt !== null && localUpdatedAt !== state.syncedUpdatedAt) {
+    const incomingUpdatedAt = readPayloadUpdatedAt(change)
+    if (
+      localUpdatedAt !== null &&
+      localUpdatedAt !== incomingUpdatedAt &&
+      localUpdatedAt !== state.syncedUpdatedAt
+    ) {
       throw new ApplyConflictError({
         entityType: change.entityType,
         entityId: change.entityId,
@@ -408,7 +473,26 @@ function sanitizeExpression(
 }
 
 function sanitizeMaterial(material: PersonalMaterial): SyncPayload {
+  if (material.deletedAt !== null) {
+    return { id: material.id, updatedAt: material.deletedAt }
+  }
   return omitProperty(material, 'ownerId')
+}
+
+function validateDeletionPayload(change: SyncChange): void {
+  if (
+    ('ownerId' in change.payload) ||
+    (typeof change.payload.id === 'string' &&
+      change.payload.id !== change.entityId)
+  ) {
+    throw invalidRemotePayload('云端删除记录结构无效，本机数据未被修改。')
+  }
+}
+
+function readPayloadUpdatedAt(change: SyncChange): string {
+  return typeof change.payload.updatedAt === 'string'
+    ? change.payload.updatedAt
+    : change.updatedAt
 }
 
 function isUnsubmittedDraft(session: TrainingSession): boolean {

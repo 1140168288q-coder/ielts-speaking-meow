@@ -19,7 +19,7 @@ from ..errors import (
     provider_error,
     unauthorized,
 )
-from ..models import AccountToken, AuthSession, User
+from ..models import AccountBillingState, AccountToken, AuthSession, User
 from .email_sender import (
     AccountEmailService,
     EmailDeliveryDisabled,
@@ -84,7 +84,11 @@ class AuthService:
         self.account_email_service = account_email_service
 
     async def register(
-        self, db: AsyncSession, email: str, password: str
+        self,
+        db: AsyncSession,
+        email: str,
+        password: str,
+        display_name: str | None = None,
     ) -> tuple[User, IssuedSession]:
         normalized_email = normalize_email(email)
         existing = await db.scalar(select(User).where(User.email == normalized_email))
@@ -92,7 +96,15 @@ class AuthService:
             raise conflict("email-already-registered", "该邮箱已注册,请直接登录。")
 
         password_hash = await asyncio.to_thread(PASSWORD_HASHER.hash, password)
-        user = User(email=normalized_email, password_hash=password_hash)
+        now = datetime.now(timezone.utc)
+        user = User(
+            email=normalized_email,
+            password_hash=password_hash,
+            display_name=display_name,
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
         db.add(user)
         try:
             await db.flush()
@@ -102,6 +114,16 @@ class AuthService:
                 "email-already-registered", "该邮箱已注册,请直接登录。"
             ) from exc
 
+
+        db.add(
+            AccountBillingState(
+                user_id=user.id,
+                plan="free",
+                subscription_status="none",
+                created_at=now,
+                updated_at=now,
+            )
+        )
         issued = self._issue_session(user.id)
         db.add(issued.session)
         await db.commit()
@@ -119,6 +141,11 @@ class AuthService:
         if user is None or not valid_password:
             raise BackendError(401, "invalid-credentials", "邮箱或密码不正确。")
 
+
+        if user.status != "active" or user.deleted_at is not None:
+            raise BackendError(
+                403, "account-inactive", "该账号当前不可登录。"
+            )
         issued = self._issue_session(user.id)
         db.add(issued.session)
         await db.commit()
@@ -139,7 +166,11 @@ class AuthService:
             raise unauthorized()
 
         user = await db.get(User, auth_session.user_id)
-        if user is None:
+        if (
+            user is None
+            or user.status != "active"
+            or user.deleted_at is not None
+        ):
             raise unauthorized()
         return AuthContext(user=user, session=auth_session)
 
@@ -180,6 +211,7 @@ class AuthService:
         )
         if user.email_verified_at is None:
             user.email_verified_at = consumed_at
+            user.updated_at = consumed_at
         account_token.consumed_at = consumed_at
         await db.commit()
         return user
@@ -225,6 +257,7 @@ class AuthService:
             PASSWORD_HASHER.hash, new_password
         )
         user.password_hash = new_password_hash
+        user.updated_at = consumed_at
         account_token.consumed_at = consumed_at
         await db.execute(
             update(AuthSession)

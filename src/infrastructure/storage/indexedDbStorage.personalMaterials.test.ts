@@ -4,6 +4,7 @@ import { IndexedDbStorage } from './indexedDbStorage'
 
 const CREATED_AT = '2026-08-21T08:00:00.000Z'
 const UPDATED_AT = '2026-08-21T09:00:00.000Z'
+const DELETED_AT = '2026-08-21T10:00:00.000Z'
 
 const aliceMaterial: PersonalMaterial = {
   id: 'material-alice-grandmother',
@@ -103,7 +104,13 @@ describe('IndexedDbStorage personal materials', () => {
       await storage.getPersonalMaterial(aliceMaterial.id, 'user-bob'),
     ).toBeNull()
 
-    await storage.deletePersonalMaterial(aliceMaterial.id, 'user-bob')
+    await expect(
+      storage.deletePersonalMaterial(
+        aliceMaterial.id,
+        'user-bob',
+        DELETED_AT,
+      ),
+    ).rejects.toThrow('不属于当前账号')
     expect(
       await storage.getPersonalMaterial(aliceMaterial.id, 'user-alice'),
     ).toEqual(aliceMaterial)
@@ -113,7 +120,11 @@ describe('IndexedDbStorage personal materials', () => {
     const storage = createAdapter()
     await storage.upsertPersonalMaterial(aliceMaterial)
 
-    await storage.deletePersonalMaterial(aliceMaterial.id, 'user-alice')
+    await storage.deletePersonalMaterial(
+      aliceMaterial.id,
+      'user-alice',
+      DELETED_AT,
+    )
 
     expect(await storage.listPersonalMaterials('user-alice')).toEqual([])
     const deleted = await storage.getPersonalMaterial(
@@ -126,7 +137,7 @@ describe('IndexedDbStorage personal materials', () => {
       status: 'confirmed',
       version: 2,
     })
-    expect(deleted?.deletedAt).not.toBeNull()
+    expect(deleted?.deletedAt).toBe(DELETED_AT)
     expect(deleted?.updatedAt).toBe(deleted?.deletedAt)
     expect(
       await storage.listPersonalMaterials('user-alice', {
@@ -134,7 +145,11 @@ describe('IndexedDbStorage personal materials', () => {
       }),
     ).toEqual([deleted])
 
-    await storage.deletePersonalMaterial(aliceMaterial.id, 'user-alice')
+    await storage.deletePersonalMaterial(
+      aliceMaterial.id,
+      'user-alice',
+      DELETED_AT,
+    )
     expect(
       await storage.getPersonalMaterial(aliceMaterial.id, 'user-alice'),
     ).toEqual(deleted)
@@ -149,7 +164,7 @@ describe('IndexedDbStorage personal materials', () => {
     await storage.close()
 
     const database = await openDatabase(databaseName)
-    expect(database.version).toBe(7)
+    expect(database.version).toBe(8)
     expect(database.objectStoreNames.contains('personalMaterials')).toBe(true)
     const transaction = database.transaction('personalMaterials', 'readonly')
     const store = transaction.objectStore('personalMaterials')

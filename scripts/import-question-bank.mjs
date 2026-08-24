@@ -10,6 +10,7 @@
  * 换季度时无需手工改业务代码:题库模块只读取生成文件。若未来 PDF 排版
  * 变化,也只需在这个解析器里增加一个适配函数,不要改 UI 或练习服务。
  */
+import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,6 +19,16 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const OUTPUT = path.join(ROOT, 'src', 'data', 'questionBank.generated.json')
+const PARSER_VERSION = '2.2.0'
+const BUILT_IN_SOURCE = '雅思口语喵内置题库'
+
+const ALLOWED_CATEGORIES = {
+  1: new Set(['必考话题', '高频话题', 'PLACE', 'OBJECTS', 'EVENTS', 'ABSTRACT']),
+  2: new Set(['PLACE', 'PEOPLE', 'OBJECTS', 'EVENTS']),
+  3: new Set(['PLACE', 'PEOPLE', 'OBJECTS', 'EVENTS']),
+}
+
+const MINIMUM_COUNTS = { 1: 20, 2: 30, 3: 100 }
 
 const HEADER_LINES = new Set([
   '新航道国际教育集团教学与考试研究院',
@@ -27,7 +38,16 @@ const HEADER_LINES = new Set([
   '录',
 ])
 
-const CUE_STARTERS = /^(And|How|What|Who|Where|Why|Whether)\b/i
+const CUE_STARTERS = /^(And|How|What|When|Which|Who|Where|Why|Whether)\b/i
+const INTERNAL_CUE_BOUNDARY = /\s+(?=(?:And explain|How|What|When|Which|Who|Where|Why|Whether)\b)/g
+const DANGLING_TOPIC_WORDS = new Set([
+  'a', 'an', 'the',
+  'and', 'or', 'but', 'nor', 'so', 'yet', 'than',
+  'of', 'to', 'in', 'on', 'at', 'for', 'from', 'with', 'by', 'about',
+  'into', 'over', 'under', 'between', 'among', 'during', 'before', 'after',
+  'without', 'within', 'as', 'through', 'across', 'around', 'against',
+  'toward', 'towards',
+])
 
 function main() {
   const input = process.argv[2]
@@ -43,17 +63,20 @@ function main() {
 async function run(inputPath) {
   const absolute = path.resolve(ROOT, inputPath)
   const isJson = absolute.toLowerCase().endsWith('.json')
+  const sourceBytes = await readFile(absolute)
   const questions = isJson
-    ? parseJsonQuestions(JSON.parse(await readFile(absolute, 'utf8')))
-    : await parsePdfQuestions(await readFile(absolute))
+    ? parseJsonQuestions(JSON.parse(sourceBytes.toString('utf8')))
+    : await parsePdfQuestions(sourceBytes)
 
   const report = validate(questions)
   const sourceName = path.basename(absolute)
   const document = {
     format: 'ielts-speaking-meow-question-bank',
-    formatVersion: 1,
+    formatVersion: 2,
+    parserVersion: PARSER_VERSION,
     seasonLabel: inferSeasonLabel(sourceName),
     sourceFile: sourceName,
+    sourceSha256: createHash('sha256').update(sourceBytes).digest('hex'),
     generatedAt: new Date().toISOString(),
     counts: report.counts,
     questions,
@@ -64,9 +87,6 @@ async function run(inputPath) {
     `P1 ${report.counts[1]} 题(必考+高频)、P2 ${report.counts[2]} 题、` +
     `P3 ${report.counts[3]} 题;关联 Part 3 ${report.linkedPart3} 条。`,
   )
-  for (const warning of report.warnings) {
-    console.warn(`⚠ ${warning}`)
-  }
 }
 
 function inferSeasonLabel(fileName) {
@@ -187,7 +207,7 @@ function createParser(rawLines) {
       topic: part2Topic(prompt),
       prompt,
       difficulty: 'developing',
-      source: '雅思口语喵内置题库',
+      source: BUILT_IN_SOURCE,
       category: currentCategory ?? 'Part 2',
       isNew: pendingPart2IsNew ?? false,
       cuePoints: [],
@@ -225,7 +245,7 @@ function createParser(rawLines) {
       topic: currentPart2.topic,
       prompt,
       difficulty: 'stretch',
-      source: '雅思口语喵内置题库',
+      source: BUILT_IN_SOURCE,
       category: currentPart2.category,
       isNew: currentPart2.isNew,
       part2QuestionId: currentPart2.id,
@@ -284,7 +304,7 @@ function createParser(rawLines) {
           topic: currentTopic ?? 'Part 1',
           prompt: questionNumber.text,
           difficulty: 'foundation',
-          source: '雅思口语喵内置题库',
+          source: BUILT_IN_SOURCE,
           category: currentCategory ?? '必考话题',
           isNew: currentTopicIsNew ?? false,
         })
@@ -412,20 +432,14 @@ function createParser(rawLines) {
     }
   }
 
-  // 规范化 Part 2 cue points:删除空白,至少保留两条。
+  // 只规范化来源中真实存在的 cue points。缺失时由 validate 直接失败，
+  // 绝不能静默补写并不存在于原 PDF 的提示。
   for (const question of questions) {
     if (question.part === 2) {
       question.cuePoints = question.cuePoints
-        .map((point) => cleanPrompt(point))
+        .flatMap((point) => splitCuePoints(point))
         .filter(Boolean)
         .slice(0, 6)
-      if (question.cuePoints.length < 2) {
-        question.cuePoints = [
-          ...question.cuePoints,
-          'Explain the main details.',
-          'Say why this is meaningful to you.',
-        ].slice(0, 6)
-      }
     }
   }
 
@@ -530,17 +544,53 @@ function cleanPrompt(text) {
     .replace(/\s+/g, ' ')
     .replace(/\s+([,.!?;:])/g, '$1')
     .replace(/([?!.])(?=[A-Za-z])/g, '$1 ')
+    .replace(/\be\.\s*g\./gi, 'e.g.')
+    .replace(/,([A-Za-z])/g, ', $1')
+    .replace(/\bpf\b/g, 'of')
+    .replace(/\brecomme\s+nd\b/gi, 'recommend')
+    .replace(/\bAl\b/g, 'AI')
     .trim()
 }
 
+function splitCuePoints(text) {
+  const cleaned = cleanPrompt(text)
+  return cleaned
+    .split(INTERNAL_CUE_BOUNDARY)
+    .map((point) => point.trim())
+    .filter(Boolean)
+}
+
+function hasDanglingTopicEnd(topic) {
+  const finalWord = topic.match(/[A-Za-z]+$/)?.[0].toLowerCase()
+  return (
+    (finalWord !== undefined && DANGLING_TOPIC_WORDS.has(finalWord)) ||
+    /\b[A-Za-z]\.$/.test(topic)
+  )
+}
+
+function trimDanglingTopicEnd(topic) {
+  let result = topic.replace(/[,:;(\-]+$/g, '').trim()
+  while (hasDanglingTopicEnd(result)) {
+    result = result.replace(/\s+\S+$/, '').trim()
+  }
+  return result
+}
+
 function part2Topic(prompt) {
-  const cleaned = prompt
-    .replace(/^Describe (an?|a) /i, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const words = cleaned.split(/\s+/)
-  const topic = words.slice(0, 7).join(' ')
-  return (topic.length > 0 ? topic : cleaned).slice(0, 80)
+  let topic = cleanPrompt(prompt)
+    .replace(/^Describe\b\s*/i, '')
+    .replace(/^(?:an?|the)\s+/i, '')
+    .replace(/\s*\((?:e\.g\.|for example|such as)\s+[^)]*\)/gi, ' ')
+  topic = cleanPrompt(topic)
+
+  if (topic.length > 80) {
+    const wordBoundary = topic.lastIndexOf(' ', 80)
+    if (wordBoundary > 0) {
+      topic = topic.slice(0, wordBoundary)
+    }
+  }
+
+  return trimDanglingTopicEnd(topic)
 }
 
 function stableId(part, prompt) {
@@ -553,45 +603,194 @@ function stableId(part, prompt) {
   return `p${part}-${slug}-${index}`
 }
 
+const COMMON_QUESTION_FIELDS = [
+  'id',
+  'part',
+  'topic',
+  'prompt',
+  'difficulty',
+  'source',
+  'category',
+  'isNew',
+]
+
+const ALLOWED_QUESTION_FIELDS = {
+  1: new Set(COMMON_QUESTION_FIELDS),
+  2: new Set([...COMMON_QUESTION_FIELDS, 'cuePoints', 'relatedPart3Ids']),
+  3: new Set([...COMMON_QUESTION_FIELDS, 'part2QuestionId']),
+}
+
+function validateText(value, label, maximumLength) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`题库校验失败:${label} 为空`)
+  }
+  if (value.length > maximumLength) {
+    throw new Error(`题库校验失败:${label} 超过 ${maximumLength} 个字符`)
+  }
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
+    throw new Error(`题库校验失败:${label} 包含控制字符或换行`)
+  }
+  if (/@@PAGE|^Warning:|You should say:|\.{5,}|\[(?:new|old)\]/i.test(value)) {
+    throw new Error(`题库校验失败:${label} 包含疑似 PDF 结构残留: ${value}`)
+  }
+  if (/,[A-Za-z]/.test(value)) {
+    throw new Error(`题库校验失败:${label} 包含逗号粘连: ${value}`)
+  }
+  if (/\bpf\b/.test(value)) {
+    throw new Error(`题库校验失败:${label} 包含孤立 OCR token pf: ${value}`)
+  }
+  if (/\be\.\s+g\./i.test(value)) {
+    throw new Error(`题库校验失败:${label} 包含未规范化缩写 e. g.: ${value}`)
+  }
+  if (/\brecomme\s+nd\b/i.test(value)) {
+    throw new Error(`题库校验失败:${label} 包含未修复的 PDF 单词断裂: ${value}`)
+  }
+  if (/\bAl\b/.test(value)) {
+    throw new Error(`题库校验失败:${label} 包含疑似 AI OCR 错字 Al: ${value}`)
+  }
+}
+
+function validateQuestionShape(question, index) {
+  if (question === null || typeof question !== 'object' || Array.isArray(question)) {
+    throw new Error(`题库校验失败:第 ${index + 1} 项不是题目对象`)
+  }
+
+  const label = typeof question.id === 'string' ? question.id : `第 ${index + 1} 项`
+  if (![1, 2, 3].includes(question.part)) {
+    throw new Error(`题库校验失败:${label} 的 Part 无效`)
+  }
+  if (!new RegExp(`^p${question.part}-[a-z0-9-]+$`).test(question.id)) {
+    throw new Error(`题库校验失败:${label} 的 id 与 Part 不匹配`)
+  }
+
+  const unexpectedFields = Object.keys(question).filter(
+    (field) => !ALLOWED_QUESTION_FIELDS[question.part].has(field),
+  )
+  if (unexpectedFields.length > 0) {
+    throw new Error(`题库校验失败:${label} 包含未知字段 ${unexpectedFields.join(', ')}`)
+  }
+
+  validateText(question.topic, `${label} topic`, 80)
+  if (question.part !== 1 && hasDanglingTopicEnd(question.topic)) {
+    throw new Error(`题库校验失败:${label} topic 以连接词、介词或残缺缩写结尾`)
+  }
+  validateText(question.prompt, `${label} 题目`, 500)
+  if (question.source !== BUILT_IN_SOURCE) {
+    throw new Error(`题库校验失败:${label} 缺少内置题库来源标记`)
+  }
+  if (typeof question.isNew !== 'boolean') {
+    throw new Error(`题库校验失败:${label} 缺少 [new]/[old] 标记`)
+  }
+  if (!ALLOWED_CATEGORIES[question.part].has(question.category)) {
+    throw new Error(`题库校验失败:${label} 的分类异常: ${question.category ?? '空'}`)
+  }
+
+  const expectedDifficulty = {
+    1: 'foundation',
+    2: 'developing',
+    3: 'stretch',
+  }[question.part]
+  if (question.difficulty !== expectedDifficulty) {
+    throw new Error(`题库校验失败:${label} 的难度标记与 Part 不匹配`)
+  }
+}
+
 function validate(questions) {
+  if (!Array.isArray(questions)) {
+    throw new Error('题库校验失败:questions 必须是数组')
+  }
+
   const counts = { 1: 0, 2: 0, 3: 0 }
-  const warnings = []
   const ids = new Set()
   const part2ById = new Map()
-  for (const question of questions) {
+  const part3ById = new Map()
+
+  for (const [index, question] of questions.entries()) {
+    validateQuestionShape(question, index)
     counts[question.part] += 1
     if (ids.has(question.id)) {
       throw new Error(`题库校验失败:重复 id ${question.id}`)
     }
     ids.add(question.id)
-    if (question.prompt.length === 0) {
-      throw new Error(`题库校验失败:${question.id} 题目为空`)
-    }
+
     if (question.part === 2) {
       part2ById.set(question.id, question)
-      if (question.cuePoints.length < 2) {
+      if (!/^Describe\b/i.test(question.prompt)) {
+        throw new Error(`题库校验失败:${question.id} 不是 Describe cue card`)
+      }
+      if (!Array.isArray(question.cuePoints) || question.cuePoints.length < 2) {
         throw new Error(`题库校验失败:${question.id} 的 cue points 少于 2 条`)
+      }
+      if (question.cuePoints.length > 6) {
+        throw new Error(`题库校验失败:${question.id} 的 cue points 超过 6 条`)
+      }
+      for (const [cueIndex, cuePoint] of question.cuePoints.entries()) {
+        validateText(cuePoint, `${question.id} cue point ${cueIndex + 1}`, 160)
+        if (!CUE_STARTERS.test(cuePoint)) {
+          throw new Error(
+            `题库校验失败:${question.id} 的 cue point 起始词异常: ${cuePoint}`,
+          )
+        }
+      }
+      if (!Array.isArray(question.relatedPart3Ids) || question.relatedPart3Ids.length === 0) {
+        throw new Error(`题库校验失败:${question.id} 没有关联 Part 3 问题`)
+      }
+      if (question.relatedPart3Ids.length > 12) {
+        throw new Error(`题库校验失败:${question.id} 关联的 Part 3 超过 12 条`)
+      }
+      if (new Set(question.relatedPart3Ids).size !== question.relatedPart3Ids.length) {
+        throw new Error(`题库校验失败:${question.id} 包含重复的 Part 3 关联`)
+      }
+    }
+
+    if (question.part === 3) {
+      if (typeof question.part2QuestionId !== 'string') {
+        throw new Error(`题库校验失败:${question.id} 没有关联 Part 2`)
+      }
+      part3ById.set(question.id, question)
+    }
+  }
+
+  for (const part of [1, 2, 3]) {
+    if (counts[part] < MINIMUM_COUNTS[part]) {
+      throw new Error(
+        `题库校验失败:Part ${part} 仅解析出 ${counts[part]} 题，低于安全下限 ${MINIMUM_COUNTS[part]}`,
+      )
+    }
+  }
+
+  let linkedPart3 = 0
+  for (const question of part3ById.values()) {
+    const part2 = part2ById.get(question.part2QuestionId)
+    if (part2 === undefined) {
+      throw new Error(
+        `题库校验失败:${question.id} 指向不存在的 Part 2 ${question.part2QuestionId}`,
+      )
+    }
+    if (!part2.relatedPart3Ids.includes(question.id)) {
+      throw new Error(`题库校验失败:${question.id} 未出现在 ${part2.id} 的反向关联中`)
+    }
+    linkedPart3 += 1
+  }
+
+  for (const question of part2ById.values()) {
+    for (const part3Id of question.relatedPart3Ids) {
+      const part3 = part3ById.get(part3Id)
+      if (part3 === undefined) {
+        throw new Error(`题库校验失败:${question.id} 指向不存在的 Part 3 ${part3Id}`)
+      }
+      if (part3.part2QuestionId !== question.id) {
+        throw new Error(`题库校验失败:${question.id} 与 ${part3Id} 的双向关联不一致`)
       }
     }
   }
-  let linkedPart3 = 0
-  for (const question of questions) {
-    if (question.part !== 3) continue
-    linkedPart3 += question.part2QuestionId !== undefined ? 1 : 0
-    if (question.part2QuestionId && !part2ById.has(question.part2QuestionId)) {
-      warnings.push(`${question.id} 指向不存在的 Part 2 ${question.part2QuestionId}`)
-    }
-  }
-  for (const question of questions) {
-    if (question.part !== 2) continue
-    if (question.relatedPart3Ids?.length === 0) {
-      warnings.push(`${question.id} 没有关联 Part 3 问题`)
-    }
-  }
-  if (counts[1] < 20) warnings.push(`Part 1 题目偏少:${counts[1]}`)
-  if (counts[2] < 30) warnings.push(`Part 2 题目偏少:${counts[2]}`)
-  if (counts[3] < 100) warnings.push(`Part 3 题目偏少:${counts[3]}`)
-  return { counts, warnings, linkedPart3 }
+
+  return { counts, linkedPart3 }
 }
 
-main()
+export { cleanPrompt, part2Topic, splitCuePoints, validate as validateQuestionBank }
+
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : null
+if (invokedPath === fileURLToPath(import.meta.url)) {
+  main()
+}

@@ -91,4 +91,30 @@ describe('AccountService', () => {
     expect(service.getCurrentUserId()).toBe(current.userId)
     expect(current.userId).toMatch(/^[0-9a-f-]{36}$/)
   })
+
+  it('persists one-to-one cloud bindings and blocks A logout to B account mixing', async () => {
+    const storage = new MemoryAccountStorage()
+    const service = createService(storage)
+    const localA = await service.initialize()
+
+    const boundA = await service.bindCurrentAccountToCloud('cloud-a')
+    expect(boundA.cloudAccountId).toBe('cloud-a')
+    await expect(service.bindCurrentAccountToCloud('cloud-b')).rejects.toThrow(
+      '已绑定另一个云账号',
+    )
+
+    const localB = await service.createAccount('本地 B', null)
+    await service.switchAccount(localB.id, null)
+    await expect(service.bindCurrentAccountToCloud('cloud-a')).rejects.toThrow(
+      `已绑定本机资料身份“${localA.displayName}”`,
+    )
+    await expect(service.bindCurrentAccountToCloud('cloud-b')).resolves.toMatchObject({
+      id: localB.id,
+      cloudAccountId: 'cloud-b',
+    })
+
+    const restored = createService(storage)
+    await restored.initialize()
+    expect(restored.getCurrentAccount()?.cloudAccountId).toBe('cloud-b')
+  })
 })

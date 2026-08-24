@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core'
-import { TTS_VOICE_CONFIG_VERSION } from '../domain'
+import { TTS_VOICE_CONFIG_VERSION, type UserPreferences } from '../domain'
 import { AccountService } from '../application/accountService'
 import { ImportMaterialService } from '../application/imports/importMaterialService'
 import { PracticeService } from '../application/practiceService'
@@ -63,7 +63,17 @@ export const createBrowserRuntime = () => {
   )
   const tts = new FallbackTTSProvider(voiceAi, systemTts)
   const playback = new HTMLAudioPlayback()
-  const audioFocus = new AudioCoordinator(tts, playback)
+  let playbackPreferences: Pick<UserPreferences, 'ttsVoiceMode' | 'ttsRate'> = {
+    ttsVoiceMode: 'natural-first',
+    ttsRate: 0.92,
+  }
+  const audioFocus = new AudioCoordinator(tts, playback, {
+    systemTts,
+    getPlaybackPreferences: () => ({
+      voiceMode: playbackPreferences.ttsVoiceMode,
+      rate: playbackPreferences.ttsRate,
+    }),
+  })
   const documentOcr = Capacitor.getPlatform() === 'android'
     ? new CapacitorDocumentOcr()
     : null
@@ -90,6 +100,12 @@ export const createBrowserRuntime = () => {
   const backupService = new StorageBackupService(storage, storage)
 
   return {
+    setUserPreferences: (preferences: UserPreferences) => {
+      playbackPreferences = {
+        ttsVoiceMode: preferences.ttsVoiceMode,
+        ttsRate: preferences.ttsRate,
+      }
+    },
     /** 载入账号、运行时配置并做一次非阻塞的云端健康检查。 */
     initialize: async () => {
       await accountService.initialize()

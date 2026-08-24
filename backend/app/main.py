@@ -14,11 +14,17 @@ from .config import Settings, get_settings
 from .database import Database
 from .errors import BackendError
 from .logging_setup import configure_logging
-from .routers import auth, feedback, health, sync, tts
-from .security import RequestIdMiddleware, SlidingWindowRateLimiter
+from .routers import auth, feedback, health, me, sync, tts
+from .security import (
+    RequestIdMiddleware,
+    SensitiveResponseHeadersMiddleware,
+    SlidingWindowRateLimiter,
+)
+from .services.account_lifecycle import AccountLifecycleService
 from .services.auth_service import AuthService
 from .services.deepseek_service import DeepSeekService
 from .services.email_sender import AccountEmailService, EmailSender, build_email_sender
+from .services.feature_authorization import FeatureAuthorizationService
 from .services.http_client import build_http_client
 from .services.sync_service import SyncService
 from .services.volcengine_tts_service import VolcengineTTSService
@@ -63,7 +69,7 @@ def create_app(
                 await client.aclose()
 
     app = FastAPI(
-        title="雅思口语喵 Backend", version="1.8.0", lifespan=lifespan
+        title="雅思口语喵 Backend", version="2.0.0", lifespan=lifespan
     )
     app.state.settings = settings
     app.state.client = client
@@ -76,6 +82,8 @@ def create_app(
         account_email_service,
     )
     app.state.sync_service = SyncService()
+    app.state.account_lifecycle_service = AccountLifecycleService()
+    app.state.feature_authorization_service = FeatureAuthorizationService(settings)
     app.state.services = services
 
     # CORS:App 在 Capacitor WebView 里的来源是 https://localhost;浏览器开发预览
@@ -89,6 +97,7 @@ def create_app(
     )
 
     app.add_middleware(SlidingWindowRateLimiter, settings=settings)
+    app.add_middleware(SensitiveResponseHeadersMiddleware, settings=settings)
     # 最外层关联 ID 覆盖正常与限流响应，便于排查且不记录请求正文。
     app.add_middleware(RequestIdMiddleware)
 
@@ -96,6 +105,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(sync.router)
     app.include_router(feedback.router, tags=["feedback"])
+    app.include_router(me.router)
     app.include_router(tts.router, tags=["tts"])
 
     @app.exception_handler(BackendError)

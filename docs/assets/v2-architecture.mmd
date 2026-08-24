@@ -1,0 +1,41 @@
+flowchart LR
+  subgraph Device["Android 设备（local-first）"]
+    UI["训练 / 题库 / 历史 / 素材 / 账号"]
+    LocalDB[("IndexedDB<br/>按 ownerId 隔离")]
+    Facts["练习、反馈、表达、个人素材"]
+    Memory["派生 Memory<br/>薄弱项 / 习惯 / 可复用素材"]
+    Preferences["按账号偏好<br/>Memory 与 AI 分享开关"]
+    SystemTTS["Android System TTS<br/>离线 fallback"]
+    UI --> LocalDB
+    LocalDB --> Facts
+    Facts --> Memory
+    Preferences --> UI
+    UI --> SystemTTS
+  end
+
+  subgraph Edge["公网安全入口"]
+    Cloudflare["Cloudflare HTTPS / WAF"]
+    Tunnel["outbound-only Tunnel"]
+    Cloudflare --> Tunnel
+  end
+
+  subgraph Home["家庭 Linux / Docker Compose"]
+    API["FastAPI V2<br/>Auth / Sync / AI / TTS / Quota"]
+    Postgres[("PostgreSQL<br/>用户 / 会话 / 同步 / 用量")]
+    API --> Postgres
+  end
+
+  subgraph Providers["可替换上游"]
+    DeepSeek["DeepSeek Text AI"]
+    Volc["火山引擎 TTS"]
+    SMTP["SMTP 验证与找回"]
+  end
+
+  UI -->|"HTTPS + Bearer session"| Cloudflare
+  Tunnel -->|"Docker private network"| API
+  LocalDB -.->|"用户明确确认后同步"| API
+  Memory -->|"紧凑 learnerContext"| API
+  API --> DeepSeek
+  API --> Volc
+  API --> SMTP
+  Volc -.->|"失败"| SystemTTS

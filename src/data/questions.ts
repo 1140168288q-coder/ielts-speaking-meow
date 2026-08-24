@@ -14,9 +14,11 @@ import generatedQuestionBank from './questionBank.generated.json'
 const generatedQuestionBankSchema = z
   .object({
     format: z.literal('ielts-speaking-meow-question-bank'),
-    formatVersion: z.literal(1),
+    formatVersion: z.literal(2),
+    parserVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
     seasonLabel: z.string().trim().min(1),
     sourceFile: z.string().trim().min(1),
+    sourceSha256: z.string().regex(/^[a-f0-9]{64}$/),
     generatedAt: z.iso.datetime({ offset: true }),
     counts: z
       .object({
@@ -24,17 +26,33 @@ const generatedQuestionBankSchema = z
         2: z.number().int().positive(),
         3: z.number().int().positive(),
       })
-      .passthrough(),
+      .strict(),
     questions: questionBankSchema,
   })
   .strict()
+  .superRefine((bank, context) => {
+    for (const part of [1, 2, 3] as const) {
+      const actualCount = bank.questions.filter(
+        (question) => question.part === part,
+      ).length
+      if (bank.counts[part] !== actualCount) {
+        context.addIssue({
+          code: 'custom',
+          message: `Part ${part} count does not match questions`,
+          path: ['counts', part],
+        })
+      }
+    }
+  })
 
 const parsed = generatedQuestionBankSchema.parse(generatedQuestionBank)
 
 export const questionBank: Question[] = parsed.questions
 export const questionBankMeta = {
+  parserVersion: parsed.parserVersion,
   seasonLabel: parsed.seasonLabel,
   sourceFile: parsed.sourceFile,
+  sourceSha256: parsed.sourceSha256,
   generatedAt: parsed.generatedAt,
   counts: parsed.counts,
 } as const

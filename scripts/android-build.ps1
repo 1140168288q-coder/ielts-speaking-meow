@@ -37,40 +37,91 @@ if ($Release -and [string]::IsNullOrWhiteSpace($BackendUrl)) {
 }
 
 function Test-PrivateLanHost([string] $HostName) {
-    $candidate = $HostName.ToLowerInvariant()
-    if ($candidate -eq 'localhost' -or $candidate -eq '::1' -or $candidate.EndsWith('.local')) {
+    $candidate = $HostName.Trim().ToLowerInvariant()
+    if (
+        $candidate -eq 'localhost' -or
+        $candidate -eq '::1' -or
+        $candidate.EndsWith('.local')
+    ) {
         return $true
     }
-    foreach ($pattern in @('^10\.', '^127\.', '^169\.254\.', '^192\.168\.', '^172\.(1[6-9]|2\d|3[01])\.')) {
-        if ($candidate -match $pattern) {
-            return $true
-        }
+
+    $address = $null
+    if (-not [System.Net.IPAddress]::TryParse($candidate, [ref] $address)) {
+        return $false
     }
-    return $false
+    if ($address.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+        return [System.Net.IPAddress]::IsLoopback($address)
+    }
+
+    $bytes = $address.GetAddressBytes()
+    return (
+        $bytes[0] -eq 10 -or
+        $bytes[0] -eq 127 -or
+        ($bytes[0] -eq 169 -and $bytes[1] -eq 254) -or
+        ($bytes[0] -eq 192 -and $bytes[1] -eq 168) -or
+        ($bytes[0] -eq 172 -and $bytes[1] -ge 16 -and $bytes[1] -le 31)
+    )
+}
+
+function ConvertTo-BackendBaseUrl([string] $Value) {
+    $candidate = $Value.Trim()
+    $parsed = $null
+    if (
+        [string]::IsNullOrWhiteSpace($candidate) -or
+        -not [System.Uri]::TryCreate(
+            $candidate,
+            [System.UriKind]::Absolute,
+            [ref] $parsed
+        )
+    ) {
+        throw "Backend 地址不是有效的绝对 URL: $Value"
+    }
+    if ($parsed.Scheme -notin @('https', 'http') -or [string]::IsNullOrWhiteSpace($parsed.Host)) {
+        throw 'Backend 地址只支持 HTTP 或 HTTPS。'
+    }
+    if (
+        -not [string]::IsNullOrEmpty($parsed.UserInfo) -or
+        -not [string]::IsNullOrEmpty($parsed.Query) -or
+        -not [string]::IsNullOrEmpty($parsed.Fragment)
+    ) {
+        throw 'Backend 地址不能包含账号、密码、查询参数或片段。'
+    }
+
+    $path = $parsed.AbsolutePath.TrimEnd('/')
+    if ($path.Length -gt 0 -and $path -ine '/health') {
+        throw 'Backend 地址只能填写服务根地址；允许自动移除末尾的 /health。'
+    }
+    return $parsed.GetLeftPart([System.UriPartial]::Authority).TrimEnd('/')
+}
+
+$LockBackendUrl = $Release
+$AllowLanHttpBuild = $false
+$Normalized = if ([string]::IsNullOrWhiteSpace($BackendUrl)) {
+    ''
+} else {
+    ConvertTo-BackendBaseUrl $BackendUrl
+}
+
+if ($Normalized.Length -gt 0) {
+    $Uri = [System.Uri]::new($Normalized)
+    $IsPrivateHttp = (
+        $Uri.Scheme -eq 'http' -and
+        (Test-PrivateLanHost $Uri.Host)
+    )
+    if ($Uri.Scheme -eq 'http' -and -not $IsPrivateHttp) {
+        throw "公网 Backend 地址必须使用 HTTPS（当前：$Normalized）。"
+    }
+    if ($Release -and $IsPrivateHttp -and -not $AllowLanHttp) {
+        throw '正式构建使用私有局域网 HTTP 时必须显式开启 -AllowLanHttp。'
+    }
+    $AllowLanHttpBuild = $Release -and $IsPrivateHttp -and $AllowLanHttp
 }
 
 if ($Release) {
-    $Normalized = $BackendUrl.Trim().TrimEnd('/') -replace '/health$', ''
-    $Uri = [System.Uri]::new($Normalized)
-    $LockBackendUrl = $false
-    $AllowLanHttpBuild = $false
-    if ($Uri.Scheme -eq 'https') {
-        $LockBackendUrl = $true
-    } elseif ($Uri.Scheme -eq 'http' -and $AllowLanHttp -and (Test-PrivateLanHost $Uri.Host)) {
-        # 家庭 Backend 过渡方案:私有局域网 HTTP 需要显式 -AllowLanHttp
-        $LockBackendUrl = $true
-        $AllowLanHttpBuild = $true
-    } else {
-        throw "正式构建的 Backend 地址必须是 HTTPS(当前:$Normalized);私有局域网 HTTP 例外需显式开启 -AllowLanHttp。"
-    }
     Write-Host "Release build will lock Backend URL: $Normalized"
-} else {
-    $LockBackendUrl = $false
-    $AllowLanHttpBuild = $false
-    $Normalized = if ([string]::IsNullOrWhiteSpace($BackendUrl)) { '' } else { $BackendUrl.Trim().TrimEnd('/') }
-    if ($Normalized.Length -gt 0) {
-        Write-Host "Debug build will default Backend URL to: $Normalized (still editable)"
-    }
+} elseif ($Normalized.Length -gt 0) {
+    Write-Host "Debug build will default Backend URL to: $Normalized (still editable)"
 }
 
 $MachinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')

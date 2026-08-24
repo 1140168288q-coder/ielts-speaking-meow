@@ -126,9 +126,10 @@ describe('IndexedDbStorage cloud sync', () => {
     await storage.close()
 
     const database = await openDatabase(databaseName)
-    expect(database.version).toBe(7)
+    expect(database.version).toBe(8)
     expect(database.objectStoreNames.contains('syncOutbox')).toBe(true)
     expect(database.objectStoreNames.contains('syncState')).toBe(true)
+    expect(database.objectStoreNames.contains('deletionTombstones')).toBe(true)
     const transaction = database.transaction('syncOutbox', 'readonly')
     expect(Array.from(transaction.objectStore('syncOutbox').indexNames)).toContain(
       'scopeId',

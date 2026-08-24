@@ -17,7 +17,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..dependencies import get_db_session
-from ..errors import unauthorized
+from ..errors import forbidden, unauthorized
 from ..models import User
 from ..services.auth_service import AuthContext, AuthService, IssuedSession, ensure_utc
 
@@ -31,11 +31,18 @@ class CredentialsPayload(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class RegisterPayload(CredentialsPayload):
+    displayName: str | None = Field(default=None, max_length=80)
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
+    displayName: str | None
+    status: str
     emailVerified: bool
     createdAt: datetime
+    updatedAt: datetime
 
 
 class AuthResponse(BaseModel):
@@ -66,8 +73,11 @@ def user_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         email=user.email,
+        displayName=user.display_name,
+        status=user.status,
         emailVerified=user.email_verified_at is not None,
         createdAt=ensure_utc(user.created_at),
+        updatedAt=ensure_utc(user.updated_at),
     )
 
 
@@ -92,14 +102,27 @@ async def get_current_auth(
     return await service.authenticate(db, credentials.credentials)
 
 
+async def require_verified_user(
+    auth: Annotated[AuthContext, Depends(get_current_auth)],
+) -> AuthContext:
+    if auth.user.email_verified_at is None:
+        raise forbidden(
+            "email-not-verified", "请先完成邮箱验证后再使用云端能力。"
+        )
+    return auth
+
+
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     request: Request,
-    payload: CredentialsPayload,
+    payload: RegisterPayload,
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> AuthResponse:
     service: AuthService = request.app.state.auth_service
-    user, issued = await service.register(db, str(payload.email), payload.password)
+    display_name = payload.displayName.strip() if payload.displayName else None
+    user, issued = await service.register(
+        db, str(payload.email), payload.password, display_name
+    )
     return auth_response(user, issued)
 
 
@@ -132,6 +155,18 @@ async def logout(
 ) -> Response:
     service: AuthService = request.app.state.auth_service
     await service.logout(db, auth)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_all(
+    request: Request,
+    auth: Annotated[AuthContext, Depends(get_current_auth)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Response:
+    await request.app.state.account_lifecycle_service.logout_all(
+        db, auth.user.id
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

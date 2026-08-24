@@ -2,18 +2,24 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, Settings, UserRound } from 'lucide-react'
 import type { AccountService } from '../../application/accountService'
 import type { AccountProfile } from '../../domain/accounts'
+import type { UserPreferences, UserPreferencesUpdate } from '../../domain/userPreferences'
 import { formatDate } from '../practice/format'
+import { MemoryPrivacyCard } from './MemoryPrivacyCard'
 
 export function AccountView({
   service,
   onSwitched,
   onOpenSettings = () => undefined,
   cloudPanel = null,
+  preferences,
+  onPreferencesChange,
 }: {
   service: AccountService
   onSwitched: (account: AccountProfile) => void
   onOpenSettings?: () => void
   cloudPanel?: ReactNode
+  preferences?: Pick<UserPreferences, 'memoryEnabled' | 'sharePersonalMaterialsWithAi'>
+  onPreferencesChange?: (update: UserPreferencesUpdate) => Promise<void>
 }) {
   const [accounts, setAccounts] = useState<AccountProfile[]>([])
   const [current, setCurrent] = useState<AccountProfile | null>(() =>
@@ -83,8 +89,6 @@ export function AccountView({
 
       {message ? <div className="notice" role="status">{message}</div> : null}
 
-      {cloudPanel}
-
       <section className="account-current-card">
         <div>
           <p className="eyebrow">当前本机资料</p>
@@ -94,14 +98,11 @@ export function AccountView({
         <span className="account-avatar" aria-hidden="true"><UserRound size={24} /></span>
       </section>
 
-      <button type="button" className="profile-settings-link" onClick={onOpenSettings}>
-        <span><Settings aria-hidden="true" size={19} /></span>
-        <span>
-          <strong>应用设置</strong>
-          <small>主题、朗读、云端服务与本地备份</small>
-        </span>
-        <ArrowRight aria-hidden="true" size={18} />
-      </button>
+      {cloudPanel}
+
+      {preferences && onPreferencesChange ? (
+        <MemoryPrivacyCard preferences={preferences} onPreferencesChange={onPreferencesChange} />
+      ) : null}
 
       <details className="device-profile-manager">
         <summary>管理这台设备上的资料身份</summary>
@@ -220,6 +221,15 @@ export function AccountView({
       </section>
         </div>
       </details>
+
+      <button type="button" className="profile-settings-link" onClick={onOpenSettings}>
+        <span><Settings aria-hidden="true" size={19} /></span>
+        <span>
+          <strong>应用设置</strong>
+          <small>主题、朗读、云端服务与本地备份</small>
+        </span>
+        <ArrowRight aria-hidden="true" size={18} />
+      </button>
     </section>
   )
 }

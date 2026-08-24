@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Brain, Check, ChevronRight, Inbox, Play, Square } from 'lucide-react'
+import { Brain, Check, ChevronRight, Play, Square } from 'lucide-react'
 import type {
   Question,
   SavedExpression,
@@ -12,6 +12,9 @@ import {
   formatDate,
   statusLabel,
 } from './format'
+import { EmptyState } from '../../app/components/EmptyState'
+
+export { EmptyState } from '../../app/components/EmptyState'
 
 export function LearnerMemoryPanel({ sessions }: { sessions: TrainingSession[] }) {
   const recent = sessions
@@ -22,22 +25,25 @@ export function LearnerMemoryPanel({ sessions }: { sessions: TrainingSession[] }
   const strengths = [...new Set(recent.flatMap((item) => item.aiFeedback?.strengths ?? []))].slice(0, 2)
 
   return (
-    <section className="learner-memory-panel">
-      <span className="memory-icon"><Brain aria-hidden="true" size={21} /></span>
-      <div>
-        <p className="eyebrow">Learning Memory</p>
-        <h2>AI 对你的长期了解</h2>
-        <p>从真实练习与反馈自动归纳，可随时重建；它不是语料收藏，也不是生活素材库。</p>
-        {problemThemes.length || strengths.length ? (
-          <div className="memory-signals">
-            {problemThemes.map((item) => <span key={`problem:${item}`}>继续练 · {item}</span>)}
-            {strengths.map((item) => <span key={`strength:${item}`}>做得好 · {item}</span>)}
-          </div>
-        ) : (
-          <small>完成几次带 AI 反馈的练习后，这里会出现稳定趋势。</small>
-        )}
-      </div>
-    </section>
+    <details className="learner-memory-details">
+      <summary>你的长期记忆摘要</summary>
+      <section className="learner-memory-panel">
+        <span className="memory-icon"><Brain aria-hidden="true" size={21} /></span>
+        <div>
+          <p className="eyebrow">Learning Memory</p>
+          <h2>AI 对你的长期了解</h2>
+          <p>从真实练习与反馈自动归纳，可随时重建；它不是语料收藏，也不是生活素材库。</p>
+          {problemThemes.length || strengths.length ? (
+            <div className="memory-signals">
+              {problemThemes.map((item) => <span key={`problem:${item}`}>继续练 · {item}</span>)}
+              {strengths.map((item) => <span key={`strength:${item}`}>做得好 · {item}</span>)}
+            </div>
+          ) : (
+            <small>完成几次带 AI 反馈的练习后，这里会出现稳定趋势。</small>
+          )}
+        </div>
+      </section>
+    </details>
   )
 }
 
@@ -46,11 +52,13 @@ export function HistoryView({
   sessions,
   onOpen,
   onDelete,
+  onPractice,
 }: {
   questions: Question[]
   sessions: TrainingSession[]
   onOpen: (session: TrainingSession) => void
   onDelete: (sessionId: string) => void
+  onPractice?: (questionId: string) => void
 }) {
   return (
     <section className="page-stack library-page">
@@ -95,6 +103,15 @@ export function HistoryView({
                 >
                   删除练习
                 </button>
+                {onPractice ? (
+                  <button
+                    type="button"
+                    className="history-practice"
+                    onClick={() => onPractice(session.questionId)}
+                  >
+                    再练一次
+                  </button>
+                ) : null}
               </article>
             )
           })}
@@ -275,15 +292,5 @@ export function ExpressionLibrary({
         <EmptyState title="还没有保存表达" body="完成两次回答后，保存一句你自己真正想再说的话。" />
       )}
     </section>
-  )
-}
-
-export function EmptyState({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="empty-state">
-      <Inbox aria-hidden="true" size={28} />
-      <h2>{title}</h2>
-      <p>{body}</p>
-    </div>
   )
 }

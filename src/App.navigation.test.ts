@@ -3,7 +3,7 @@ import {
   resetViewScroll,
   resolveAndroidBackAction,
   resolveInitialView,
-} from './App'
+} from './app/navigation'
 import type { AudioFocusState } from './ports/speech'
 
 function focus(state: AudioFocusState) {

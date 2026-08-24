@@ -153,9 +153,9 @@ export function HomeView({
           <ArrowRight aria-hidden="true" size={19} />
         </button>
         <div className="snapshot-stats">
-          <div><Clock3 aria-hidden="true" size={17} /><strong>{sessions.length}</strong><span>练习记录</span></div>
-          <div><RotateCcw aria-hidden="true" size={17} /><strong>{completedSecondAttempts}</strong><span>完成二答</span></div>
-          <div><Sparkles aria-hidden="true" size={17} /><strong>{expressionCount}</strong><span>个人语料</span></div>
+          <div><Clock3 aria-hidden="true" size={17} /><strong aria-label={`${sessions.length} 条练习记录`}>{sessions.length}</strong><span>练习记录</span></div>
+          <div><RotateCcw aria-hidden="true" size={17} /><strong aria-label={`${completedSecondAttempts} 次完成二答`}>{completedSecondAttempts}</strong><span>完成二答</span></div>
+          <div><Sparkles aria-hidden="true" size={17} /><strong aria-label={`${expressionCount} 条个人语料`}>{expressionCount}</strong><span>个人语料</span></div>
         </div>
       </section>
     </section>

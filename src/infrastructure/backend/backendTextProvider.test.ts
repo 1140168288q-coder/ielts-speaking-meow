@@ -157,4 +157,41 @@ describe('BackendTextProvider', () => {
       provider.extractQuestions({ fileName: 'x.txt', extractedText: 'text' }),
     ).rejects.toMatchObject({ code: 'invalid-response' })
   })
+
+  it('requests material suggestions from /v1/materials/suggest and validates them', async () => {
+    const { provider, fetch } = createProvider({
+      suggestions: [
+        {
+          title: '关于 hometown 的素材草稿',
+          content: '写一写你小时候常去的那条街。',
+          kind: 'place',
+          topicTags: ['hometown'],
+        },
+      ],
+    })
+    const suggestions = await provider.suggestMaterials({
+      memoryDigest: '本机历史:共完成 3 次单题练习。',
+      existingTitles: ['My grandmother'],
+      maxCount: 4,
+    })
+
+    expect(suggestions).toHaveLength(1)
+    expect(suggestions[0]?.kind).toBe('place')
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('http://backend.test/v1/materials/suggest')
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.memoryDigest).toContain('共完成 3 次')
+    expect(body.existingTitles).toEqual(['My grandmother'])
+    expect(body.maxCount).toBe(4)
+  })
+
+  it('rejects malformed material suggestion responses', async () => {
+    const { provider } = createProvider({ suggestions: [{ title: '' }] })
+    await expect(
+      provider.suggestMaterials({
+        memoryDigest: 'digest',
+        existingTitles: [],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-response' })
+  })
 })

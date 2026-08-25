@@ -307,4 +307,40 @@ describe('SettingsController', () => {
     expect(harness.preferredVoiceSpeak).not.toHaveBeenCalled()
     expect(await screen.findByText(/正在使用系统朗读/)).toBeTruthy()
   })
+
+  it('saves custom home greeting text on blur and can restore defaults', async () => {
+    const user = userEvent.setup()
+    const onPreferencesChange = vi.fn().mockResolvedValue(undefined)
+    const harness = createHarness()
+    render(
+      <SettingsController
+        {...harness}
+        onPreferencesChange={onPreferencesChange}
+      />,
+    )
+
+    const title = screen.getByLabelText('主标题')
+    await user.type(title, '小明，开嗓了。')
+    await user.tab()
+
+    const subtitle = screen.getByLabelText('副标题')
+    await user.type(subtitle, '今天从 Part 2 开始。')
+    await user.tab()
+
+    await waitFor(() => {
+      expect(onPreferencesChange).toHaveBeenCalledWith({
+        homeTitleOverride: '小明，开嗓了。',
+      })
+      expect(onPreferencesChange).toHaveBeenCalledWith({
+        homeSubtitleOverride: '今天从 Part 2 开始。',
+      })
+    })
+  })
+
+  it('keeps 恢复默认文案 disabled until a greeting override exists', () => {
+    const harness = createHarness()
+    render(<SettingsController {...harness} />)
+    const restore = screen.getByRole('button', { name: /恢复默认文案/ })
+    expect(restore).toHaveProperty('disabled', true)
+  })
 })

@@ -4,6 +4,8 @@ import type { PersonalMaterial } from './personalMaterials'
 import {
   buildLearnerContext,
   buildLearnerMemory,
+  buildLocalMaterialSuggestions,
+  buildMaterialSuggestionContext,
   findReusableExpressions,
   findReusablePersonalMaterials,
 } from './userMemory'
@@ -111,6 +113,30 @@ describe('userMemory', () => {
     expect(matches).toHaveLength(1)
     expect(matches[0]?.material.id).toBe(material.id)
     expect(matches[0]?.reason).toContain('关联')
+  })
+
+  it('aggregates a material suggestion digest from local history only', () => {
+    const context = buildMaterialSuggestionContext([session], [expression], [question])
+    expect(context.digest).toContain('共完成 1 次')
+    expect(context.digest).toContain('boring place')
+    expect(context.digest).toContain(expression.text)
+    expect(context.topics[0]).toEqual({ topic: 'boring place', count: 1 })
+    expect(context.digest.length).toBeLessThan(1_201)
+  })
+
+  it('creates local suggestion drafts only for topics without existing materials', () => {
+    const context = buildMaterialSuggestionContext(
+      [session, { ...session, id: 'session-2' }],
+      [],
+      [question],
+    )
+    const drafts = buildLocalMaterialSuggestions(context, ['About boring place'], 4)
+    expect(drafts).toHaveLength(0)
+
+    const openDrafts = buildLocalMaterialSuggestions(context, [], 4)
+    expect(openDrafts).toHaveLength(1)
+    expect(openDrafts[0]?.topicTags).toEqual(['boring place'])
+    expect(openDrafts[0]?.content).not.toContain('我')
   })
 })
 

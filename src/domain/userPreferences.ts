@@ -16,6 +16,10 @@ export const userPreferencesSchema = z
     memoryEnabled: z.boolean(),
     sharePersonalMaterialsWithAi: z.boolean(),
     reduceMotion: z.boolean(),
+    /** 首页问候主标题;null 表示使用内置默认文案。 */
+    homeTitleOverride: z.string().max(40).nullable().default(null),
+    /** 首页问候副标题;null 表示使用内置默认文案。 */
+    homeSubtitleOverride: z.string().max(80).nullable().default(null),
     updatedAt: isoDateTimeSchema,
   })
   .strict()
@@ -42,6 +46,8 @@ export function createDefaultUserPreferences(
     memoryEnabled: true,
     sharePersonalMaterialsWithAi: false,
     reduceMotion: false,
+    homeTitleOverride: null,
+    homeSubtitleOverride: null,
     updatedAt: now.toISOString(),
   })
 }

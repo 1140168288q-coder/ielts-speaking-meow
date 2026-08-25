@@ -83,7 +83,8 @@ export function AccountView({
         <p className="eyebrow">Account & sync</p>
         <h1>账号与同步</h1>
         <p>
-          邮箱账号已经可用；验证邮箱后可手动同步已确认的学习资料，本机数据仍可离线保存。
+          一个账号，一份坚持。验证邮箱后，你的努力可以跟着你去任何设备；
+          不联网的日子，它们也一直在这里。
         </p>
       </div>
 
@@ -93,7 +94,7 @@ export function AccountView({
         <div>
           <p className="eyebrow">当前本机资料</p>
           <h2>{current?.displayName ?? '未登录'}</h2>
-          <p className="settings-note">用于离线隔离练习和草稿，不等同于云端邮箱账号。</p>
+          <p className="settings-note">这台设备上的练习身份；与云端邮箱账号相互独立。</p>
         </div>
         <span className="account-avatar" aria-hidden="true"><UserRound size={24} /></span>
       </section>

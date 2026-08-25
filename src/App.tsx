@@ -46,10 +46,14 @@ import {
 } from './domain/accounts'
 import {
   buildLearnerContext,
+  buildMaterialSuggestionContext,
+  buildLocalMaterialSuggestions,
   findReusableExpressions,
   findReusablePersonalMaterials,
 } from './domain/userMemory'
 import type { ImportedQuestionRecord } from './domain/imports'
+import type { PersonalMaterialCandidate } from './application/personalMaterialService'
+import { ApiProviderError } from './infrastructure/ai/providerErrors'
 import { AccountView, CloudAccountPanel } from './features/accounts'
 import { CloudSyncCard } from './features/accounts/CloudSyncCard'
 
@@ -67,6 +71,18 @@ interface QuestionDataModule {
   legacyQuestionsById: Map<string, Question>
 }
 
+const BACK_LABELS: Record<AppView, string> = {
+  home: '返回首页',
+  questions: '返回题库',
+  practice: '返回',
+  history: '返回复盘',
+  expressions: '返回个人语料',
+  materials: '返回个人素材',
+  accounts: '返回「我的」',
+  imports: '返回导入工具',
+  settings: '返回设置',
+}
+
 export function App() {
   const [runtime] = useState(createBrowserRuntime)
 
@@ -77,6 +93,9 @@ export function App() {
   const [sessions, setSessions] = useState<TrainingSession[]>([])
   const [expressions, setExpressions] = useState<SavedExpression[]>([])
   const [personalMaterials, setPersonalMaterials] = useState<PersonalMaterial[]>([])
+  const [materialCandidates, setMaterialCandidates] = useState<
+    PersonalMaterialCandidate[]
+  >([])
   const [questionData, setQuestionData] = useState<QuestionDataModule | null>(null)
   const [importedQuestions, setImportedQuestions] = useState<
     ImportedQuestionRecord[]
@@ -89,6 +108,9 @@ export function App() {
   const [navigationNotice, setNavigationNotice] = useState<string | null>(null)
   const [practiceExitGuardActive, setPracticeExitGuardActive] = useState(false)
   const [apiConnected, setApiConnected] = useState(false)
+  /** 记录进入 practice/imports/settings 前的来源视图,供"返回上一级"使用。 */
+  const [backOrigin, setBackOrigin] = useState<AppView>('home')
+  const viewRef = useRef(view)
 
   const {
     theme,
@@ -187,11 +209,79 @@ export function App() {
     return () => window.clearInterval(interval)
   }, [runtime.healthCache])
 
+  /** 进入覆盖型视图(practice/imports/settings)前记住来源,返回时回来源而非写死题库。 */
+  const rememberBackOrigin = useCallback((target: AppView) => {
+    if (viewRef.current !== target) {
+      setBackOrigin(viewRef.current)
+    }
+  }, [])
+
+  /** 返回目标永远不是 practice;兜底回题库。 */
+  const backTarget = (): Exclude<AppView, 'practice'> =>
+    backOrigin === 'practice' ? 'questions' : backOrigin
+
   const openSession = (nextSession: TrainingSession) => {
+    rememberBackOrigin('practice')
     setPracticeExitGuardActive(false)
     setNavigationNotice(null)
     setSession(nextSession)
     setView('practice')
+  }
+
+  /**
+   * 一键提炼个人素材:云端可用时走 /v1/materials/suggest,否则用本地启发式
+   * 生成"可写角度"草稿。结果只是候选,用户确认后才写入素材库。
+   */
+  const handleSuggestMaterials = async (): Promise<PersonalMaterialCandidate[]> => {
+    const context = buildMaterialSuggestionContext(sessions, expressions, allQuestions)
+    const existingTitles = personalMaterials.map((material) => material.title)
+    const localSuggestions = () =>
+      buildLocalMaterialSuggestions(context, existingTitles)
+    const health = runtime.healthCache.getSnapshot()
+    const deepSeekReady =
+      runtime.textAi.isConfigured() &&
+      health.health?.providers.deepseek?.configured === true
+    let suggestions
+    if (!deepSeekReady) {
+      suggestions = localSuggestions()
+    } else {
+      try {
+        suggestions = await runtime.textAi.suggestMaterials({
+          memoryDigest: context.digest,
+          existingTitles,
+          maxCount: 4,
+        })
+      } catch (error) {
+        const canUseLocalFallback =
+          error instanceof ApiProviderError &&
+          ['network', 'timeout', 'server', 'not-configured'].includes(error.code)
+        if (!canUseLocalFallback) throw error
+        suggestions = localSuggestions()
+      }
+    }
+    const nextCandidates = suggestions.map((suggestion, index) => ({
+      candidateId: `suggest-${index + 1}-${Date.now()}`,
+      status: 'candidate' as const,
+      ...suggestion,
+    }))
+    setMaterialCandidates(nextCandidates)
+    return nextCandidates
+  }
+
+  const handleConfirmCandidate = async (candidate: PersonalMaterialCandidate) => {
+    await runtime.personalMaterialService.confirmCandidate(candidate, {
+      userConfirmed: true,
+    })
+    setMaterialCandidates((current) =>
+      current.filter((item) => item.candidateId !== candidate.candidateId),
+    )
+    await refreshLibrary()
+  }
+
+  const handleDismissCandidate = (candidateId: string) => {
+    setMaterialCandidates((current) =>
+      current.filter((item) => item.candidateId !== candidateId),
+    )
   }
 
   const startQuestion = async (question: Question) => {
@@ -254,6 +344,8 @@ export function App() {
     setSession(null)
     setPracticeExitGuardActive(false)
     setNavigationNotice(null)
+    setMaterialCandidates([])
+    setBackOrigin('home')
     setView('home')
     void refreshLibrary()
   }
@@ -288,20 +380,28 @@ export function App() {
     [practiceExitGuardActive, runtime.audioFocus],
   )
 
-  const viewRef = useRef(view)
   const navigateSafelyRef = useRef(navigateSafely)
+  // Android 返回键监听只注册一次,通过 ref 读取最新来源视图。
+  const backOriginRef = useRef(backOrigin)
 
   useEffect(() => {
     viewRef.current = view
     navigateSafelyRef.current = navigateSafely
-  }, [navigateSafely, view])
+    backOriginRef.current = backOrigin
+  }, [backOrigin, navigateSafely, view])
 
   useEffect(() => {
     resetViewScroll()
   }, [view])
 
   useEffect(() => {
-    const handleSafeBack = () => navigateSafelyRef.current('questions')
+    // 只读 ref:监听器注册一次即可拿到最新来源。
+    const handleSafeBack = () =>
+      navigateSafelyRef.current(
+        backOriginRef.current === 'practice'
+          ? 'questions'
+          : backOriginRef.current,
+      )
     window.addEventListener(SAFE_PRACTICE_BACK_EVENT, handleSafeBack)
     return () => {
       window.removeEventListener(SAFE_PRACTICE_BACK_EVENT, handleSafeBack)
@@ -317,10 +417,21 @@ export function App() {
     let listenerHandle: PluginListenerHandle | undefined
 
     void CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-      const action = resolveAndroidBackAction(viewRef.current, canGoBack)
+      const action = resolveAndroidBackAction(
+        viewRef.current,
+        canGoBack,
+        backOriginRef.current,
+      )
       switch (action) {
         case 'safe-practice-exit':
           window.dispatchEvent(new Event(SAFE_PRACTICE_BACK_EVENT))
+          break
+        case 'origin':
+          navigateSafelyRef.current(
+            backOriginRef.current === 'practice'
+              ? 'questions'
+              : backOriginRef.current,
+          )
           break
         case 'home':
           navigateSafelyRef.current('home')
@@ -418,6 +529,8 @@ export function App() {
             sessions={sessions}
             expressionCount={expressions.length}
             accountName={currentAccount?.displayName ?? '本机用户'}
+            titleOverride={preferences.homeTitleOverride}
+            subtitleOverride={preferences.homeSubtitleOverride}
             onStart={(question) => void startQuestion(question)}
             onResume={openSession}
             onOpenLibrary={(part) => {
@@ -432,7 +545,10 @@ export function App() {
             questions={allQuestions}
             bankMeta={questionData.questionBankMeta}
             onStart={(question) => void startQuestion(question)}
-            onImport={() => navigateSafely('imports')}
+            onImport={() => {
+              rememberBackOrigin('imports')
+              navigateSafely('imports')
+            }}
           />
         ) : view === 'practice' && session && activeQuestion ? (
           <PracticeFlow
@@ -455,7 +571,8 @@ export function App() {
             }
             onExitGuardChange={setPracticeExitGuardActive}
             onChange={handleSessionChange}
-            onBack={() => navigateSafely('questions')}
+            onBack={() => navigateSafely(backTarget())}
+            backLabel={BACK_LABELS[backOrigin] ?? '返回'}
           />
         ) : view === 'history' ? (
           <ReviewCenter active="history" onChange={navigateSafely}>
@@ -497,18 +614,25 @@ export function App() {
           <ReviewCenter active="materials" onChange={navigateSafely}>
             <PersonalMaterialLibrary
               materials={personalMaterials}
+              candidates={materialCandidates}
               onCreate={async (input) => { await runtime.personalMaterialService.create(input); await refreshLibrary() }}
               onUpdate={async (id, input) => { await runtime.personalMaterialService.update(id, input); await refreshLibrary() }}
               onArchive={async (id) => { await runtime.personalMaterialService.archive(id); await refreshLibrary() }}
               onRestore={async (id) => { await runtime.personalMaterialService.restore(id); await refreshLibrary() }}
               onDelete={async (id) => { await runtime.personalMaterialService.delete(id); await refreshLibrary() }}
+              onSuggestMaterials={handleSuggestMaterials}
+              onConfirmCandidate={handleConfirmCandidate}
+              onDismissCandidate={handleDismissCandidate}
             />
           </ReviewCenter>
         ) : view === 'accounts' ? (
           <AccountView
             service={runtime.accountService}
             onSwitched={handleAccountSwitched}
-            onOpenSettings={() => navigateSafely('settings')}
+            onOpenSettings={() => {
+              rememberBackOrigin('settings')
+              navigateSafely('settings')
+            }}
             preferences={preferences}
             onPreferencesChange={changeUserPreferences}
             cloudPanel={(
@@ -548,7 +672,7 @@ export function App() {
                 ])
               }}
               onStartQuestion={(question) => void startQuestion(question)}
-              onBack={() => navigateSafely('questions')}
+              onBack={() => navigateSafely(backTarget())}
             />
           </Suspense>
         ) : (
@@ -560,6 +684,7 @@ export function App() {
             dataMaintenance={runtime.storage}
             backupService={runtime.backupService}
             onDataChanged={refreshLibrary}
+            onBack={() => navigateSafely(backTarget())}
             theme={theme}
             onThemeChange={(nextTheme) => void changeUserPreferences({ theme: nextTheme })}
             preferences={preferences}

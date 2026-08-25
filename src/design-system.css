@@ -9,10 +9,12 @@
   --ds-text-soft: #665f59;
   --ds-line: #eadfd4;
   --ds-primary: #b7441e;
-  --ds-primary-strong: #8f3214;
+  --ds-primary-strong: #a84316;
   --ds-primary-soft: #fff0e6;
-  --ds-accent: #b7441e;
-  --ds-accent-soft: #fff0e6;
+  --ds-accent: #c2521b;
+  --ds-accent-soft: #ffeadb;
+  --ds-vivid: #dd6722;
+  --ds-vivid-deep: #b54a15;
   --ds-warning: #9b681d;
   --ds-warning-soft: #fff1cf;
   --ds-danger: #943d2c;
@@ -28,7 +30,7 @@
   --cream: var(--ds-bg);
   --paper: var(--ds-surface-raised);
   --orange: var(--ds-accent);
-  --orange-dark: #8f3214;
+  --orange-dark: var(--ds-primary-strong);
   --orange-soft: var(--ds-accent-soft);
   --mint: var(--ds-primary);
   --mint-soft: var(--ds-primary-soft);
@@ -185,6 +187,17 @@ select:focus-visible {
   padding: 26px calc(22px + env(safe-area-inset-right)) 18px calc(22px + env(safe-area-inset-left));
 }
 
+/* Android WebView:backdrop-filter 滚动时易产生残影/闪烁,改用近实色背景。 */
+:root[data-platform="android"] .app-header {
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--ds-bg) 97%, transparent);
+}
+
+:root[data-platform="android"] .bottom-nav {
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--ds-surface-raised) 98%, transparent);
+}
+
 .app-main > * {
   animation: view-fade-in 180ms ease-out;
 }
@@ -219,17 +232,17 @@ select:focus-visible {
   gap: 8px;
   min-height: 48px;
   padding: 0 18px;
-  border: 1px solid var(--ds-primary-strong);
+  border: 1px solid color-mix(in srgb, var(--ds-vivid-deep) 82%, black);
   border-radius: var(--ds-radius-sm);
   color: #fff;
-  background: var(--ds-primary);
-  box-shadow: 0 4px 0 var(--ds-primary-strong);
+  background: var(--ds-vivid-deep);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--ds-vivid-deep) 72%, black);
   cursor: pointer;
   font-weight: 780;
 }
 
 .primary-button:hover:not(:disabled) {
-  background: var(--ds-primary-strong);
+  background: var(--ds-vivid);
 }
 
 .secondary-button {
@@ -359,10 +372,10 @@ select:focus-visible {
 
 .today-focus-card {
   padding: clamp(24px, 6vw, 38px);
-  border: 1px solid color-mix(in srgb, var(--ds-primary) 85%, black);
+  border: 1px solid color-mix(in srgb, var(--ds-vivid-deep) 72%, black);
   border-radius: var(--ds-radius-lg);
   color: #fffaf3;
-  background: var(--ds-primary-strong);
+  background: linear-gradient(135deg, var(--ds-vivid), var(--ds-vivid-deep));
   box-shadow: var(--ds-shadow-lg);
 }
 
@@ -370,14 +383,14 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #ffe4cf;
+  color: #fff6ec;
   font-size: 11px;
   font-weight: 760;
 }
 
 .today-focus-meta small {
   margin-left: auto;
-  color: #f4c7a9;
+  color: #ffe3cb;
   font-weight: 600;
 }
 
@@ -405,7 +418,7 @@ select:focus-visible {
 .today-focus-card > p {
   max-width: 570px;
   margin: 0;
-  color: #f6d4bd;
+  color: #ffe3cb;
   line-height: 1.7;
 }
 
@@ -417,9 +430,9 @@ select:focus-visible {
 
 .today-focus-card .primary-button {
   border-color: #fff;
-  color: var(--ds-primary-strong);
+  color: var(--ds-vivid-deep);
   background: #fff;
-  box-shadow: 0 4px 0 #e5b09a;
+  box-shadow: 0 4px 0 #f0b489;
 }
 
 .today-focus-card .secondary-button {
@@ -796,6 +809,12 @@ select:focus-visible {
   background: var(--ds-surface-muted);
 }
 
+.history-list .history-practice {
+  border-color: var(--ds-line);
+  color: var(--ds-primary-strong);
+  background: var(--ds-primary-soft);
+}
+
 .history-progress {
   display: flex;
   flex-wrap: wrap;
@@ -1123,26 +1142,13 @@ select:focus-visible {
 }
 
 .device-profile-manager {
-  border: 1px solid var(--ds-line);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-raised);
   box-shadow: var(--ds-shadow-sm);
-}
-
-.device-profile-manager > summary {
-  min-height: 54px;
-  padding: 0 16px;
-  cursor: pointer;
-  color: var(--ds-text-soft);
-  font-size: 12px;
-  font-weight: 760;
-  line-height: 54px;
 }
 
 .device-profile-manager-body {
   display: grid;
   gap: 14px;
-  padding: 0 12px 12px;
+  padding: 2px 14px 14px;
 }
 
 .device-profile-manager-body > section {
@@ -1221,6 +1227,17 @@ select:focus-visible {
   color: var(--ds-text);
   font-size: 12px;
   line-height: 1.55;
+}
+
+.material-suggest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.material-suggest-actions .settings-feedback {
+  font-size: 11px;
 }
 
 .prompt-card h1,
@@ -1464,6 +1481,8 @@ select:focus-visible {
     --ds-primary-soft: #4a2e24;
     --ds-accent: #f3a06f;
     --ds-accent-soft: #4a2e24;
+    --ds-vivid: #c96227;
+    --ds-vivid-deep: #9c4517;
     --ds-warning: #f0c26c;
     --ds-warning-soft: #463723;
     --ds-danger: #ef9b8b;
@@ -1476,8 +1495,8 @@ select:focus-visible {
 }
 
 :root[data-theme="dark"] .today-focus-card {
-  border-color: #a55232;
-  background: #5a2416;
+  border-color: #b5562f;
+  background: linear-gradient(135deg, var(--ds-vivid), var(--ds-vivid-deep));
 }
 
 :root[data-theme="dark"] .primary-button {
@@ -1494,7 +1513,7 @@ select:focus-visible {
 
 :root[data-theme="dark"] .today-focus-card .primary-button {
   border-color: #fff;
-  color: #7a2e18;
+  color: #8a3714;
   background: #fff;
   box-shadow: 0 4px 0 #c8896f;
 }
@@ -1565,6 +1584,13 @@ select:focus-visible {
   gap: 5px;
 }
 
+.settings-back-button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  justify-self: start;
+}
+
 .settings-page-heading h1,
 .settings-page-heading p {
   margin: 0;
@@ -1584,6 +1610,18 @@ select:focus-visible {
 .settings-card-heading h2,
 .settings-card-heading p {
   margin: 0;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .settings-card-heading {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .settings-card-heading .service-state {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
 }
 
 .settings-card-icon {
@@ -1615,24 +1653,136 @@ select:focus-visible {
   background: var(--ds-surface-muted);
 }
 
-.advanced-settings {
-  border-top: 1px solid var(--ds-line);
-  padding-top: 4px;
+/* 统一披露组件:记忆摘要 / 高级设置 / 设备资料 / 教学卡 / 反馈细节。
+   :where() 零特异性,各组件原有专属规则仍可正常覆盖。 */
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .tutor-knowledge-card,
+  .feedback-details,
+  .improved-answer-details
+) {
+  overflow: hidden;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
 }
 
-.advanced-settings > summary {
-  min-height: 42px;
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .tutor-knowledge-card,
+  .feedback-details,
+  .improved-answer-details
+)[open] {
+  border-color: color-mix(in srgb, var(--ds-primary) 30%, var(--ds-line));
+}
+
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .tutor-knowledge-card,
+  .feedback-details,
+  .improved-answer-details
+) > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 13px 16px;
   cursor: pointer;
-  color: var(--ds-text-soft);
+  list-style: none;
+  color: var(--ds-text);
   font-size: 12px;
-  font-weight: 760;
-  line-height: 42px;
+  font-weight: 780;
+  transition: background 140ms ease;
+}
+
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .tutor-knowledge-card,
+  .feedback-details,
+  .improved-answer-details
+) > summary:hover {
+  background: color-mix(in srgb, var(--ds-primary) 6%, transparent);
+}
+
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .tutor-knowledge-card,
+  .feedback-details,
+  .improved-answer-details
+) > summary::-webkit-details-marker {
+  display: none;
+}
+
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .tutor-knowledge-card,
+  .feedback-details,
+  .improved-answer-details
+) > summary::marker {
+  content: "";
+}
+
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .tutor-knowledge-card,
+  .feedback-details,
+  .improved-answer-details
+) > summary::after {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  margin-right: 2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: rotate(45deg);
+  transition: transform 180ms ease;
+}
+
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .tutor-knowledge-card,
+  .feedback-details,
+  .improved-answer-details
+)[open] > summary::after {
+  transform: rotate(-135deg);
+}
+
+:where(
+  .learner-memory-details,
+  .advanced-settings,
+  .device-profile-manager,
+  .feedback-details,
+  .improved-answer-details
+) > *:not(summary) {
+  animation: ds-reveal 180ms ease-out;
+}
+
+.learner-memory-details > .learner-memory-panel {
+  margin: 0 12px 12px;
 }
 
 .advanced-settings-body {
   display: grid;
   gap: 12px;
-  padding-top: 8px;
+  padding: 2px 16px 14px;
 }
 
 .theme-options {
@@ -1666,6 +1816,19 @@ select:focus-visible {
 
 .preference-settings-card {
   gap: 14px;
+}
+
+.home-greeting-fields {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--ds-line);
+}
+
+.home-greeting-fields .settings-note {
+  margin: 0;
+  color: var(--ds-text-soft);
+  font-size: 11px;
 }
 
 .preference-grid {

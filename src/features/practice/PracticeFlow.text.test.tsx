@@ -139,7 +139,7 @@ describe('PracticeFlow V1.7 text answer flow', () => {
       />,
     )
 
-    expect(screen.getByText(/手机系统键盘自带语音输入/)).toBeInTheDocument()
+    expect(screen.getByText(/手机键盘上的麦克风就是你的口语通道/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '开始计时' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '暂停' })).toBeNull()
 

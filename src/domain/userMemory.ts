@@ -254,3 +254,112 @@ function tokenize(text: string): string[] {
     .split(' ')
     .filter((token) => token.length > 1 && !STOP_WORDS.has(token))
 }
+
+export interface MaterialSuggestionContext {
+  /** 发送给 Text AI 的紧凑摘要;只含本机已持久化数据,≤1200 字符。 */
+  digest: string
+  /** 按练习次数排序的常练话题,供本地启发式降级使用。 */
+  topics: Array<{ topic: string; count: number }>
+}
+
+/**
+ * 为"一键提炼个人素材"聚合本地记忆:常练话题、老师反复指出的问题与亮点、
+ * 个人语料按话题分组的代表句。隐私级别与 buildLearnerContext 一致。
+ */
+export function buildMaterialSuggestionContext(
+  sessions: TrainingSession[],
+  expressions: SavedExpression[],
+  knownQuestions: Question[] = [],
+): MaterialSuggestionContext {
+  const questionsById = new Map(knownQuestions.map((item) => [item.id, item]))
+  const topicCounts = new Map<string, number>()
+  for (const session of sessions) {
+    const topic = questionsById.get(session.questionId)?.topic?.trim()
+    if (topic) {
+      topicCounts.set(topic, (topicCounts.get(topic) ?? 0) + 1)
+    }
+  }
+  const topics = [...topicCounts.entries()]
+    .map(([topic, count]) => ({ topic, count }))
+    .sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic))
+
+  const lines: string[] = []
+  lines.push(
+    `本机历史:共完成 ${sessions.length} 次单题练习。` +
+    (topics.length
+      ? `常练话题:${topics.slice(0, 6).map((item) => `${item.topic}(${item.count}次)`).join('、')}。`
+      : '尚无练习记录。'),
+  )
+  const problemThemes = collectProblemThemes(sessions)
+  if (problemThemes.length > 0) {
+    lines.push(`近期老师反复指出的重点:${problemThemes.join('、')}。`)
+  }
+  const strengths = collectStrengths(sessions)
+  if (strengths.length > 0) {
+    lines.push(`近期被肯定的地方:${strengths.join('、')}。`)
+  }
+
+  const expressionsByTopic = new Map<string, string[]>()
+  for (const expression of expressions.slice(0, 60)) {
+    const key = expression.topic.trim() || '未分类'
+    const bucket = expressionsByTopic.get(key) ?? []
+    if (bucket.length < 2) {
+      bucket.push(expression.text)
+      expressionsByTopic.set(key, bucket)
+    }
+  }
+  if (expressionsByTopic.size > 0) {
+    const parts = [...expressionsByTopic.entries()]
+      .slice(0, 8)
+      .map(([topic, texts]) => `[${topic}] ${texts.join(' | ')}`)
+    lines.push(`学习者确认的个人语料(英语表达):${parts.join(' ; ')}`)
+  }
+
+  return { digest: lines.join('\n').slice(0, 1_200), topics }
+}
+
+/**
+ * 无云端时的降级路径:根据常练话题生成本地素材草稿。
+ * 只提示可写的角度,绝不虚构用户经历的具体事实。
+ */
+export function buildLocalMaterialSuggestions(
+  context: MaterialSuggestionContext,
+  existingTitles: string[],
+  maxCount = 4,
+): Array<{
+  title: string
+  content: string
+  kind: 'experience'
+  topicTags: string[]
+}> {
+  const normalizedExisting = new Set(
+    existingTitles.map((title) => title.trim().toLowerCase()),
+  )
+  const suggestions: Array<{
+    title: string
+    content: string
+    kind: 'experience'
+    topicTags: string[]
+  }> = []
+  for (const { topic, count } of context.topics) {
+    if (suggestions.length >= maxCount) break
+    const tagKey = topic.toLowerCase()
+    if (
+      normalizedExisting.has(tagKey) ||
+      [...normalizedExisting].some((title) => title.includes(tagKey))
+    ) {
+      continue
+    }
+    normalizedExisting.add(tagKey)
+    suggestions.push({
+      title: `关于 ${topic} 的素材草稿`,
+      content:
+        `这个话题你练过 ${count} 次，但还没有留下自己的故事。想一想：` +
+        `与「${topic}」有关的一个人、一个地方或一次经历——它发生在什么时候？` +
+        '你看到了什么、听到了什么？为什么它让你印象深刻？把真实细节写下来，考场上就能直接用。',
+      kind: 'experience',
+      topicTags: [topic],
+    })
+  }
+  return suggestions
+}

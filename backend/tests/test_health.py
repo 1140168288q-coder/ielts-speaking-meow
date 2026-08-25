@@ -24,7 +24,7 @@ async def test_health_configured(make_app):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["version"] == "2.0.0"
+    assert body["version"] == "2.1.1"
     assert body["providers"]["deepseek"]["configured"] is True
     assert body["providers"]["deepseek"]["model"] == "deepseek-v4-flash"
     assert body["providers"]["volc_tts"]["configured"] is True

@@ -21,7 +21,7 @@ export function ReviewCenter({
         <div>
           <p className="eyebrow">Review & reuse</p>
           <h1>复盘中心</h1>
-          <p>回看练习，也把真正能复用的英语留下来。</p>
+          <p>说过的都不会白说——回看，然后把最好的句子留下。</p>
         </div>
       </div>
       <nav className="review-tabs" aria-label="复盘内容">
@@ -54,10 +54,10 @@ export function ReviewCenter({
       </nav>
       <p className="review-tab-definition">
         {active === 'history'
-          ? '回看每次回答、反馈与第二遍进步。'
+          ? '每一次回答，都是下一题的地基。'
           : active === 'expressions'
-            ? '下次可以直接说出口的句子和表达'
-            : '你的经历、观点和例子，用来支撑答案内容'}
+            ? '下次紧张时，伸手就能拿到的句子。'
+            : '你的故事库：人、地方、和你站在哪一边。'}
       </p>
       {children}
     </section>

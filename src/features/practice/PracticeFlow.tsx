@@ -73,6 +73,7 @@ export function PracticeFlow({
   onExitGuardChange,
   onChange,
   onBack,
+  backLabel = '返回题库',
 }: {
   question: Question
   session: TrainingSession
@@ -88,6 +89,7 @@ export function PracticeFlow({
   onExitGuardChange: (active: boolean) => void
   onChange: (session: TrainingSession) => void
   onBack: () => void
+  backLabel?: string
 }) {
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -343,7 +345,7 @@ export function PracticeFlow({
 
   return (
     <section className="practice-page">
-      <PracticeTopBar part={question.part} step={step} onBack={onBack} />
+      <PracticeTopBar part={question.part} step={step} onBack={onBack} backLabel={backLabel} />
 
       <QuestionCard
         question={question}
@@ -444,9 +446,9 @@ export function PracticeFlow({
           <span className="celebration" aria-hidden="true"><CheckCircle2 size={28} /></span>
           <p className="eyebrow">本次练习完成</p>
           <h2>你已经完成了两次回答</h2>
-          <p>练习记录已保存；确认过的短表达可在“复盘 → 个人语料”继续复习。</p>
+          <p>留下的句子，会在「复盘 · 个人语料」等你回来。</p>
           <button type="button" className="primary-button" onClick={onBack}>
-            返回题库
+            {backLabel}
           </button>
         </section>
       ) : null}

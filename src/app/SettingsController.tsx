@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Cloud, Headphones, Monitor, Moon, Sun } from 'lucide-react'
+import { ChevronLeft, Cloud, Headphones, Monitor, Moon, Sun } from 'lucide-react'
 import type {
   BackendConfigStore,
   BackendHealthCache,
@@ -26,17 +26,21 @@ export interface SettingsControllerProps {
   dataMaintenance: LocalDataMaintenance
   backupService: StorageBackupService
   onDataChanged: () => Promise<void>
+  /** 返回上一级;由 App 按来源视图决定目标。 */
+  onBack?: () => void
   theme?: 'system' | 'light' | 'dark'
-  preferences?: Pick<UserPreferences,
-    | 'ttsVoiceMode'
-    | 'ttsRate'
-    | 'autoPlayQuestion'
-    | 'defaultPart'
-    | 'feedbackDetail'
-    | 'memoryEnabled'
-    | 'sharePersonalMaterialsWithAi'
-    | 'reduceMotion'
-  >
+   preferences?: Pick<UserPreferences,
+     | 'ttsVoiceMode'
+     | 'ttsRate'
+     | 'autoPlayQuestion'
+     | 'defaultPart'
+     | 'feedbackDetail'
+     | 'memoryEnabled'
+     | 'sharePersonalMaterialsWithAi'
+     | 'reduceMotion'
+     | 'homeTitleOverride'
+     | 'homeSubtitleOverride'
+   >
   onPreferencesChange?: (update: UserPreferencesUpdate) => Promise<void>
   onThemeChange?: (theme: 'system' | 'light' | 'dark') => void
 }
@@ -68,6 +72,8 @@ const DEFAULT_PREFERENCES = {
   memoryEnabled: true,
   sharePersonalMaterialsWithAi: false,
   reduceMotion: false,
+  homeTitleOverride: null,
+  homeSubtitleOverride: null,
 } as const
 export function SettingsController({
   configStore,
@@ -77,6 +83,7 @@ export function SettingsController({
   dataMaintenance,
   backupService,
   onDataChanged,
+  onBack = () => undefined,
   theme = 'system',
   onThemeChange = () => undefined,
   preferences = DEFAULT_PREFERENCES,
@@ -93,6 +100,8 @@ export function SettingsController({
   const [ttsFeedback, setTtsFeedback] = useState<Feedback | null>(null)
   const [cloudPreviewFeedback, setCloudPreviewFeedback] = useState<Feedback | null>(null)
   const [systemTtsStatus, setSystemTtsStatus] = useState<SystemTtsStatus | null>(null)
+  const [homeTitleDraft, setHomeTitleDraft] = useState(preferences.homeTitleOverride ?? '')
+  const [homeSubtitleDraft, setHomeSubtitleDraft] = useState(preferences.homeSubtitleOverride ?? '')
   const locked = configStore.isLocked()
 
   const loadSystemTtsStatus = useCallback(async () => {
@@ -268,12 +277,32 @@ export function SettingsController({
     }
   }
 
+  /** 失焦时提交首页文案草稿;清空即恢复默认。 */
+  const commitHomeText = (
+    field: 'homeTitleOverride' | 'homeSubtitleOverride',
+    value: string,
+  ) => {
+    const next = value.trim()
+    if ((preferences[field] ?? '') === next) return
+    void savePreference({ [field]: next.length === 0 ? null : next })
+  }
+
   const health = snapshot.health
   const usesPlainHttp = addressDraft.trim().toLowerCase().startsWith('http://')
 
   return (
     <div className="settings-panel">
       <header className="settings-page-heading">
+        {onBack ? (
+          <button
+            type="button"
+            className="icon-button settings-back-button"
+            onClick={onBack}
+            aria-label="返回上一页"
+          >
+            <ChevronLeft aria-hidden="true" size={21} />
+          </button>
+        ) : null}
         <p className="eyebrow">Settings</p>
         <h1>设置</h1>
         <p>常用选项放在前面；服务地址和供应商验证收在高级设置里。</p>
@@ -352,6 +381,46 @@ export function SettingsController({
           />
           <span><strong>减少动态效果</strong><small>保留状态反馈，缩短页面和卡片动画。</small></span>
         </label>
+        <div className="home-greeting-fields">
+          <p className="settings-note">首页那两行问候语，可以换成你自己的一句话。</p>
+          <label className="settings-field">
+            <span>主标题</span>
+            <input
+              type="text"
+              value={homeTitleDraft}
+              maxLength={40}
+              placeholder="留空使用默认问候语"
+              onChange={(event) => setHomeTitleDraft(event.target.value)}
+              onBlur={(event) => commitHomeText('homeTitleOverride', event.target.value)}
+            />
+          </label>
+          <label className="settings-field">
+            <span>副标题</span>
+            <input
+              type="text"
+              value={homeSubtitleDraft}
+              maxLength={80}
+              placeholder="留空使用默认副标题"
+              onChange={(event) => setHomeSubtitleDraft(event.target.value)}
+              onBlur={(event) => commitHomeText('homeSubtitleOverride', event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="text-button"
+            disabled={
+              preferences.homeTitleOverride === null &&
+              preferences.homeSubtitleOverride === null
+            }
+            onClick={() => {
+              setHomeTitleDraft('')
+              setHomeSubtitleDraft('')
+              void savePreference({ homeTitleOverride: null, homeSubtitleOverride: null })
+            }}
+          >
+            恢复默认文案
+          </button>
+        </div>
       </section>
 
       <section className="settings-card">
@@ -459,6 +528,7 @@ export function SettingsController({
             <p className="eyebrow">Playback</p>
             <h2>系统朗读</h2>
           </div>
+        </div>
         <div className="preference-grid playback-preferences">
           <label className="settings-field">
             <span>默认音色来源</span>
@@ -483,7 +553,6 @@ export function SettingsController({
               onChange={(event) => void savePreference({ ttsRate: Number(event.target.value) })}
             />
           </label>
-        </div>
         </div>
         <ul className="settings-providers">
           <li>

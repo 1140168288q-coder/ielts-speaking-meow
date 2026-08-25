@@ -64,14 +64,29 @@ describe('resolveAndroidBackAction', () => {
     expect(resolveAndroidBackAction('practice', true)).toBe(
       'safe-practice-exit',
     )
+    expect(resolveAndroidBackAction('practice', true, 'home')).toBe(
+      'safe-practice-exit',
+    )
   })
 
-  it.each(['questions', 'history', 'expressions', 'accounts', 'settings'] as const)(
-    'returns from %s to the home screen before exiting',
+  it.each(['questions', 'history', 'expressions', 'accounts'] as const)(
+    'returns from %s to the home screen without a recorded origin',
     (view) => {
       expect(resolveAndroidBackAction(view, false)).toBe('home')
     },
   )
+
+  it.each([
+    ['settings', 'accounts'],
+    ['imports', 'questions'],
+    ['history', 'home'],
+  ] as const)('returns from %s to its origin (%s)', (view, origin) => {
+    expect(resolveAndroidBackAction(view, false, origin)).toBe('origin')
+  })
+
+  it('does not loop when the origin equals the current view', () => {
+    expect(resolveAndroidBackAction('settings', false, 'settings')).toBe('home')
+  })
 
   it('uses WebView history from the root when one exists', () => {
     expect(resolveAndroidBackAction('home', true)).toBe('browser-back')

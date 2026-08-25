@@ -26,20 +26,20 @@ export function LearnerMemoryPanel({ sessions }: { sessions: TrainingSession[] }
 
   return (
     <details className="learner-memory-details">
-      <summary>你的长期记忆摘要</summary>
+      <summary>你的口语轨迹 · 点开看看这段时间的痕迹</summary>
       <section className="learner-memory-panel">
         <span className="memory-icon"><Brain aria-hidden="true" size={21} /></span>
         <div>
-          <p className="eyebrow">Learning Memory</p>
-          <h2>AI 对你的长期了解</h2>
-          <p>从真实练习与反馈自动归纳，可随时重建；它不是语料收藏，也不是生活素材库。</p>
+          <p className="eyebrow">Your speaking trail</p>
+          <h2>每一次开口，都被悄悄记住</h2>
+          <p>练过的每一题都在告诉你：哪里已经稳了，哪里值得再来一次。</p>
           {problemThemes.length || strengths.length ? (
             <div className="memory-signals">
               {problemThemes.map((item) => <span key={`problem:${item}`}>继续练 · {item}</span>)}
               {strengths.map((item) => <span key={`strength:${item}`}>做得好 · {item}</span>)}
             </div>
           ) : (
-            <small>完成几次带 AI 反馈的练习后，这里会出现稳定趋势。</small>
+            <small>再练几题，这里会长出属于你的曲线。</small>
           )}
         </div>
       </section>
@@ -64,8 +64,8 @@ export function HistoryView({
     <section className="page-stack library-page">
       <div className="page-title">
         <p className="eyebrow">Learning trail</p>
-        <h1>看见第二遍的进步</h1>
-        <p>记录每次回答、反馈和二答完成情况；登录后可安全同步确认过的数据。</p>
+        <h1>第二遍，看得见的进步</h1>
+        <p>这里存着你每次开口的样子，和两次之间的那一步。</p>
       </div>
       {sessions.length ? (
         <div className="history-list">
@@ -117,7 +117,7 @@ export function HistoryView({
           })}
         </div>
       ) : (
-        <EmptyState title="还没有练习记录" body="从一道 Part 1 小题开始，提交你的第一次真实回答。" />
+        <EmptyState title="还没有练习记录" body="从一道 Part 1 小题开始，说出你的第一次真实回答。" />
       )}
     </section>
   )
@@ -211,7 +211,7 @@ export function ExpressionLibrary({
       <div className="page-title">
         <p className="eyebrow">个人语料</p>
         <h1>真正说得出口的表达</h1>
-        <p>只保存你认可、未来可能再次使用的句子。</p>
+        <p>只留下你认可、下次还敢用的句子。</p>
       </div>
       {message ? <div className="notice">{message}</div> : null}
       {expressions.length ? (
@@ -219,8 +219,8 @@ export function ExpressionLibrary({
           <div className="expression-review-card">
             <div>
               <p className="eyebrow">轻复习</p>
-              <h2>{reviewIds.size ? `有 ${reviewIds.size} 句值得再听读` : '今天的表达已复习'}</h2>
-              <p>未听读或超过 7 天的表达会优先标记，不做复杂记忆算法。</p>
+              <h2>{reviewIds.size ? `有 ${reviewIds.size} 句在等你回头` : '今天的句子都已听过一遍'}</h2>
+              <p>隔了些日子的句子会被轻轻顶到前面——没有算法，只有提醒。</p>
             </div>
             <span aria-hidden="true">↻</span>
           </div>
@@ -285,11 +285,11 @@ export function ExpressionLibrary({
             </article>
           ))}
           {visibleExpressions.length === 0 ? (
-            <EmptyState title="没有找到匹配表达" body="换一个英文关键词或主题试试。" />
+            <EmptyState title="没有找到匹配表达" body="换一个英文关键词，或换个主题试试。" />
           ) : null}
         </div>
       ) : (
-        <EmptyState title="还没有保存表达" body="完成两次回答后，保存一句你自己真正想再说的话。" />
+        <EmptyState title="还没有留下句子" body="完成两次回答后，把一句你自己真正想再说的话留在这里。" />
       )}
     </section>
   )

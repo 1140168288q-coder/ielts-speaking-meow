@@ -31,6 +31,12 @@ class OrganizePayload(BaseModel):
     extractedText: str = Field(max_length=60_000)
 
 
+class MaterialSuggestPayload(BaseModel):
+    memoryDigest: str = Field(min_length=1, max_length=4_000)
+    existingTitles: list[str] = Field(default_factory=list, max_length=50)
+    maxCount: int = Field(default=4, ge=1, le=6)
+
+
 async def consume_feature(
     request: Request,
     db: AsyncSession,
@@ -83,3 +89,24 @@ async def organize(
         payload.fileName, payload.extractedText
     )
     return {"questions": questions}
+
+
+@router.post("/v1/materials/suggest")
+async def suggest_materials(
+    request: Request,
+    payload: MaterialSuggestPayload,
+    auth: Annotated[AuthContext, Depends(require_verified_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict:
+    if not payload.memoryDigest.strip():
+        raise invalid_request("素材提炼需要本地记忆摘要。")
+    service = request.app.state.services["deepseek"]
+    if not service.is_configured:
+        raise not_configured("DeepSeek(Text AI)")
+    await consume_feature(request, db, auth, FeatureKey.MATERIAL_SUGGEST, units=1)
+    suggestions = await service.suggest_materials(
+        payload.memoryDigest,
+        [title for title in payload.existingTitles if title.strip()],
+        payload.maxCount,
+    )
+    return {"suggestions": suggestions}

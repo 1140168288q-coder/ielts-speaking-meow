@@ -57,9 +57,17 @@ export class HTMLAudioPlayback implements RecordingPlayback, PlaybackController 
   private active: ActivePlayback | null = null
   private currentSnapshot: PlaybackSnapshot = IDLE_PLAYBACK_SNAPSHOT
   private readonly playbackListeners = new Set<PlaybackListener>()
+  /** timeupdate 触发的高频位置发布合帧间隔;状态变化不受此限制。 */
+  private static readonly POSITION_PUBLISH_INTERVAL_MS = 500
+  private readonly now: () => number
+  private lastPositionPublishAt = 0
 
-  constructor(createAudio = browserAudioFactory()) {
+  constructor(
+    createAudio = browserAudioFactory(),
+    now: () => number = () => Date.now(),
+  ) {
     this.createAudio = createAudio
+    this.now = now
   }
 
   get snapshot(): PlaybackSnapshot {
@@ -105,7 +113,7 @@ export class HTMLAudioPlayback implements RecordingPlayback, PlaybackController 
         this.publish(this.currentSnapshot.status, element)
       }
       element.ontimeupdate = () => {
-        this.publish(this.currentSnapshot.status, element)
+        this.publishPositionThrottled(this.currentSnapshot.status, element)
       }
       element.onplay = () => {
         this.publish('playing', element)
@@ -222,6 +230,7 @@ export class HTMLAudioPlayback implements RecordingPlayback, PlaybackController 
   ): void {
     this.currentSnapshot = this.snapshotFor(status, element)
     const snapshot = this.currentSnapshot
+    this.lastPositionPublishAt = this.now()
     this.playbackListeners.forEach((listener) => {
       try {
         listener(snapshot)
@@ -229,6 +238,23 @@ export class HTMLAudioPlayback implements RecordingPlayback, PlaybackController 
         // UI listeners cannot disrupt playback.
       }
     })
+  }
+
+  /**
+   * 播放位置的常规推进按固定间隔发布,避免 Android WebView 上高频 setState
+   * 叠加滚动造成重绘风暴与视觉残影;暂停/恢复等状态变化仍走即时 publish。
+   */
+  private publishPositionThrottled(
+    status: PlaybackStatus,
+    element: HTMLAudioElementLike,
+  ): void {
+    if (
+      this.now() - this.lastPositionPublishAt <
+      HTMLAudioPlayback.POSITION_PUBLISH_INTERVAL_MS
+    ) {
+      return
+    }
+    this.publish(status, element)
   }
 
   private settle(

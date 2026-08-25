@@ -62,4 +62,50 @@ describe('IndexedDbStorage user preferences', () => {
       'User preferences owner',
     )
   })
+
+  it('fills greeting overrides for legacy records saved before the fields existed', async () => {
+    const legacy = {
+      version: 1,
+      ownerId: 'owner-legacy',
+      theme: 'system',
+      ttsVoiceMode: 'natural-first',
+      ttsRate: 0.92,
+      autoPlayQuestion: true,
+      defaultPart: 1,
+      feedbackDetail: 'focused',
+      memoryEnabled: true,
+      sharePersonalMaterialsWithAi: false,
+      reduceMotion: false,
+      updatedAt: '2026-08-01T08:00:00.000Z',
+    }
+    // 直接写入一条缺少新字段的旧记录,模拟升级场景。
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open(databaseName)
+      open.onupgradeneeded = () => {
+        const db = open.result
+        if (!db.objectStoreNames.contains('appMeta')) {
+          db.createObjectStore('appMeta', { keyPath: 'id' })
+        }
+      }
+      open.onsuccess = () => {
+        const db = open.result
+        const tx = db.transaction('appMeta', 'readwrite')
+        tx.objectStore('appMeta').put({
+          id: 'userPreferences:owner-legacy',
+          ...legacy,
+        })
+        tx.oncomplete = () => {
+          db.close()
+          resolve()
+        }
+        tx.onerror = () => reject(tx.error ?? new Error('write failed'))
+      }
+      open.onerror = () => reject(open.error ?? new Error('open failed'))
+    })
+
+    const loaded = await createAdapter().getUserPreferences('owner-legacy')
+    expect(loaded).not.toBeNull()
+    expect(loaded?.homeTitleOverride).toBeNull()
+    expect(loaded?.homeSubtitleOverride).toBeNull()
+  })
 })

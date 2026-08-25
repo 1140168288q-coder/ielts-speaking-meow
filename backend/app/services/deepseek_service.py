@@ -44,6 +44,22 @@ ORGANIZE_SYSTEM = (
     "Part 2 needs 2 to 5 cue points. Return at most 50 questions."
 )
 
+MATERIAL_SUGGEST_SYSTEM = (
+    "You are an IELTS Speaking coach helping a learner build a personal "
+    "story bank (what to talk about). Based only on the learner's own "
+    "practice digest and saved expressions, suggest personal material "
+    "drafts they could confirm and reuse later. Return JSON only, write "
+    "content in Chinese, first person. "
+    "Ground every suggestion in topics/facts that already appear in the "
+    "digest; generalize themes, but never invent specific people, places "
+    "or events the learner did not mention. Never repeat suggestions whose "
+    "topic is already covered by existingTitles. Each content is at most "
+    "300 Chinese characters and reads like warm coaching notes, not an "
+    "essay."
+)
+
+MAX_MATERIAL_DIGEST_CHARACTERS = 4_000
+
 MAX_AI_IMPORT_CHARACTERS = 60_000
 
 
@@ -76,6 +92,19 @@ class ImportQuestion(BaseModel):
 
 class ImportQuestionList(BaseModel):
     questions: list[ImportQuestion] = Field(min_length=1, max_length=50)
+
+
+class MaterialSuggestionItem(BaseModel):
+    """一条候选个人素材;客户端确认后才写入素材库。"""
+
+    title: str = Field(min_length=1, max_length=160)
+    content: str = Field(min_length=1, max_length=800)
+    kind: Literal["person", "place", "experience", "object", "opinion"]
+    topicTags: list[str] = Field(default_factory=list, max_length=6)
+
+
+class MaterialSuggestionList(BaseModel):
+    suggestions: list[MaterialSuggestionItem] = Field(min_length=1, max_length=6)
 
 
 class DeepSeekService:
@@ -185,6 +214,45 @@ class DeepSeekService:
         )
         result = await self._complete_validated(ORGANIZE_SYSTEM, user, ImportQuestionList)
         return result["questions"]
+
+    async def suggest_materials(
+        self,
+        memoryDigest: str,
+        existingTitles: list[str],
+        maxCount: int = 4,
+    ) -> list[dict]:
+        max_count = max(1, min(6, maxCount))
+        user = json.dumps(
+            {
+                "task": "suggest-personal-material-drafts",
+                "requiredShape": {
+                    "suggestions": [
+                        {
+                            "title": "简短中文标题,≤40字",
+                            "content": (
+                                "中文第一人称的素材草稿或写作提示,"
+                                "只基于 digest 中已有的事实与主题"
+                            ),
+                            "kind": "person | place | experience | object | opinion",
+                            "topicTags": ["1-4 个简短标签"],
+                        }
+                    ]
+                },
+                "rules": [
+                    f"返回 1 到 {max_count} 条建议,按与常练话题的相关度排序",
+                    "只能归纳/泛化 digest 中已有的主题,不得虚构具体人物、地点或事件细节",
+                    "不要重复 existingTitles 已覆盖的话题",
+                    "content 像教练写的便签,引导用户补全自己的真实细节",
+                ],
+                "memoryDigest": memoryDigest[:MAX_MATERIAL_DIGEST_CHARACTERS],
+                "existingTitles": existingTitles[:50],
+            },
+            ensure_ascii=False,
+        )
+        result = await self._complete_validated(
+            MATERIAL_SUGGEST_SYSTEM, user, MaterialSuggestionList
+        )
+        return result["suggestions"]
 
     async def verify(self) -> dict:
         """最小成本的显式验证:一次小规模补全,结果写入 last_call。

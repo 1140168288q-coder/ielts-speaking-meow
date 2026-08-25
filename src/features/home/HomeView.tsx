@@ -20,6 +20,8 @@ export function HomeView({
   sessions,
   expressionCount,
   accountName,
+  titleOverride = null,
+  subtitleOverride = null,
   onStart,
   onResume,
   onOpenLibrary,
@@ -29,6 +31,8 @@ export function HomeView({
   sessions: TrainingSession[]
   expressionCount: number
   accountName: string
+  titleOverride?: string | null
+  subtitleOverride?: string | null
   onStart: (question: Question) => void
   onResume: (session: TrainingSession) => void
   onOpenLibrary: (part?: 1 | 2 | 3) => void
@@ -67,8 +71,8 @@ export function HomeView({
       <header className="home-welcome">
         <div>
           <p className="eyebrow">Today · Speaking practice</p>
-          <h1>{accountName}，今天再说好一点。</h1>
-          <p>不刷题量。完成一题、听懂反馈，再认真说第二遍。</p>
+          <h1>{titleOverride?.trim() || `${accountName}，今天也说出口。`}</h1>
+          <p>{subtitleOverride?.trim() || '说一遍，听一听，再说一遍。进步藏在第二次开口里。'}</p>
         </div>
         <button type="button" className="week-pill" onClick={onOpenReview}>
           <CheckCircle2 aria-hidden="true" size={17} />

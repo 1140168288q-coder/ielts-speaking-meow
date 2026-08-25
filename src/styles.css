@@ -12,9 +12,9 @@
   --muted: #665f59;
   --cream: #fffaf3;
   --paper: #ffffff;
-  --orange: #b7441e;
-  --orange-dark: #8f3214;
-  --orange-soft: #fff0e6;
+  --orange: #c2521b;
+  --orange-dark: #a84316;
+  --orange-soft: #ffeadb;
   --mint: #267564;
   --mint-soft: #e9f6f1;
   --yellow: #f3c86a;
@@ -427,9 +427,10 @@ h3 {
 .icon-button {
   width: 48px;
   height: 48px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--ds-line);
   border-radius: 14px;
-  background: white;
+  color: var(--ds-text);
+  background: var(--ds-surface-raised);
   cursor: pointer;
   font-size: 19px;
 }
@@ -863,6 +864,24 @@ textarea::placeholder {
   font-size: 10px;
   font-weight: 800;
   text-align: right;
+}
+
+.history-list .history-practice {
+  width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  color: var(--orange-dark);
+  background: var(--orange-soft);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.history-list .history-practice:hover {
+  color: var(--orange-dark);
+  background: color-mix(in srgb, var(--orange) 16%, var(--orange-soft));
 }
 
 
@@ -1799,7 +1818,6 @@ textarea::placeholder {
   border-radius: 16px;
   background: color-mix(in srgb, var(--surface) 94%, var(--mint-soft));
   box-shadow: 0 10px 30px rgba(42, 66, 58, 0.12);
-  transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 
@@ -1845,7 +1863,7 @@ textarea::placeholder {
 
 .playback-dot.loading,
 .playback-dot.playing {
-  animation: playback-pulse 1.4s ease-in-out infinite;
+  animation: playback-breathe 1.4s ease-in-out infinite;
 }
 
 
@@ -1898,14 +1916,15 @@ textarea::placeholder {
 
 
 
-@keyframes playback-pulse {
+/* 仅动 opacity,可被合成器处理;box-shadow 动画会强制连续重绘。 */
+@keyframes playback-breathe {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mint) 30%, transparent);
+    opacity: 1;
   }
 
   50% {
-    box-shadow: 0 0 0 5px transparent;
+    opacity: 0.35;
   }
 }
 

@@ -408,6 +408,8 @@ export class IndexedDbStorage
       memoryEnabled: stored.memoryEnabled,
       sharePersonalMaterialsWithAi: stored.sharePersonalMaterialsWithAi,
       reduceMotion: stored.reduceMotion,
+      homeTitleOverride: stored.homeTitleOverride ?? null,
+      homeSubtitleOverride: stored.homeSubtitleOverride ?? null,
       updatedAt: stored.updatedAt,
     })
     return parsed.success && parsed.data.ownerId === ownerId ? parsed.data : null

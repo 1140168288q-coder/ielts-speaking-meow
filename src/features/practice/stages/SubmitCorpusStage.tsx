@@ -40,7 +40,7 @@ export function SubmitCorpusStage({
       <div className="section-heading compact-heading">
         <div>
           <p className="eyebrow">完成与沉淀</p>
-          <h2>这次练习已经完成，要留下一句以后再用吗？</h2>
+          <h2>值得带走的一句话</h2>
         </div>
         {attempt.metrics.durationMs > 0 ? (
           <span className="answer-duration">
@@ -51,7 +51,7 @@ export function SubmitCorpusStage({
       <label className="transcript-field">
         <span>
           候选表达
-          <small>系统先挑出一句；请确认或改短。完整回答不会进入个人语料库。</small>
+          <small>从你的回答里挑了一句；改成你以后真的会说的样子。完整回答不会进入个人语料。</small>
         </span>
         <textarea
           value={draft}

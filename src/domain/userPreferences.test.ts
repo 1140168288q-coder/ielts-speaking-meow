@@ -43,4 +43,37 @@ describe('userPreferences', () => {
     const current = createDefaultUserPreferences('owner-a')
     expect(() => updateUserPreferences(current, { ttsRate: 1.5 })).toThrow()
   })
+
+  it('defaults home greeting overrides to null', () => {
+    const preferences = createDefaultUserPreferences('owner-a')
+    expect(preferences.homeTitleOverride).toBeNull()
+    expect(preferences.homeSubtitleOverride).toBeNull()
+  })
+
+  it('saves and clears custom home greeting text', () => {
+    const current = createDefaultUserPreferences('owner-a')
+    const customized = updateUserPreferences(current, {
+      homeTitleOverride: '小明，开嗓了。',
+      homeSubtitleOverride: '今天从 Part 2 开始。',
+    })
+    expect(customized.homeTitleOverride).toBe('小明，开嗓了。')
+    expect(customized.homeSubtitleOverride).toBe('今天从 Part 2 开始。')
+
+    const restored = updateUserPreferences(customized, {
+      homeTitleOverride: null,
+      homeSubtitleOverride: null,
+    })
+    expect(restored.homeTitleOverride).toBeNull()
+    expect(restored.homeSubtitleOverride).toBeNull()
+  })
+
+  it('rejects oversized greeting overrides', () => {
+    const current = createDefaultUserPreferences('owner-a')
+    expect(() =>
+      updateUserPreferences(current, { homeTitleOverride: 'a'.repeat(41) }),
+    ).toThrow()
+    expect(() =>
+      updateUserPreferences(current, { homeSubtitleOverride: 'b'.repeat(81) }),
+    ).toThrow()
+  })
 })

@@ -48,3 +48,21 @@ export type PersonalMaterialStatus = z.infer<
   typeof personalMaterialStatusSchema
 >
 export type PersonalMaterial = z.infer<typeof personalMaterialSchema>
+
+/**
+ * AI/本地启发式提炼出的候选素材(未落盘)。用户逐条确认后才经
+ * PersonalMaterialService.confirmCandidate 写入素材库。
+ */
+export const materialSuggestionSchema = z.object({
+  title: nonEmptyText(160),
+  content: nonEmptyText(800),
+  kind: personalMaterialKindSchema,
+  topicTags: z.array(nonEmptyText(40)).max(6),
+})
+
+export const materialSuggestionListSchema = z
+  .array(materialSuggestionSchema)
+  .min(1)
+  .max(6)
+
+export type MaterialSuggestion = z.infer<typeof materialSuggestionSchema>

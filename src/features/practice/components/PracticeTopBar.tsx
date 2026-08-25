@@ -6,14 +6,16 @@ export function PracticeTopBar({
   part,
   step,
   onBack,
+  backLabel = '返回题库',
 }: {
   part: Question['part']
   step: number
   onBack: () => void
+  backLabel?: string
 }) {
   return (
     <div className="practice-topbar">
-      <button type="button" className="icon-button" onClick={onBack} aria-label="返回题库">
+      <button type="button" className="icon-button" onClick={onBack} aria-label={backLabel}>
         <ChevronLeft aria-hidden="true" size={21} />
       </button>
       <div className="practice-topbar-center">

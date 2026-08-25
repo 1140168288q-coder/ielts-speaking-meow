@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # ---- free plan 默认额度；0 表示该周期没有可用额度 ----
     free_feedback_monthly_quota: int = Field(default=60, ge=0)
     free_organize_monthly_quota: int = Field(default=10, ge=0)
+    free_material_suggest_monthly_quota: int = Field(default=20, ge=0)
     free_tts_characters_monthly_quota: int = Field(default=100_000, ge=0)
     free_provider_verify_daily_quota: int = Field(default=10, ge=0)
 

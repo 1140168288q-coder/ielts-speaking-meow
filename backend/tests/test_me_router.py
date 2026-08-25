@@ -47,7 +47,14 @@ async def test_me_reports_identity_plan_and_verification_gated_capabilities(make
         "subscriptionStatus": "none",
         "currentPeriodEnd": None,
     }
-    assert {"sync", "feedback", "organize", "tts", "provider_verify"} == set(
+    assert {
+        "sync",
+        "feedback",
+        "organize",
+        "material_suggest",
+        "tts",
+        "provider_verify",
+    } == set(
         body["capabilities"]
     )
     assert all(

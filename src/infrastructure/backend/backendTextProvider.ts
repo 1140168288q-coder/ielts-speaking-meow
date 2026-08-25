@@ -2,14 +2,18 @@ import { z } from 'zod'
 import {
   aiFeedbackSchema,
   importQuestionCandidateListSchema,
+  materialSuggestionListSchema,
   type AiFeedback,
   type ImportQuestionCandidate,
+  type MaterialSuggestion,
 } from '../../domain'
 import type {
   LLMFeedbackRequest,
   LLMProvider,
   MaterialQuestionOrganizer,
   MaterialQuestionRequest,
+  MaterialSuggestionRequest,
+  MaterialSuggester,
 } from '../../ports/ai'
 import { ApiProviderError } from '../ai/providerErrors'
 import type { BackendClient } from './backendClient'
@@ -22,7 +26,9 @@ const TEXT_TIMEOUT_MS = 45_000
  * 客户端不接触 DeepSeek Key;提示词与输出校验分别在 Backend 与本端各做一次。
  * 配置状态由 BackendHealthCache 驱动,状态未知时保持乐观(失败时本地反馈兜底)。
  */
-export class BackendTextProvider implements LLMProvider, MaterialQuestionOrganizer {
+export class BackendTextProvider
+  implements LLMProvider, MaterialQuestionOrganizer, MaterialSuggester
+{
   readonly id = 'backend-text'
 
   constructor(
@@ -96,10 +102,34 @@ export class BackendTextProvider implements LLMProvider, MaterialQuestionOrganiz
     }))
     return importQuestionCandidateListSchema.parse(withIds)
   }
+
+  async suggestMaterials(
+    request: MaterialSuggestionRequest,
+  ): Promise<MaterialSuggestion[]> {
+    const data = await this.client.postJson<unknown>(
+      '/v1/materials/suggest',
+      {
+        memoryDigest: request.memoryDigest,
+        existingTitles: request.existingTitles.slice(0, 50),
+        maxCount: request.maxCount ?? 4,
+      },
+      TEXT_TIMEOUT_MS,
+    )
+    const envelope = parseValidated(
+      data,
+      materialSuggestResponseSchema,
+      'AI 提炼结果不完整,请重试。',
+    )
+    return envelope.suggestions
+  }
 }
 
 const organizeResponseSchema = z.object({
   questions: z.array(z.record(z.string(), z.unknown())).min(1).max(50),
+})
+
+const materialSuggestResponseSchema = z.object({
+  suggestions: materialSuggestionListSchema,
 })
 
 function parseValidated<T>(

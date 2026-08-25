@@ -42,7 +42,7 @@ describe('ExpressionLibrary', () => {
       />,
     )
 
-    expect(screen.getByText('有 1 句值得再听读')).toBeInTheDocument()
+    expect(screen.getByText('有 1 句在等你回头')).toBeInTheDocument()
     const search = screen.getByRole('searchbox', { name: '搜索个人表达' })
     await user.type(search, 'travel')
     expect(screen.getByText('没有找到匹配表达')).toBeInTheDocument()

@@ -7,6 +7,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -47,6 +48,8 @@ export interface PersonalMaterialLibraryProps {
   onArchive: (materialId: string) => Promise<void>
   onRestore: (materialId: string) => Promise<void>
   onDelete: (materialId: string) => Promise<void>
+  /** 根据练习记忆与个人语料提炼候选素材;确认前不落盘。 */
+  onSuggestMaterials?: () => Promise<PersonalMaterialCandidate[]>
   onConfirmCandidate?: (
     candidate: PersonalMaterialCandidate,
   ) => Promise<void>
@@ -61,6 +64,7 @@ export function PersonalMaterialLibrary({
   onArchive,
   onRestore,
   onDelete,
+  onSuggestMaterials,
   onConfirmCandidate,
   onDismissCandidate,
 }: PersonalMaterialLibraryProps) {
@@ -70,6 +74,8 @@ export function PersonalMaterialLibrary({
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [suggestBusy, setSuggestBusy] = useState(false)
+  const [suggestError, setSuggestError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
   const visibleMaterials = useMemo(() => {
@@ -125,25 +131,63 @@ export function PersonalMaterialLibrary({
     void run(material.id, () => onDelete(material.id), '素材已删除。')
   }
 
+  const runSuggest = async () => {
+    if (!onSuggestMaterials || suggestBusy) return
+    setSuggestError(null)
+    setMessage(null)
+    setSuggestBusy(true)
+    try {
+      const suggested = await onSuggestMaterials()
+      setMessage(
+        suggested.length > 0
+          ? '提炼完成：请勾选真正属于你的素材，确认后才会保存。'
+          : '这次没有提炼出新素材——先去练一两题，或手动写下你的故事。',
+      )
+    } catch (error) {
+      setSuggestError(
+        error instanceof Error ? error.message : '素材提炼失败，请稍后再试。',
+      )
+    } finally {
+      setSuggestBusy(false)
+    }
+  }
+
   return (
     <section className="page-stack library-page">
       <div className="page-title">
         <p className="eyebrow">个人素材</p>
-        <h1>积累你真正经历过的内容</h1>
+        <h1>先有故事，再有答案</h1>
         <p>
-          素材库保存“说什么”的人物、地点、经历、物品和观点；个人语料保存
-          “怎么说”的英文表达，两者独立管理。
+          人物、地点、经历、观点——考场上让你眼里有光的内容，都从这里来。
+          英文怎么说，另放在「个人语料」。
         </p>
       </div>
 
       <div className="expression-review-card">
         <div>
-          <p className="eyebrow">内容记忆</p>
-          <h2>先有自己的故事，再练自然表达</h2>
-          <p>训练时可按题目主题调用素材，但不会把整段答案自动收进来。</p>
+          <p className="eyebrow">你的素材，题目来敲门</p>
+          <h2>练到相关话题时，它们会自己出现在手边</h2>
+          <p>素材只在合适的时候被推荐；整段答案不会自动收进来。</p>
         </div>
         <span aria-hidden="true"><Lightbulb size={21} /></span>
       </div>
+
+      {onSuggestMaterials ? (
+        <div className="material-suggest-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={suggestBusy}
+            onClick={() => void runSuggest()}
+          >
+            <Sparkles aria-hidden="true" size={17} />
+            {suggestBusy ? '正在从记忆里提炼…' : '从练习记忆里提炼素材'}
+          </button>
+          {suggestError ? (
+            <span className="settings-feedback error" role="alert">{suggestError}</span>
+          ) : null}
+        </div>
+      ) : null}
 
       {message ? <div className="notice" role="status">{message}</div> : null}
 
@@ -157,7 +201,7 @@ export function PersonalMaterialLibrary({
             {candidates.map((candidate) => (
               <article key={candidate.candidateId}>
                 <div className="expression-meta">
-                  <span>AI 候选 · {kindLabels[candidate.kind]}</span>
+                  <span>候选素材 · {kindLabels[candidate.kind]}</span>
                   <small>尚未保存</small>
                 </div>
                 <h2>{candidate.title}</h2>
@@ -336,7 +380,7 @@ export function PersonalMaterialLibrary({
       ) : (
         <EmptyState
           title={query.trim() || kind !== 'all' ? '没有找到匹配素材' : status === 'archived' ? '还没有归档素材' : '还没有个人素材'}
-          body={status === 'archived' ? '归档后的素材会出现在这里，并可随时恢复。' : '从一个熟悉的人、地点或经历开始，写下以后答题能用的真实内容。'}
+          body={status === 'archived' ? '归档后的素材会在这里安静等着，随时可以恢复。' : '从奶奶的厨房、巷口的猫、或你唯一坚持的事写起——真实的细节最动人。'}
         />
       )}
     </section>
@@ -425,10 +469,18 @@ function MaterialForm({
         />
       </label>
       <div>
-        <button type="submit" disabled={!valid || busy}>
+        <button
+          type="submit"
+          className="primary-button compact"
+          disabled={!valid || busy}
+        >
           <Check size={15} aria-hidden="true" /> {submitLabel}
         </button>
-        <button type="button" className="expression-muted-action" onClick={onCancel}>
+        <button
+          type="button"
+          className="secondary-button compact"
+          onClick={onCancel}
+        >
           <X size={15} aria-hidden="true" /> 取消
         </button>
       </div>

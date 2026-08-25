@@ -1,5 +1,6 @@
 import type { AiFeedback, Question } from '../domain/models'
 import type { ImportQuestionCandidate } from '../domain/imports'
+import type { MaterialSuggestion } from '../domain/personalMaterials'
 
 /**
  * DeepSeek 只分析用户提交的答案文本。answerDurationSeconds 是用户主动
@@ -43,4 +44,26 @@ export interface MaterialQuestionOrganizer {
   extractQuestions(
     request: MaterialQuestionRequest,
   ): Promise<ImportQuestionCandidate[]>
+}
+
+/** 一条候选个人素材;确认前不落盘、不进入任何 AI 上下文。 */
+export type MaterialSuggestionPayload = MaterialSuggestion
+
+export interface MaterialSuggestionRequest {
+  /** 本地聚合的练习轨迹摘要(≤1200 字符),只含本机已持久化数据。 */
+  memoryDigest: string
+  /** 已有素材标题,用于让 AI 避免重复提炼。 */
+  existingTitles: string[]
+  maxCount?: number
+}
+
+/**
+ * Optional Text AI helper. 从练习记忆与个人语料中归纳"可能值得保存的生活素材",
+ * 结果必须经用户逐条确认后才会写入素材库。
+ */
+export interface MaterialSuggester {
+  isConfigured(): boolean
+  suggestMaterials(
+    request: MaterialSuggestionRequest,
+  ): Promise<MaterialSuggestionPayload[]>
 }

@@ -72,8 +72,8 @@ describe('PersonalMaterialLibrary', () => {
     const user = userEvent.setup()
     renderLibrary()
 
-    expect(screen.getByText(/素材库保存“说什么”/)).toBeInTheDocument()
-    expect(screen.getByText(/个人语料保存/)).toBeInTheDocument()
+    expect(screen.getByText(/人物、地点、经历、观点/)).toBeInTheDocument()
+    expect(screen.getByText(/个人语料/)).toBeInTheDocument()
     expect(screen.getByText('My grandmother')).toBeInTheDocument()
     expect(screen.queryByText('Riverside park')).not.toBeInTheDocument()
 

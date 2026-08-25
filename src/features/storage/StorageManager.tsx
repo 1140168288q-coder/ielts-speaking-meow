@@ -45,7 +45,7 @@ export function StorageManager({
       const blob = await backupService.exportBackup()
       const date = new Date().toISOString().slice(0, 10)
       downloadBlob(blob, `ielts-speaking-meow-backup-${date}.json`)
-      setMessage('备份已生成。文件含私密录音，请妥善保存。')
+      setMessage('快照已生成。它装着你说过的每一段话，请放在只有你知道的地方。')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '备份导出失败。')
     } finally {
@@ -91,8 +91,9 @@ export function StorageManager({
     <section className="settings-card storage-card">
       <h2 className="section-heading">本地数据与备份</h2>
       <p className="settings-note">
-        练习、答案文本和个人语料默认只在本机。备份文件可能包含 V1.6 及更早版本
-        的历史录音，属于私密数据；导入会合并记录，并覆盖相同 ID 的旧版本。
+        你的每一份回答都先住在这台手机里。导出备份，像给这段练习之旅拍一张快照——
+        里面可能包含早期版本练习留下的录音，请像日记一样保管。恢复时会与现有记录合并，
+        同一条目的旧版本会被新版本取代。
       </p>
       {summary ? (
         <div className="storage-summary" aria-label="本地存储概览">

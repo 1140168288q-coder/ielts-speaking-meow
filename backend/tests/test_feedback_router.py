@@ -171,3 +171,86 @@ async def test_organize_happy_path(make_app):
         )
     assert response.status_code == 200
     assert response.json()["questions"][0]["part"] == 2
+
+
+MATERIAL_SUGGESTIONS = {
+    "suggestions": [
+        {
+            "title": "关于 hometown 的素材草稿",
+            "content": "写一写你小时候常去的那条街：谁常在那里、你做过什么。",
+            "kind": "place",
+            "topicTags": ["hometown", "childhood"],
+        },
+    ]
+}
+
+
+async def test_material_suggest_happy_path(make_app):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": json.dumps(MATERIAL_SUGGESTIONS)}}],
+        })
+
+    app, _ = make_app(handler)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(
+            client,
+            "/v1/materials/suggest",
+            {
+                "memoryDigest": "本机历史:共完成 3 次单题练习;常练话题:hometown(2次)。",
+                "existingTitles": ["My grandmother"],
+                "maxCount": 4,
+            },
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["suggestions"][0]["kind"] == "place"
+    user_prompt = json.loads(captured["body"]["messages"][1]["content"])
+    assert user_prompt["memoryDigest"].startswith("本机历史")
+    assert user_prompt["existingTitles"] == ["My grandmother"]
+
+
+async def test_material_suggest_rejects_blank_digest(make_app):
+    app, _ = make_app(deepseek_ok_handler(MATERIAL_SUGGESTIONS))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(
+            client,
+            "/v1/materials/suggest",
+            {"memoryDigest": "   ", "existingTitles": []},
+        )
+    assert response.status_code == 400
+
+
+async def test_material_suggest_invalid_shape_returns_502(make_app):
+    app, _ = make_app(deepseek_ok_handler({"suggestions": [{"title": ""}]}))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(
+            client,
+            "/v1/materials/suggest",
+            {"memoryDigest": "digest", "existingTitles": []},
+        )
+    assert response.status_code == 502
+
+
+async def test_material_suggest_not_configured(make_app):
+    settings = configured_settings(deepseek_api_key="")
+    app, _ = make_app(deepseek_ok_handler(MATERIAL_SUGGESTIONS), settings)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(
+            client,
+            "/v1/materials/suggest",
+            {"memoryDigest": "digest", "existingTitles": []},
+        )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "not-configured"

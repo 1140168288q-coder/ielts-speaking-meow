@@ -69,7 +69,7 @@ export function AnswerEntryStage({
         />
       </label>
       <p className="keyboard-hint">
-        手机系统键盘自带语音输入，可以直接说英文；本应用不会录音或转写。
+        小贴士：手机键盘上的麦克风就是你的口语通道——说完顺手改两个字就好；本应用不录音、不转写。
       </p>
       <div className="manual-timer">
         <div className="manual-timer-head">

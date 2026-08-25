@@ -25,18 +25,24 @@ export function resetViewScroll(): void {
 export type AndroidBackAction =
   | 'safe-practice-exit'
   | 'home'
+  | 'origin'
   | 'browser-back'
   | 'exit-app'
 
+/**
+ * `origin` 是进入当前视图前的来源(如从"我的"进入设置)。硬件返回优先回到
+ * 来源视图,没有记录时才回首页;练习页永远走安全退出守卫。
+ */
 export const resolveAndroidBackAction = (
   view: AppView,
   canGoBack: boolean,
+  origin?: AppView,
 ): AndroidBackAction => {
   if (view === 'practice') {
     return 'safe-practice-exit'
   }
   if (view !== 'home') {
-    return 'home'
+    return origin !== undefined && origin !== view ? 'origin' : 'home'
   }
   return canGoBack ? 'browser-back' : 'exit-app'
 }

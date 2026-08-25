@@ -29,6 +29,7 @@ class FeatureKey(StrEnum):
     SYNC = "sync"
     FEEDBACK = "feedback"
     ORGANIZE = "organize"
+    MATERIAL_SUGGEST = "material_suggest"
     TTS = "tts"
     PROVIDER_VERIFY = "provider_verify"
 
@@ -63,6 +64,9 @@ class FeatureAuthorizationService:
             ),
             FeatureKey.ORGANIZE: FeaturePolicy(
                 settings.free_organize_monthly_quota, "month", "request"
+            ),
+            FeatureKey.MATERIAL_SUGGEST: FeaturePolicy(
+                settings.free_material_suggest_monthly_quota, "month", "request"
             ),
             FeatureKey.TTS: FeaturePolicy(
                 settings.free_tts_characters_monthly_quota, "month", "character"

@@ -502,7 +502,9 @@ export function App() {
       {view !== 'practice' ? (
         <AppHeader
           accountLabel={
-            cloudSession?.user.email.split('@')[0] ?? currentAccount?.displayName ?? '本机用户'
+            cloudSession
+              ? (cloudSession.user.displayName?.trim() || '云端用户')
+              : (currentAccount?.displayName ?? '本机用户')
           }
           apiConnected={apiConnected}
           onBrandClick={() => navigateSafely('home')}

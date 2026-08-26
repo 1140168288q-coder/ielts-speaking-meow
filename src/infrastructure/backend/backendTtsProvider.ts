@@ -62,6 +62,11 @@ export class BackendTtsProvider implements TTSProvider {
       if (this.health.statusOf('volc_tts') !== 'configured') {
         return false
       }
+      // 最近一次真实调用明确失败时,不要在熔断窗口外反复阻塞用户;
+      // 设置页重新验证成功后健康缓存会自动恢复云端音色。
+      if (this.health.verificationOf('volc_tts')?.status === 'failed') {
+        return false
+      }
     }
     return !this.isTripped()
   }

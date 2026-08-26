@@ -11,6 +11,7 @@ const { cloudSession, runtimeFixture, syncConstructor, syncRun } = vi.hoisted(()
       id: 'cloud-user-1',
       email: 'learner@example.com',
       emailVerified: true,
+      displayName: '我的云昵称',
       createdAt: '2026-08-21T08:00:00+00:00',
     },
   }
@@ -172,6 +173,9 @@ describe('App cloud sync integration', () => {
 
     await user.click(await screen.findByRole('button', { name: '打开账号页' }))
     await user.click(await screen.findByRole('button', { name: '模拟验证云账号' }))
+
+    expect(screen.getByRole('button', { name: '打开账号页' })).toHaveTextContent('我的云昵称')
+    expect(screen.getByRole('button', { name: '打开账号页' })).not.toHaveTextContent('learner')
 
     const syncButton = await screen.findByRole('button', { name: '确认并开始同步' })
     expect(syncButton).toBeDisabled()

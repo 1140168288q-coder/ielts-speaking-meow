@@ -11,6 +11,7 @@ import base64
 import json
 import logging
 import time
+import uuid
 
 import httpx
 
@@ -118,6 +119,7 @@ class VolcengineTTSService:
             headers={
                 **self._settings.volc_tts_auth_headers,
                 "X-Api-Resource-Id": self._settings.volc_tts_resource_id,
+                "X-Api-Request-Id": str(uuid.uuid4()),
                 "Content-Type": "application/json",
                 "Connection": "keep-alive",
             },
@@ -144,7 +146,9 @@ class VolcengineTTSService:
                 if code == STREAM_END_CODE:
                     break
                 if isinstance(code, int) and code > 0:
-                    raise provider_error(f"火山 TTS 合成失败(code {code})。")
+                    message = event.get("message")
+                    detail = f"：{message.strip()}" if isinstance(message, str) and message.strip() else ""
+                    raise provider_error(f"火山 TTS 合成失败(code {code}){detail}。")
                 data = event.get("data")
                 if isinstance(data, str) and data:
                     try:

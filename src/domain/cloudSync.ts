@@ -66,12 +66,17 @@ export const syncPushResultSchema = z
 
 export const syncPushResponseSchema = z
   .object({
+    // Backend V1 responses carry this compatibility marker. Keep it optional
+    // for older self-hosted servers during the migration window, but reject
+    // unknown versions instead of silently accepting a different protocol.
+    schemaVersion: z.literal(1).optional(),
     results: z.array(syncPushResultSchema),
   })
   .strict()
 
 export const syncPullResponseSchema = z
   .object({
+    schemaVersion: z.literal(1).optional(),
     changes: z.array(syncChangeSchema),
     nextCursor: z.number().int().nonnegative(),
     hasMore: z.boolean(),

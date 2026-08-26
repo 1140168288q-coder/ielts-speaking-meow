@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     # ---- 火山引擎语音合成 ----
     volc_endpoint: str = "https://openspeech.bytedance.com"
     volc_tts_resource_id: str = "seed-tts-2.0"  # 语音合成大模型 2.0
-    # 默认用基础 uranus 音色(实测稳定可用);控制台开通英语音色后可改
-    # en_female_anna_mars_bigtts(英语女声)等
-    volc_tts_speaker: str = "zh_female_vv_uranus_bigtts"
+    # 默认使用与 seed-tts-2.0 资源匹配的英语 uranus 音色,适合 IELTS 播报。
+    # 旧版 mars 音色(如 en_female_anna_mars_bigtts)必须配 seed-tts-1.0。
+    volc_tts_speaker: str = "en_female_dacey_uranus_bigtts"
     # 音色展示名(可选,只出现在 /health 与设置页,便于人眼确认音色)。
     volc_tts_speaker_name: str = ""
 

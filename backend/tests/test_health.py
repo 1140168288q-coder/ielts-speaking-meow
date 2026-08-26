@@ -28,7 +28,7 @@ async def test_health_configured(make_app):
     assert body["providers"]["deepseek"]["configured"] is True
     assert body["providers"]["deepseek"]["model"] == "deepseek-v4-flash"
     assert body["providers"]["volc_tts"]["configured"] is True
-    assert body["providers"]["volc_tts"]["speaker"]["id"] == "zh_female_vv_uranus_bigtts"
+    assert body["providers"]["volc_tts"]["speaker"]["id"] == "en_female_dacey_uranus_bigtts"
     assert "volc_stt" not in body["providers"]
     # 只配置了密钥、还没真实调用过:必须显示 unverified,而不是"已验证"
     assert body["providers"]["deepseek"]["verification"]["status"] == "unverified"

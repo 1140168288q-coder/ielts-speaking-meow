@@ -4,6 +4,36 @@ import { CloudSyncClient } from './cloudSyncClient'
 const TOKEN = 'opaque-session-token-with-enough-entropy'
 
 describe('CloudSyncClient', () => {
+  it('accepts the backend protocol version marker on push and pull responses', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        schemaVersion: 1,
+        changes: [],
+        nextCursor: 0,
+        hasMore: false,
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        schemaVersion: 1,
+        results: [],
+      }))
+    const client = createClient(fetch)
+
+    await expect(client.pull(0)).resolves.toMatchObject({
+      changes: [],
+      nextCursor: 0,
+    })
+    await expect(client.push([
+      {
+        operationId: 'operation-versioned',
+        entityType: 'session',
+        entityId: 'session-versioned',
+        baseVersion: 0,
+        payload: { status: 'completed' },
+        deletedAt: null,
+      },
+    ])).resolves.toEqual({ schemaVersion: 1, results: [] })
+  })
+
   it('injects the current access token and validates push responses', async () => {
     const fetch = vi.fn().mockResolvedValue(jsonResponse({
       results: [

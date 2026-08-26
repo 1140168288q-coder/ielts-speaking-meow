@@ -305,7 +305,11 @@ describe('SettingsController', () => {
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
     await user.click(screen.getByRole('button', { name: /试听自然音色/ }))
     expect(harness.preferredVoiceSpeak).not.toHaveBeenCalled()
-    expect(await screen.findByText(/正在使用系统朗读/)).toBeTruthy()
+    expect(harness.systemTtsSpeak).toHaveBeenCalledWith(expect.objectContaining({
+      text: 'Hello, this is your IELTS speaking coach.',
+      language: 'en-US',
+    }))
+    expect(await screen.findByText(/已改用系统朗读/)).toBeTruthy()
   })
 
   it('saves custom home greeting text on blur and can restore defaults', async () => {

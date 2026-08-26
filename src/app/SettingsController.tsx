@@ -242,11 +242,30 @@ export function SettingsController({
   /** 试听服务端当前配置的云端音色(同时就是一次真实验证)。 */
   const previewCloudVoice = async () => {
     if (busy) return
+    const fallbackToSystemVoice = async (): Promise<boolean> => {
+      try {
+        await systemTts.speak({
+          text: CLOUD_PREVIEW_TEXT,
+          language: 'en-US',
+          rate: preferences.ttsRate,
+        })
+        return true
+      } catch {
+        return false
+      }
+    }
+
     if (!preferredVoice.isAvailable()) {
-      setCloudPreviewFeedback({
-        tone: 'error',
-        text: '云端语音当前不可用（未连接、未配置或已熔断），正在使用系统朗读。',
-      })
+      const fallbackWorked = await fallbackToSystemVoice()
+      setCloudPreviewFeedback(fallbackWorked
+        ? {
+            tone: 'error',
+            text: '云端语音当前不可用，已改用系统朗读。',
+          }
+        : {
+            tone: 'error',
+            text: '云端语音和本机系统朗读都不可用，请检查连接与英语语音包。',
+          })
       return
     }
     setCloudPreviewFeedback({ tone: 'busy', text: '正在合成云端音色…' })
@@ -260,12 +279,20 @@ export function SettingsController({
       void healthCache.refresh().then(setSnapshot)
 
     } catch (error) {
-      setCloudPreviewFeedback({
-        tone: 'error',
-        text: error instanceof Error
-          ? `${error.message} 已切换系统朗读。`
-          : '云端音色播放失败，已切换系统朗读。',
-      })
+      const fallbackWorked = await fallbackToSystemVoice()
+      setCloudPreviewFeedback(fallbackWorked
+        ? {
+            tone: 'error',
+            text: error instanceof Error
+              ? `${error.message} 已改用系统朗读。`
+              : '云端音色播放失败，已改用系统朗读。',
+          }
+        : {
+            tone: 'error',
+            text: error instanceof Error
+              ? `${error.message}；系统朗读也不可用。`
+              : '云端音色和本机系统朗读都不可用。',
+          })
     }
   }
 

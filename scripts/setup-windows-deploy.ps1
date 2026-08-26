@@ -30,7 +30,7 @@ function Read-SecretText {
 
 function Set-EnvLine {
     param(
-        [Parameter(Mandatory = $true)][System.Collections.Generic.List[string]]$Lines,
+        [Parameter(Mandatory = $true)][System.Collections.IList]$Lines,
         [Parameter(Mandatory = $true)][string]$Key,
         [AllowEmptyString()][string]$Value
     )
@@ -45,7 +45,7 @@ function Set-EnvLine {
         }
     }
     if (-not $found) {
-        $Lines.Add($replacement)
+        [void]$Lines.Add($replacement)
     }
 }
 

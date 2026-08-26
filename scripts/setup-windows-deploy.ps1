@@ -51,8 +51,16 @@ function Set-EnvLine {
 
 function New-RandomHex {
     $bytes = New-Object byte[] 32
-    [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-    return ([Convert]::ToHexString($bytes)).ToLowerInvariant()
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($bytes)
+    }
+    finally {
+        $rng.Dispose()
+    }
+
+    # Avoid newer static APIs so the script also works with Windows PowerShell 5.1.
+    return (($bytes | ForEach-Object { $_.ToString("x2") }) -join "")
 }
 
 $ProjectRoot = (Resolve-Path $ProjectRoot).Path

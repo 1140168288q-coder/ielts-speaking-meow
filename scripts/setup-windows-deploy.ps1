@@ -108,7 +108,13 @@ if ($volcAccessToken) { Set-EnvLine -Lines $lines -Key "VOLC_ACCESS_TOKEN" -Valu
 $utf8NoBom = [Text.UTF8Encoding]::new($false)
 [IO.File]::WriteAllText($envPath, (($lines -join "`n").TrimEnd() + "`n"), $utf8NoBom)
 
-$tunnelToken = Read-SecretText "Cloudflare Tunnel Token（必填，输入不会显示）"
+$tunnelToken = (Read-SecretText "Cloudflare Tunnel Token（必填，输入不会显示）").Trim()
+if ($tunnelToken -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$') {
+    throw "你输入的是 Tunnel ID（UUID），不是 Connector Token。请从 Cloudflare Tunnel 的 Docker 连接器页面复制 --token 后面的长字符串。"
+}
+if ($tunnelToken -match '\s' -or $tunnelToken -match '^(?i:docker|cloudflared)') {
+    throw "请只粘贴 --token 后面的 Token 字符串，不要粘贴完整 docker/cloudflared 命令。"
+}
 [IO.Directory]::CreateDirectory($secretDir) | Out-Null
 [IO.File]::WriteAllText($tunnelSecretPath, $tunnelToken, $utf8NoBom)
 

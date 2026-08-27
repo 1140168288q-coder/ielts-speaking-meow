@@ -16,7 +16,7 @@ import type { BackendHealthCache } from './backendHealth'
 
 const capabilities: TTSCapabilities = {
   language: true,
-  voice: false,
+  voice: true,
   rate: true,
   pitch: true,
   style: false,
@@ -80,7 +80,7 @@ export class BackendTtsProvider implements TTSProvider {
       text: request.text,
       provider: this.id,
       model: this.voiceModel(),
-      speaker: this.voiceSpeaker(),
+      speaker: request.voice ?? this.voiceSpeaker(),
       language: request.language ?? null,
       rate: request.rate ?? null,
       pitch: request.pitch ?? null,

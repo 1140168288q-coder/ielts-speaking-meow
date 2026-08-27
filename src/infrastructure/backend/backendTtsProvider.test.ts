@@ -135,20 +135,21 @@ describe('BackendTtsProvider', () => {
     expect(provider.isAvailable()).toBe(true)
     expect(provider.capabilities).toEqual({
       language: true,
-      voice: false,
+      voice: true,
       rate: true,
       pitch: true,
       style: false,
     })
   })
 
-  it('forwards language, rate and pitch to the backend', async () => {
+  it('forwards language, voice, rate and pitch to the backend', async () => {
     const { provider, fetch } = createHarness()
     await provider.speak({
       text: 'Hello.',
       language: 'en-US',
       rate: 0.92,
       pitch: 1,
+      voice: 'en_male_dave_moon_bigtts',
     })
     const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
     expect(JSON.parse(init.body as string)).toEqual({
@@ -156,6 +157,7 @@ describe('BackendTtsProvider', () => {
       language: 'en-US',
       rate: 0.92,
       pitch: 1,
+      voice: 'en_male_dave_moon_bigtts',
     })
   })
 

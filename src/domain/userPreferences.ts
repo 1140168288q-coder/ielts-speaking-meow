@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isoDateTimeSchema } from './models'
+import { TTS_VOICE_PRESET_IDS } from './ttsPresets'
 
 export const USER_PREFERENCES_VERSION = 1
 
@@ -8,8 +9,10 @@ export const userPreferencesSchema = z
     version: z.literal(USER_PREFERENCES_VERSION),
     ownerId: z.string().trim().min(1).max(120),
     theme: z.enum(['system', 'light', 'dark']),
+    ttsVoicePreset: z.enum(TTS_VOICE_PRESET_IDS),
     ttsVoiceMode: z.enum(['natural-first', 'system']),
     ttsRate: z.number().min(0.75).max(1.2),
+    ttsPitch: z.number().min(0.85).max(1.15),
     autoPlayQuestion: z.boolean(),
     defaultPart: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     feedbackDetail: z.enum(['focused', 'expanded']),
@@ -38,8 +41,10 @@ export function createDefaultUserPreferences(
     version: USER_PREFERENCES_VERSION,
     ownerId,
     theme: 'system',
+    ttsVoicePreset: 'backend-default',
     ttsVoiceMode: 'natural-first',
     ttsRate: 0.92,
+    ttsPitch: 1,
     autoPlayQuestion: true,
     defaultPart: 1,
     feedbackDetail: 'focused',

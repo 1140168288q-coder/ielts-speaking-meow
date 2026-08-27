@@ -29,6 +29,16 @@ _RATIO_MIN = 0.5
 _RATIO_MAX = 2.0
 VERIFY_TEXT = "Hello."
 
+# 英语考官预设使用官方音色列表中的 speaker。部分音色属于 TTS 1.0，
+# 因此要随 speaker 切换对应资源；未传 voice 时继续使用现有 .env 配置。
+VOICE_RESOURCE_IDS = {
+    "en_male_dave_moon_bigtts": "seed-tts-1.0",
+    "en_male_corey_emo_v2_mars_bigtts": "seed-tts-1.0",
+    "en_female_daisy_moon_bigtts": "seed-tts-1.0",
+    "en_female_onez_moon_bigtts": "seed-tts-1.0",
+    "en_female_emily_mars_bigtts": "seed-tts-1.0",
+}
+
 
 def _clamp_ratio(value: float) -> float:
     return max(_RATIO_MIN, min(_RATIO_MAX, value))
@@ -51,6 +61,7 @@ class VolcengineTTSService:
         self,
         text: str,
         language: str | None = None,
+        voice: str | None = None,
         rate: float | None = None,
         pitch: float | None = None,
     ) -> bytes:
@@ -63,10 +74,13 @@ class VolcengineTTSService:
             raise invalid_request("合成文本不能为空。")
         if len(text) > MAX_TEXT_CHARACTERS:
             raise invalid_request(f"合成文本过长(最多 {MAX_TEXT_CHARACTERS} 字符)。")
+        speaker, resource_id = self._resolve_voice(voice)
         started = time.perf_counter()
         try:
             audio = await self._synthesize_checked(
                 text,
+                speaker=speaker,
+                resource_id=resource_id,
                 rate=rate,
                 pitch=pitch,
                 language=language,
@@ -95,6 +109,8 @@ class VolcengineTTSService:
         self,
         text: str,
         *,
+        speaker: str,
+        resource_id: str,
         language: str | None,
         rate: float | None,
         pitch: float | None,
@@ -102,7 +118,7 @@ class VolcengineTTSService:
         del language  # TTS 2.0 自动识别中英文,不需要指定
         req_params: dict = {
             "text": text,
-            "speaker": self._settings.volc_tts_speaker,
+            "speaker": speaker,
             "audio_params": {
                 "format": "mp3",
                 "sample_rate": 24000,
@@ -118,7 +134,7 @@ class VolcengineTTSService:
             f"{self._settings.volc_endpoint}/api/v3/tts/unidirectional",
             headers={
                 **self._settings.volc_tts_auth_headers,
-                "X-Api-Resource-Id": self._settings.volc_tts_resource_id,
+                "X-Api-Resource-Id": resource_id,
                 "X-Api-Request-Id": str(uuid.uuid4()),
                 "Content-Type": "application/json",
                 "Connection": "keep-alive",
@@ -161,3 +177,15 @@ class VolcengineTTSService:
             from ..errors import upstream_timeout
             raise upstream_timeout("火山 TTS 流中断,请稍后重试。")
         return b"".join(chunks)
+
+    def _resolve_voice(self, voice: str | None) -> tuple[str, str]:
+        if voice is None or not voice.strip():
+            return (
+                self._settings.volc_tts_speaker,
+                self._settings.volc_tts_resource_id,
+            )
+        speaker = voice.strip()
+        resource_id = VOICE_RESOURCE_IDS.get(speaker)
+        if resource_id is None:
+            raise invalid_request("所选云端音色不受支持。")
+        return speaker, resource_id

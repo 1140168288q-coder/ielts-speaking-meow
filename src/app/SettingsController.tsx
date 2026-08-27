@@ -14,6 +14,11 @@ import type {
 import type { LocalDataMaintenance } from '../ports/storage'
 import type { StorageBackupService } from '../application/storageBackupService'
 import type { UserPreferences, UserPreferencesUpdate } from '../domain/userPreferences'
+import {
+  getTtsVoicePreset,
+  resolveTtsVoicePlaybackSettings,
+  TTS_VOICE_PRESETS,
+} from '../domain'
 import { StorageManager } from '../features/storage'
 
 export interface SettingsControllerProps {
@@ -31,7 +36,9 @@ export interface SettingsControllerProps {
   theme?: 'system' | 'light' | 'dark'
    preferences?: Pick<UserPreferences,
      | 'ttsVoiceMode'
+     | 'ttsVoicePreset'
      | 'ttsRate'
+     | 'ttsPitch'
      | 'autoPlayQuestion'
      | 'defaultPart'
      | 'feedbackDetail'
@@ -64,8 +71,10 @@ const CLOUD_PREVIEW_TEXT = 'Hello, this is your IELTS speaking coach.'
  */
 
 const DEFAULT_PREFERENCES = {
+  ttsVoicePreset: 'backend-default',
   ttsVoiceMode: 'natural-first',
   ttsRate: 0.92,
+  ttsPitch: 1,
   autoPlayQuestion: true,
   defaultPart: 1,
   feedbackDetail: 'focused',
@@ -239,7 +248,7 @@ export function SettingsController({
     }
   }
 
-  /** 试听服务端当前配置的云端音色(同时就是一次真实验证)。 */
+  /** 试听当前选择的云端音色(同时就是一次真实验证)。 */
   const previewCloudVoice = async () => {
     if (busy) return
     const fallbackToSystemVoice = async (): Promise<boolean> => {
@@ -247,7 +256,7 @@ export function SettingsController({
         await systemTts.speak({
           text: CLOUD_PREVIEW_TEXT,
           language: 'en-US',
-          rate: preferences.ttsRate,
+          ...selectedVoicePlayback,
         })
         return true
       } catch {
@@ -273,7 +282,7 @@ export function SettingsController({
       await preferredVoice.speak({
         text: CLOUD_PREVIEW_TEXT,
         language: 'en-US',
-        rate: 0.92,
+        ...selectedVoicePlayback,
       })
       setCloudPreviewFeedback({ tone: 'success', text: '云端音色试听完成。' })
       void healthCache.refresh().then(setSnapshot)
@@ -316,6 +325,12 @@ export function SettingsController({
 
   const health = snapshot.health
   const usesPlainHttp = addressDraft.trim().toLowerCase().startsWith('http://')
+  const selectedVoicePreset = getTtsVoicePreset(preferences.ttsVoicePreset)
+  const selectedVoicePlayback = resolveTtsVoicePlaybackSettings(
+    preferences.ttsVoicePreset,
+    preferences.ttsRate,
+    preferences.ttsPitch,
+  )
 
   return (
     <div className="settings-panel">
@@ -480,7 +495,7 @@ export function SettingsController({
               onClick={() => void previewCloudVoice()}
               disabled={busy}
             >
-              试听自然音色
+              试听{selectedVoicePreset.label}
             </button>
           ) : null}
         </div>
@@ -558,6 +573,26 @@ export function SettingsController({
         </div>
         <div className="preference-grid playback-preferences">
           <label className="settings-field">
+            <span>考官音色预设</span>
+            <select
+              aria-label="考官音色预设"
+              value={preferences.ttsVoicePreset}
+              onChange={(event) => void savePreference({
+                ttsVoicePreset: event.target.value as UserPreferences['ttsVoicePreset'],
+              })}
+            >
+              <option value="backend-default">云端默认 · 沿用 Backend 配置</option>
+              {TTS_VOICE_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+            <small className="settings-meta">
+              {selectedVoicePreset.description} · {selectedVoicePreset.accent}
+            </small>
+          </label>
+          <label className="settings-field">
             <span>默认音色来源</span>
             <select
               aria-label="默认音色来源"
@@ -580,7 +615,22 @@ export function SettingsController({
               onChange={(event) => void savePreference({ ttsRate: Number(event.target.value) })}
             />
           </label>
+          <label className="settings-field range-field">
+            <span>音高 · {preferences.ttsPitch.toFixed(2)}×</span>
+            <input
+              aria-label="朗读音高"
+              type="range"
+              min="0.85"
+              max="1.15"
+              step="0.05"
+              value={preferences.ttsPitch}
+              onChange={(event) => void savePreference({ ttsPitch: Number(event.target.value) })}
+            />
+          </label>
         </div>
+        <p className="settings-meta">
+          云端音色会使用所选考官预设；切换到系统音色时，设备可能不支持指定 speaker，但仍会应用语速和音高。
+        </p>
         <ul className="settings-providers">
           <li>
             系统 TTS 引擎:

@@ -138,7 +138,7 @@ describe('AudioCoordinator', () => {
     }
     const coordinator = new AudioCoordinator(natural, recording, {
       systemTts: system,
-      getPlaybackPreferences: () => ({ voiceMode: 'system', rate: 0.8 }),
+      getPlaybackPreferences: () => ({ voiceMode: 'system', rate: 0.8, pitch: 1.05 }),
     })
 
     await coordinator.speak({ text: 'Long Part 2 answer', rate: 1.1 })
@@ -147,6 +147,7 @@ describe('AudioCoordinator', () => {
     expect(systemSpeak).toHaveBeenCalledWith({
       text: 'Long Part 2 answer',
       rate: 0.8,
+      pitch: 1.05,
     })
   })
 

@@ -303,13 +303,33 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /试听自然音色/ }))
+    await user.click(screen.getByRole('button', { name: /试听云端默认/ }))
     expect(harness.preferredVoiceSpeak).not.toHaveBeenCalled()
     expect(harness.systemTtsSpeak).toHaveBeenCalledWith(expect.objectContaining({
       text: 'Hello, this is your IELTS speaking coach.',
       language: 'en-US',
     }))
     expect(await screen.findByText(/已改用系统朗读/)).toBeTruthy()
+  })
+
+  it('offers five examiner voice presets and persists the selected preset', async () => {
+    const user = userEvent.setup()
+    const onPreferencesChange = vi.fn().mockResolvedValue(undefined)
+    const harness = createHarness()
+    render(
+      <SettingsController
+        {...harness}
+        onPreferencesChange={onPreferencesChange}
+      />,
+    )
+
+    const voiceSelect = screen.getByLabelText('考官音色预设')
+    expect(voiceSelect.querySelectorAll('option')).toHaveLength(6)
+    await user.selectOptions(voiceSelect, 'dave')
+
+    expect(onPreferencesChange).toHaveBeenCalledWith({
+      ttsVoicePreset: 'dave',
+    })
   })
 
   it('saves custom home greeting text on blur and can restore defaults', async () => {

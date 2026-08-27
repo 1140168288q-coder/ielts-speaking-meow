@@ -73,6 +73,42 @@ async def test_tts_forwards_rate_and_pitch(make_app):
     assert captured["req_params"]["pitch_ratio"] == 1.0
 
 
+async def test_tts_forwards_allowed_voice_and_matching_resource(make_app):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["headers"] = request.headers
+        captured["req_params"] = json.loads(request.content)["req_params"]
+        return httpx.Response(200, content="\n".join(json.dumps(c) for c in [
+            {"code": 0, "message": "OK", "data": base64.b64encode(b"chunk1").decode()},
+            {"code": 20000000, "message": "OK", "data": ""},
+        ]))
+
+    app, _ = make_app(handler)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_tts(client, {
+            "text": "Hello there.",
+            "voice": "en_male_dave_moon_bigtts",
+        })
+    assert response.status_code == 200
+    assert captured["headers"]["X-Api-Resource-Id"] == "seed-tts-1.0"
+    assert captured["req_params"]["speaker"] == "en_male_dave_moon_bigtts"
+
+
+async def test_tts_rejects_unknown_voice(make_app):
+    app, _ = make_app(tts_ok_handler())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_tts(client, {
+            "text": "Hello",
+            "voice": "not-a-supported-voice",
+        })
+    assert response.status_code == 400
+
+
 async def test_tts_rejects_out_of_range_rate(make_app):
     app, _ = make_app(tts_ok_handler())
     async with httpx.AsyncClient(

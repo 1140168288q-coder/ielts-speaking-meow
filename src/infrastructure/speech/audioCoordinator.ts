@@ -12,6 +12,8 @@ import {
 export interface TtsPlaybackPreferences {
   voiceMode: 'natural-first' | 'system'
   rate: number
+  pitch: number
+  voice?: string
 }
 
 export interface AudioCoordinatorOptions {
@@ -82,7 +84,14 @@ export class AudioCoordinator implements AudioFocus {
         : this.tts
       const effectiveRequest = preferences === undefined
         ? request
-        : { ...request, rate: preferences.rate }
+        : {
+            ...request,
+            rate: preferences.rate,
+            pitch: preferences.pitch,
+            ...(preferences.voice !== undefined
+              ? { voice: preferences.voice }
+              : {}),
+          }
       this.setState('tts')
       this.setTtsPlayback({
         ...IDLE_PLAYBACK_SNAPSHOT,

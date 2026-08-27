@@ -1,5 +1,9 @@
 import { Capacitor } from '@capacitor/core'
-import { TTS_VOICE_CONFIG_VERSION, type UserPreferences } from '../domain'
+import {
+  TTS_VOICE_CONFIG_VERSION,
+  resolveTtsVoicePlaybackSettings,
+  type UserPreferences,
+} from '../domain'
 import { AccountService } from '../application/accountService'
 import { ImportMaterialService } from '../application/imports/importMaterialService'
 import { PracticeService } from '../application/practiceService'
@@ -16,7 +20,10 @@ import {
   CloudSyncClient,
 } from '../infrastructure/backend'
 import { CapacitorDocumentOcr, CapacitorSecureAuthTokenStore } from '../infrastructure/platform'
-import { AudioCoordinator } from '../infrastructure/speech/audioCoordinator'
+import {
+  AudioCoordinator,
+  type TtsPlaybackPreferences,
+} from '../infrastructure/speech/audioCoordinator'
 import { CapacitorSystemTTS } from '../infrastructure/speech/capacitorSystemTts'
 import { FallbackTTSProvider } from '../infrastructure/speech/fallbackTtsProvider'
 import { HTMLAudioPlayback } from '../infrastructure/speech/htmlAudioPlayback'
@@ -63,15 +70,20 @@ export const createBrowserRuntime = () => {
   )
   const tts = new FallbackTTSProvider(voiceAi, systemTts)
   const playback = new HTMLAudioPlayback()
-  let playbackPreferences: Pick<UserPreferences, 'ttsVoiceMode' | 'ttsRate'> = {
-    ttsVoiceMode: 'natural-first',
-    ttsRate: 0.92,
+  let playbackPreferences: TtsPlaybackPreferences = {
+    voiceMode: 'natural-first',
+    rate: 0.92,
+    pitch: 1,
   }
   const audioFocus = new AudioCoordinator(tts, playback, {
     systemTts,
     getPlaybackPreferences: () => ({
-      voiceMode: playbackPreferences.ttsVoiceMode,
-      rate: playbackPreferences.ttsRate,
+      voiceMode: playbackPreferences.voiceMode,
+      rate: playbackPreferences.rate,
+      pitch: playbackPreferences.pitch,
+      ...(playbackPreferences.voice
+        ? { voice: playbackPreferences.voice }
+        : {}),
     }),
   })
   const documentOcr = Capacitor.getPlatform() === 'android'
@@ -102,8 +114,12 @@ export const createBrowserRuntime = () => {
   return {
     setUserPreferences: (preferences: UserPreferences) => {
       playbackPreferences = {
-        ttsVoiceMode: preferences.ttsVoiceMode,
-        ttsRate: preferences.ttsRate,
+        voiceMode: preferences.ttsVoiceMode,
+        ...resolveTtsVoicePlaybackSettings(
+          preferences.ttsVoicePreset,
+          preferences.ttsRate,
+          preferences.ttsPitch,
+        ),
       }
     },
     /** 载入账号、运行时配置并做一次非阻塞的云端健康检查。 */

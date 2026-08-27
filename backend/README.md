@@ -293,8 +293,8 @@ outbound-only HTTPS 通道进入，Tailscale 只用于管理员 SSH/维护。不
 
 ## TTS 说明
 
-- 默认音色 `zh_female_vv_uranus_bigtts`(uranus 系列基础音色,实测稳定)；
-- 音色需在控制台开通，未开通会返回 `55000000`；
-- 为 IELTS 英文播报开通英语音色后，推荐切换 `en_female_anna_mars_bigtts`
-  (英语女声 Anna)或 `en_male_jason_conversation_wvae_bigtts`(英语男声)；
-- 音色配置只写在 `.env`，App 不接触任何密钥。
+- 未选择预设时沿用 `.env` 中的 `VOLC_TTS_SPEAKER` 与资源配置；
+- App 提供 Dave、Corey 两个英式男声，以及 Daisy、Onez、Emily 三个英式女声预设；
+  这些预设由 Backend 白名单校验，并按音色切换兼容的资源版本；
+- 音色需在控制台开通，未开通会返回上游错误，App 会自动回退系统 TTS；
+- 音色配置只写在 Backend `.env`，App 不接触任何密钥。

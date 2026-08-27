@@ -18,8 +18,10 @@ describe('userPreferences', () => {
       feedbackDetail: 'focused',
       memoryEnabled: true,
       sharePersonalMaterialsWithAi: false,
+      ttsVoicePreset: 'backend-default',
       ttsVoiceMode: 'natural-first',
       ttsRate: 0.92,
+      ttsPitch: 1,
     })
   })
 
@@ -27,7 +29,7 @@ describe('userPreferences', () => {
     const current = createDefaultUserPreferences('owner-a')
     const next = updateUserPreferences(
       current,
-      { theme: 'dark', ttsRate: 1.1, defaultPart: 3 },
+      { theme: 'dark', ttsVoicePreset: 'dave', ttsRate: 1.1, ttsPitch: 0.95, defaultPart: 3 },
       new Date('2026-08-24T09:00:00.000Z'),
     )
 
@@ -35,6 +37,8 @@ describe('userPreferences', () => {
     expect(next.version).toBe(USER_PREFERENCES_VERSION)
     expect(next.theme).toBe('dark')
     expect(next.ttsRate).toBe(1.1)
+    expect(next.ttsVoicePreset).toBe('dave')
+    expect(next.ttsPitch).toBe(0.95)
     expect(next.defaultPart).toBe(3)
     expect(next.updatedAt).toBe('2026-08-24T09:00:00.000Z')
   })
@@ -42,6 +46,11 @@ describe('userPreferences', () => {
   it('rejects unsupported playback rates', () => {
     const current = createDefaultUserPreferences('owner-a')
     expect(() => updateUserPreferences(current, { ttsRate: 1.5 })).toThrow()
+  })
+
+  it('rejects unsupported playback pitches', () => {
+    const current = createDefaultUserPreferences('owner-a')
+    expect(() => updateUserPreferences(current, { ttsPitch: 1.5 })).toThrow()
   })
 
   it('defaults home greeting overrides to null', () => {

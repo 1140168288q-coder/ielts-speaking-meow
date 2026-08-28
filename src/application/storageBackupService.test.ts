@@ -3,6 +3,7 @@ import type {
   SavedExpression,
   TrainingSession,
 } from '../domain/models'
+import type { QuestionPracticeState } from '../domain/questionPracticeState'
 import type { PersonalMaterial } from '../domain/personalMaterials'
 import type { AudioStorage, LocalStorage } from '../ports/storage'
 import { StorageBackupService } from './storageBackupService'
@@ -12,6 +13,7 @@ const NOW = '2026-08-14T08:00:00.000Z'
 class MemoryStorage implements LocalStorage, AudioStorage {
   readonly sessions = new Map<string, TrainingSession>()
   readonly expressions = new Map<string, SavedExpression>()
+  readonly questionStates = new Map<string, QuestionPracticeState>()
   readonly materials = new Map<string, PersonalMaterial>()
   readonly audio = new Map<string, Blob>()
 
@@ -24,6 +26,15 @@ class MemoryStorage implements LocalStorage, AudioStorage {
   }
   listSessions(): Promise<TrainingSession[]> {
     return Promise.resolve([...this.sessions.values()])
+  }
+  listQuestionPracticeStates(ownerId: string): Promise<QuestionPracticeState[]> {
+    return Promise.resolve(
+      [...this.questionStates.values()].filter((state) => state.ownerId === ownerId),
+    )
+  }
+  saveQuestionPracticeState(state: QuestionPracticeState): Promise<void> {
+    this.questionStates.set(state.id, structuredClone(state))
+    return Promise.resolve()
   }
   upsertExpression(expression: SavedExpression): Promise<void> {
     this.expressions.set(expression.id, structuredClone(expression))

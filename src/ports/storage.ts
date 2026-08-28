@@ -3,6 +3,7 @@ import type {
   SavedExpression,
   TrainingSession,
 } from '../domain/models'
+import type { QuestionPracticeState } from '../domain/questionPracticeState'
 import type { PersonalMaterial } from '../domain/personalMaterials'
 import type {
   CloudSyncEntityType,
@@ -31,6 +32,9 @@ export interface LocalStorage {
   upsertSession(session: TrainingSession): Promise<void>
   getSession(sessionId: string): Promise<TrainingSession | null>
   listSessions(): Promise<TrainingSession[]>
+
+  listQuestionPracticeStates(ownerId: string): Promise<QuestionPracticeState[]>
+  saveQuestionPracticeState(state: QuestionPracticeState): Promise<void>
 
   upsertExpression(expression: SavedExpression): Promise<void>
   getExpression(expressionId: string): Promise<SavedExpression | null>

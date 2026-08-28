@@ -7,6 +7,8 @@ import {
   normalizeStoredTrainingSession,
   personalMaterialSchema,
   practiceTextsSchema,
+  questionPracticeStateId,
+  questionPracticeStateSchema,
   recordBelongsToAccount,
   savedExpressionSchema,
   ttsCacheEntrySchema,
@@ -16,6 +18,7 @@ import {
   type ImportedQuestionRecord,
   type ImportSource,
   type PersonalMaterial,
+  type QuestionPracticeState,
   type PracticeTexts,
   type SavedExpression,
   type TrainingSession,
@@ -175,6 +178,23 @@ export class IndexedDbStorage
       }
     }
     return validValues
+  }
+
+  async listQuestionPracticeStates(ownerId: string): Promise<QuestionPracticeState[]> {
+    assertStorageKey(ownerId, 'Question practice owner')
+    const values = await this.getAll<unknown>(STORES.appMeta)
+    return values.flatMap((value) => {
+      const parsed = questionPracticeStateSchema.safeParse(value)
+      return parsed.success && parsed.data.ownerId === ownerId ? [parsed.data] : []
+    })
+  }
+
+  async saveQuestionPracticeState(state: QuestionPracticeState): Promise<void> {
+    const parsed = questionPracticeStateSchema.parse(state)
+    await this.put(STORES.appMeta, {
+      ...parsed,
+      id: questionPracticeStateId(parsed.ownerId, parsed.questionId),
+    })
   }
 
   async upsertExpression(expression: SavedExpression): Promise<void> {

@@ -51,6 +51,7 @@ const { cloudSession, runtimeFixture, syncConstructor, syncRun } = vi.hoisted(()
     practiceService: {
       listSessions: vi.fn().mockResolvedValue([]),
       listExpressions: vi.fn().mockResolvedValue([]),
+      listQuestionPracticeStates: vi.fn().mockResolvedValue([]),
     },
     personalMaterialService: {
       list: vi.fn().mockResolvedValue([]),
@@ -154,6 +155,7 @@ describe('App cloud sync integration', () => {
     })
     runtimeFixture.practiceService.listSessions.mockResolvedValue([])
     runtimeFixture.practiceService.listExpressions.mockResolvedValue([])
+    runtimeFixture.practiceService.listQuestionPracticeStates.mockResolvedValue([])
     runtimeFixture.personalMaterialService.list.mockResolvedValue([])
     runtimeFixture.storage.listImportedQuestions.mockResolvedValue([])
     runtimeFixture.storage.close.mockResolvedValue(undefined)

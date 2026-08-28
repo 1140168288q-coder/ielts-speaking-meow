@@ -207,7 +207,7 @@ export function buildLearnerContext(
         .join(' | '),
     )
   }
-  const context = lines.join('\n').slice(0, 1_200)
+  const context = lines.join('\n').slice(0, 1_900)
   return context
 }
 

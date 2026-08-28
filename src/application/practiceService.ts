@@ -11,6 +11,11 @@ import {
   type SavedExpression,
   type TrainingSession,
 } from '../domain/models'
+import {
+  questionPracticeStateId,
+  questionPracticeStateSchema,
+  type QuestionPracticeState,
+} from '../domain/questionPracticeState'
 import { analyzeSpeech } from '../domain/speechAnalysis'
 import type { LocalDataMaintenance, LocalStorage } from '../ports/storage'
 
@@ -206,6 +211,7 @@ export class PracticeService {
       updatedAt: this.now().toISOString(),
     })
     await this.localStorage.upsertSession(updated)
+    await this.setQuestionDone(session.questionId, true)
     return updated
   }
 
@@ -256,7 +262,28 @@ export class PracticeService {
       updatedAt: timestamp,
     })
     await this.localStorage.upsertSession(updated)
+    await this.setQuestionDone(session.questionId, true)
     return { session: updated, expression }
+  }
+
+  async listQuestionPracticeStates(): Promise<QuestionPracticeState[]> {
+    return this.localStorage.listQuestionPracticeStates(this.getCurrentUserId())
+  }
+
+  async setQuestionDone(
+    questionId: string,
+    isDone: boolean,
+  ): Promise<QuestionPracticeState> {
+    const ownerId = this.getCurrentUserId()
+    const state = questionPracticeStateSchema.parse({
+      id: questionPracticeStateId(ownerId, questionId),
+      ownerId,
+      questionId,
+      isDone,
+      updatedAt: this.now().toISOString(),
+    })
+    await this.localStorage.saveQuestionPracticeState(state)
+    return state
   }
 
   async listSessions(): Promise<TrainingSession[]> {

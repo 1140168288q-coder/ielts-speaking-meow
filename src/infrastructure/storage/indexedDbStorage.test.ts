@@ -1,5 +1,6 @@
 import { LOCAL_DEFAULT_USER_ID } from '../../domain/accounts'
 import type { SavedExpression, TrainingSession } from '../../domain/models'
+import type { QuestionPracticeState } from '../../domain/questionPracticeState'
 import { IndexedDbStorage } from './indexedDbStorage'
 
 const CREATED_AT = '2026-08-09T10:00:00.000+08:00'
@@ -49,6 +50,25 @@ afterEach(async () => {
 })
 
 describe('IndexedDbStorage', () => {
+  it('persists question practice states per local account', async () => {
+    const storage = createAdapter()
+    const state: QuestionPracticeState = {
+      id: 'question-practice:alice:p1-home',
+      ownerId: 'alice',
+      questionId: 'p1-home',
+      isDone: true,
+      updatedAt: UPDATED_AT,
+    }
+
+    await storage.saveQuestionPracticeState(state)
+    expect(await storage.listQuestionPracticeStates('alice')).toEqual([state])
+    expect(await storage.listQuestionPracticeStates('bob')).toEqual([])
+
+    await storage.close()
+    const reopened = createAdapter()
+    expect(await reopened.listQuestionPracticeStates('alice')).toEqual([state])
+  })
+
   it('round-trips practice texts including blank lines', async () => {
     const storage = createAdapter()
 

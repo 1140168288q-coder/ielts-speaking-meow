@@ -16,25 +16,12 @@ from ..config import Settings
 from ..errors import not_configured, provider_error
 from .http_client import raise_for_upstream, timeout_guard
 from .feedback_policy import validate_feedback_policy
+from .ielts_speaking_skill import IELTS_SPEAKING_SKILL
 from .verification import LastCallRecord
 
 logger = logging.getLogger(__name__)
 
-FEEDBACK_SYSTEM = (
-    "You are a friendly IELTS Speaking Tutor. Analyze only the answer text "
-    "the learner submits. Return JSON only and write all comments in Chinese. "
-    "Prioritize the 2-3 most important issues; do not over-correct everything. "
-    "Keep summary and problems short and actionable: summary at most 2 short "
-    "sentences; every problem is one action-first sentence of at most 30 "
-    "Chinese characters when possible. "
-    "When improving the answer, keep the learner's current level, voice and "
-    "speaking habits; never rewrite it into advanced English that is clearly "
-    "hard for them to imitate. Every reference answer must sound like natural "
-    "spoken English, not a memorized essay. "
-    "Never mention or evaluate pronunciation, speech rate, pauses, intonation "
-    "or any acoustic feature. Never give an IELTS band score or any "
-    "proficiency rating."
-)
+FEEDBACK_SYSTEM = IELTS_SPEAKING_SKILL
 
 ORGANIZE_SYSTEM = (
     "Extract IELTS Speaking questions from the supplied private material. "
@@ -74,10 +61,10 @@ class TextFeedback(BaseModel):
     """客户端与服务端共同约定的结构化反馈,不包含任何评分字段。"""
 
     summary: str = Field(min_length=1, max_length=500)
-    strengths: list[str] = Field(default_factory=list, max_length=3)
-    problems: list[str] = Field(min_length=2, max_length=3)
-    grammarSuggestions: list[str] = Field(default_factory=list, max_length=3)
-    vocabularySuggestions: list[str] = Field(default_factory=list, max_length=3)
+    strengths: list[str] = Field(default_factory=list, max_length=2)
+    problems: list[str] = Field(min_length=2, max_length=2)
+    grammarSuggestions: list[str] = Field(default_factory=list, max_length=2)
+    vocabularySuggestions: list[str] = Field(default_factory=list, max_length=2)
     improvedAnswer: str = Field(min_length=1, max_length=1_500)
     referenceAnswers: list[ReferenceAnswer] = Field(min_length=3, max_length=3)
 
@@ -127,14 +114,14 @@ class DeepSeekService:
                         "用中文写 0-2 条做得好的地方,不要硬凑"
                     ],
                     "problems": [
-                        "用中文写 2-3 条最优先的问题,按重要性排序,"
+                        "用中文写恰好 2 条最优先的问题,按重要性排序,"
                         "每条先给动作再给例子,一句话讲完"
                     ],
                     "grammarSuggestions": [
-                        "用中文写 0-3 条具体、可执行的语法建议,一条一个动作"
+                        "用中文写 0-2 条具体、可执行的语法建议,一条一个动作"
                     ],
                     "vocabularySuggestions": [
-                        "用中文写 0-3 条贴合用户水平的词汇建议,一条一个替换"
+                        "用中文写 0-2 条贴合用户水平的词汇建议,一条一个替换"
                     ],
                     "improvedAnswer": (
                         "保持用户原本想法、水平和表达习惯的优化版英文回答,"
@@ -166,6 +153,11 @@ class DeepSeekService:
                     "三个版本都必须像真实口语,不要写成作文或背诵范文",
                     "优先指出最重要的问题,不要一次纠完所有小错",
                     "修改表达时保持用户原本水平和表达习惯",
+                    "Part 1 重点是直接回答加一个理由或细节",
+                    "Part 2 按 cue points 和简单故事时间线展开,不要输出固定全文",
+                    "Part 3 使用观点、原因、例子,需要时补结果或比较",
+                    "summary 不超过 2 句,problems 必须恰好 2 条",
+                    "grammarSuggestions 和 vocabularySuggestions 各最多 2 条",
                     "不要评价发音、语速、停顿、语调或任何语音表现",
                     "不要给出 IELTS Band 分数、分数段或任何水平评分",
                 ],
@@ -177,12 +169,14 @@ class DeepSeekService:
                 "learnerContext": payload.get("learnerContext") or "",
                 "contextRules": [
                     "tutorContext 是 IELTS 教学原则,优先按其重点给建议,"
-                    "但不要长篇复述这些原则",
+                    "并按当前 Part 和题型主动应用,但不要长篇复述这些原则",
                     "learnerContext 是学习者的长期记忆聚合(练过次数、"
                     "近期重点、其本人可复用素材);如果其中素材适合本题,"
-                    "改进版和参考回答可自然沿用素材原句或短语,"
+                    "改进版和参考回答可主动、自然地沿用一到两处素材原句或短语,"
                     "但不要生硬粘贴,也不要把素材当作范文整段背诵",
+                    "当前题目和用户原回答始终优先;不得用上下文替用户虚构事实",
                     "若没有上下文,就按题目和答案正常分析",
+                    "answerDurationSeconds 仅是可选计时上下文,不得据此评价语速",
                     "永远不要评价 pronunciation、speech rate、pauses、"
                     "intonation 或任何语音表现",
                     "永远不要给 IELTS Band 分数、分数段或水平评分",

@@ -50,7 +50,7 @@ export interface MaterialQuestionOrganizer {
 export type MaterialSuggestionPayload = MaterialSuggestion
 
 export interface MaterialSuggestionRequest {
-  /** 本地聚合的练习轨迹摘要(≤1200 字符),只含本机已持久化数据。 */
+  /** 本地聚合的练习轨迹摘要(≤1900 字符),只含本机已持久化数据。 */
   memoryDigest: string
   /** 已有素材标题,用于让 AI 避免重复提炼。 */
   existingTitles: string[]

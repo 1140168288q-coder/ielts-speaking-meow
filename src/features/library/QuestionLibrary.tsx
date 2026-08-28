@@ -6,6 +6,11 @@ import {
   Shuffle,
   Upload,
 } from 'lucide-react'
+import {
+  filterPracticeQuestions,
+  pickRandomQuestion,
+  type QuestionDoneFilter,
+} from '../../domain/questionSelection'
 import type { Question } from '../../domain/models'
 import { EmptyState } from '../../app/components/EmptyState'
 
@@ -13,19 +18,25 @@ export function QuestionLibrary({
   initialPart,
   questions,
   bankMeta,
+  questionDoneById,
   onStart,
+  onQuestionDoneChange,
   onImport,
 }: {
   initialPart: 1 | 2 | 3
   questions: Question[]
   bankMeta: { seasonLabel: string; counts: { 1: number; 2: number; 3: number } }
+  questionDoneById: Record<string, boolean>
   onStart: (question: Question) => void
+  onQuestionDoneChange: (questionId: string, isDone: boolean) => void
   onImport: () => void
 }) {
   const [part, setPart] = useState<1 | 2 | 3>(initialPart)
   const [query, setQuery] = useState('')
   const [newOnly, setNewOnly] = useState(false)
   const [category, setCategory] = useState('all')
+  const [topic, setTopic] = useState('all')
+  const [doneFilter, setDoneFilter] = useState<QuestionDoneFilter>('all')
   const [visibleLimit, setVisibleLimit] = useState(20)
   const [showFollowUpsFor, setShowFollowUpsFor] = useState<string | null>(null)
   const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -33,18 +44,20 @@ export function QuestionLibrary({
   const categories = Array.from(
     new Set(partQuestions.map((question) => question.category ?? '导入题目')),
   )
-  const visiblePartQuestions = partQuestions.filter((question) => {
-    const matchesQuery =
-      normalizedQuery.length === 0 ||
-      question.topic.toLocaleLowerCase().includes(normalizedQuery) ||
-      question.prompt.toLocaleLowerCase().includes(normalizedQuery) ||
-      (question.category ?? '').toLocaleLowerCase().includes(normalizedQuery)
-    // 只隐藏明确的旧题;导入题没有 new/old 标记,仍然可见。
-    const matchesNew = !newOnly || question.isNew !== false
-    const matchesCategory = category === 'all' ||
-      (question.category ?? '导入题目') === category
-    return matchesQuery && matchesNew && matchesCategory
-  })
+  const topics = Array.from(new Set(partQuestions.map((question) => question.topic)))
+    .sort((left, right) => left.localeCompare(right))
+  const visiblePartQuestions = filterPracticeQuestions(
+    questions,
+    questionDoneById,
+    {
+      part,
+      topic,
+      done: doneFilter,
+      query: normalizedQuery,
+      category,
+      newOnly,
+    },
+  )
   const questionById = new Map(questions.map((question) => [question.id, question]))
   const visibleQuestions = visiblePartQuestions.slice(0, visibleLimit)
   const groups = groupQuestions(visibleQuestions)
@@ -53,9 +66,7 @@ export function QuestionLibrary({
   )
 
   const pickRandom = () => {
-    // eslint-disable-next-line react-hooks/purity -- 随机抽题只在用户点击时执行
-    const index = Math.floor(Math.random() * visiblePartQuestions.length)
-    const question = visiblePartQuestions[index]
+    const question = pickRandomQuestion(visiblePartQuestions)
     if (question) {
       onStart(question)
     }
@@ -92,6 +103,7 @@ export function QuestionLibrary({
             onClick={() => {
               setPart(value)
               setCategory('all')
+              setTopic('all')
               setVisibleLimit(20)
               setShowFollowUpsFor(null)
             }}
@@ -120,7 +132,18 @@ export function QuestionLibrary({
             }}
           />
         </label>
-        <div className="question-filter-chips" role="group" aria-label="主题分类">
+        <label className="question-topic-select">
+          <span>主题</span>
+          <select
+            aria-label="按主题筛选"
+            value={topic}
+            onChange={(event) => { setTopic(event.target.value); setVisibleLimit(20) }}
+          >
+            <option value="all">全部主题</option>
+            {topics.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <div className="question-filter-chips" role="group" aria-label="题目分类">
           <button
             type="button"
             className={category === 'all' ? 'active' : ''}
@@ -138,6 +161,23 @@ export function QuestionLibrary({
               onClick={() => { setCategory(item); setVisibleLimit(20) }}
             >
               {item}
+            </button>
+          ))}
+        </div>
+        <div className="question-filter-chips" role="group" aria-label="练习状态">
+          {([
+            ['all', '全部状态'],
+            ['undone', '仅未做'],
+            ['done', '仅已做'],
+          ] as const).map(([value, label]) => (
+            <button
+              type="button"
+              key={value}
+              className={doneFilter === value ? 'active' : ''}
+              aria-pressed={doneFilter === value}
+              onClick={() => { setDoneFilter(value); setVisibleLimit(20) }}
+            >
+              {label}
             </button>
           ))}
         </div>
@@ -177,9 +217,11 @@ export function QuestionLibrary({
                   question={question}
                   index={index}
                   questionById={questionById}
+                  isDone={questionDoneById[question.id] === true}
                   showFollowUps={showFollowUpsFor === question.id}
                   onToggleFollowUps={toggleFollowUps}
                   onStart={onStart}
+                  onToggleDone={onQuestionDoneChange}
                 />
               ))}
             </div>
@@ -206,16 +248,20 @@ function QuestionRow({
   question,
   index,
   questionById,
+  isDone,
   showFollowUps,
   onToggleFollowUps,
   onStart,
+  onToggleDone,
 }: {
   question: Question
   index: number
   questionById: Map<string, Question>
+  isDone: boolean
   showFollowUps: boolean
   onToggleFollowUps: (questionId: string) => void
   onStart: (question: Question) => void
+  onToggleDone: (questionId: string, isDone: boolean) => void
 }) {
   const followUpIds =
     question.part === 2 ? (question.relatedPart3Ids ?? []) : []
@@ -236,7 +282,7 @@ function QuestionRow({
           <small>
             {topicLabel}
             {' · '}
-            <QuestionStatus isNew={question.isNew} />
+            <QuestionStatus isNew={question.isNew} isDone={isDone} />
             {' · '}
             {difficultyLabel(question.difficulty)}
             {question.part === 2 ? ` · ${question.cuePoints.length} 个提示点` : ''}
@@ -248,6 +294,14 @@ function QuestionRow({
             {' · 开始练习 '}
             <ArrowRight aria-hidden="true" size={14} />
           </span>
+        </button>
+        <button
+          type="button"
+          className="question-row-done"
+          aria-pressed={isDone}
+          onClick={() => onToggleDone(question.id, !isDone)}
+        >
+          {isDone ? '标为未做' : '标为已做'}
         </button>
       </article>
       {followUps.length > 0 ? (
@@ -279,10 +333,17 @@ function QuestionRow({
   )
 }
 
-function QuestionStatus({ isNew }: { isNew: boolean | undefined }) {
-  if (isNew === true) return <b className="new-tag">新题</b>
-  if (isNew === false) return <span>保留题</span>
-  return <span>自定义</span>
+function QuestionStatus({
+  isNew,
+  isDone,
+}: {
+  isNew: boolean | undefined
+  isDone: boolean
+}) {
+  const doneLabel = isDone ? <b className="done-tag">已做</b> : <span>未做</span>
+  if (isNew === true) return <>{doneLabel} · <b className="new-tag">新题</b></>
+  if (isNew === false) return <>{doneLabel} · <span>保留题</span></>
+  return <>{doneLabel} · <span>自定义</span></>
 }
 
 function EmptyQuestionResult({

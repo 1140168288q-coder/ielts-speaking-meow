@@ -4,6 +4,7 @@ import {
   type SavedExpression,
   type TrainingSession,
 } from '../domain/models'
+import type { QuestionPracticeState } from '../domain/questionPracticeState'
 import type { PersonalMaterial } from '../domain/personalMaterials'
 import type { LocalStorage } from '../ports/storage'
 import { PracticeService } from './practiceService'
@@ -13,11 +14,13 @@ const NOW = new Date('2026-08-09T02:00:00.000Z')
 interface MemoryBacking {
   sessions: Map<string, TrainingSession>
   expressions: Map<string, SavedExpression>
+  states?: Map<string, QuestionPracticeState>
 }
 
 class MemoryPersistence implements LocalStorage {
   sessions: Map<string, TrainingSession>
   expressions: Map<string, SavedExpression>
+  states: Map<string, QuestionPracticeState>
   materials = new Map<string, PersonalMaterial>()
   texts: PracticeTexts | null = null
   failNextSessionWrite: Error | null = null
@@ -25,6 +28,7 @@ class MemoryPersistence implements LocalStorage {
   constructor(backing: MemoryBacking = { sessions: new Map(), expressions: new Map() }) {
     this.sessions = backing.sessions
     this.expressions = backing.expressions
+    this.states = backing.states ?? new Map<string, QuestionPracticeState>()
   }
 
   upsertSession(session: TrainingSession): Promise<void> {
@@ -46,6 +50,19 @@ class MemoryPersistence implements LocalStorage {
     return Promise.resolve(
       [...this.sessions.values()].map((session) => structuredClone(session)),
     )
+  }
+
+  listQuestionPracticeStates(ownerId: string): Promise<QuestionPracticeState[]> {
+    return Promise.resolve(
+      [...this.states.values()]
+        .filter((state) => state.ownerId === ownerId)
+        .map((state) => structuredClone(state)),
+    )
+  }
+
+  saveQuestionPracticeState(state: QuestionPracticeState): Promise<void> {
+    this.states.set(state.id, structuredClone(state))
+    return Promise.resolve()
   }
 
   upsertExpression(expression: SavedExpression): Promise<void> {
@@ -307,6 +324,26 @@ describe('PracticeService V1.7 text-answer flow', () => {
 
     expect(completed.status).toBe('completed')
     expect(storage.expressions.size).toBe(0)
+    await expect(service.listQuestionPracticeStates()).resolves.toMatchObject([
+      { questionId: 'p1-hobbies', isDone: true },
+    ])
+  })
+
+  it('allows an account to manually override its own question state', async () => {
+    const storage = new MemoryPersistence()
+    const alice = createService(storage, () => 'alice')
+    const bob = createService(storage, () => 'bob')
+
+    await alice.setQuestionDone('p1-hobbies', true)
+    await alice.setQuestionDone('p1-hobbies', false)
+    await bob.setQuestionDone('p1-hobbies', true)
+
+    await expect(alice.listQuestionPracticeStates()).resolves.toMatchObject([
+      { ownerId: 'alice', questionId: 'p1-hobbies', isDone: false },
+    ])
+    await expect(bob.listQuestionPracticeStates()).resolves.toMatchObject([
+      { ownerId: 'bob', questionId: 'p1-hobbies', isDone: true },
+    ])
   })
 
   it('keeps expression CRUD local and marks reviews', async () => {

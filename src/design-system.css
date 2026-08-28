@@ -634,6 +634,54 @@ select:focus-visible {
   background: var(--ds-surface-raised);
 }
 
+.question-topic-select {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--ds-text-soft);
+  font-size: 11px;
+  font-weight: 740;
+}
+
+.question-topic-select select {
+  min-height: 38px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--ds-line);
+  border-radius: 10px;
+  color: var(--ds-text);
+  background: var(--ds-surface-raised);
+}
+
+.question-row {
+  grid-template-columns: 45px minmax(0, 1fr) 86px;
+}
+
+.question-row-done {
+  align-self: center;
+  min-height: 34px;
+  margin-right: 10px;
+  padding: 6px 5px !important;
+  border: 1px solid var(--ds-line) !important;
+  border-radius: 9px;
+  color: var(--ds-text-soft) !important;
+  background: var(--ds-surface) !important;
+  font-size: 10px;
+  font-weight: 740;
+  text-align: center !important;
+}
+
+.question-row-done[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ds-primary) 35%, var(--ds-line)) !important;
+  color: var(--ds-primary-strong) !important;
+  background: var(--ds-primary-soft) !important;
+}
+
+.done-tag {
+  color: var(--ds-primary) !important;
+}
+
 .question-search input {
   width: 100%;
   min-width: 0;

@@ -14,6 +14,7 @@ import type {
   SavedExpression,
   TrainingSession,
 } from '../domain/models'
+import type { QuestionPracticeState } from '../domain/questionPracticeState'
 import type { PersonalMaterial } from '../domain/personalMaterials'
 import type {
   CloudSyncStorage,
@@ -244,6 +245,7 @@ describe('AccountCloudSyncService', () => {
 class MemoryStorage implements LocalStorage, CloudSyncStorage {
   readonly sessions = new Map<string, TrainingSession>()
   readonly expressions = new Map<string, SavedExpression>()
+  readonly questionStates = new Map<string, QuestionPracticeState>()
   readonly materials = new Map<string, PersonalMaterial>()
   readonly deletedSessions: string[] = []
   readonly deletedExpressions: string[] = []
@@ -264,6 +266,15 @@ class MemoryStorage implements LocalStorage, CloudSyncStorage {
     return Promise.resolve(
       [...this.sessions.values()].map((value) => structuredClone(value)),
     )
+  }
+  listQuestionPracticeStates(ownerId: string): Promise<QuestionPracticeState[]> {
+    return Promise.resolve(
+      [...this.questionStates.values()].filter((state) => state.ownerId === ownerId),
+    )
+  }
+  saveQuestionPracticeState(state: QuestionPracticeState): Promise<void> {
+    this.questionStates.set(state.id, structuredClone(state))
+    return Promise.resolve()
   }
   deleteSessionWithAudio(
     id: string,

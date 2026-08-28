@@ -91,6 +91,7 @@ export function App() {
   )
   const [session, setSession] = useState<TrainingSession | null>(null)
   const [sessions, setSessions] = useState<TrainingSession[]>([])
+  const [questionDoneById, setQuestionDoneById] = useState<Record<string, boolean>>({})
   const [expressions, setExpressions] = useState<SavedExpression[]>([])
   const [personalMaterials, setPersonalMaterials] = useState<PersonalMaterial[]>([])
   const [materialCandidates, setMaterialCandidates] = useState<
@@ -123,13 +124,23 @@ export function App() {
 
   const refreshLibrary = useCallback(async () => {
     const ownerId = runtime.accountService.getCurrentUserId()
-    const [nextSessions, nextExpressions, nextPersonalMaterials, nextImportedQuestions] = await Promise.all([
+    const [nextSessions, nextExpressions, nextPersonalMaterials, nextImportedQuestions, nextQuestionStates] = await Promise.all([
       runtime.practiceService.listSessions(),
       runtime.practiceService.listExpressions(),
       runtime.personalMaterialService.list({ includeArchived: true }),
       runtime.storage.listImportedQuestions(ownerId),
+      runtime.practiceService.listQuestionPracticeStates(),
     ])
     setSessions(nextSessions)
+    const explicitQuestionStates = new Map(
+      nextQuestionStates.map((state) => [state.questionId, state.isDone]),
+    )
+    for (const item of nextSessions) {
+      if (item.status === 'completed' && !explicitQuestionStates.has(item.questionId)) {
+        explicitQuestionStates.set(item.questionId, true)
+      }
+    }
+    setQuestionDoneById(Object.fromEntries(explicitQuestionStates))
     setExpressions(nextExpressions)
     setPersonalMaterials(nextPersonalMaterials)
     setImportedQuestions(
@@ -303,6 +314,15 @@ export function App() {
       ...current.filter((item) => item.id !== nextSession.id),
     ])
     void refreshLibrary().catch(() => undefined)
+  }
+
+  const handleQuestionDoneChange = async (questionId: string, isDone: boolean) => {
+    try {
+      const state = await runtime.practiceService.setQuestionDone(questionId, isDone)
+      setQuestionDoneById((current) => ({ ...current, [state.questionId]: state.isDone }))
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : '题目状态保存失败。')
+    }
   }
 
   const deleteSession = async (sessionId: string) => {
@@ -546,7 +566,11 @@ export function App() {
             initialPart={libraryPart}
             questions={allQuestions}
             bankMeta={questionData.questionBankMeta}
+            questionDoneById={questionDoneById}
             onStart={(question) => void startQuestion(question)}
+            onQuestionDoneChange={(questionId, isDone) =>
+              void handleQuestionDoneChange(questionId, isDone)
+            }
             onImport={() => {
               rememberBackOrigin('imports')
               navigateSafely('imports')

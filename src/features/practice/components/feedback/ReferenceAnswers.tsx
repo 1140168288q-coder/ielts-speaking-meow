@@ -67,14 +67,8 @@ export function ReferenceRecap({
   return (
     <section className="reference-recap-card">
       <p className="eyebrow">上一轮参考</p>
-      <h2>回答前可随时试听优化版和 3 个参考回答</h2>
+      <h2>回答前可随时试听两个参考版本</h2>
       <div className="reference-recap-actions">
-        <TtsPlayButton
-          label="优化答案"
-          playingLabel="停止"
-          playing={playingKey === `tts:recap:improved:${feedback.improvedAnswer}`}
-          onClick={() => onToggle(`tts:recap:improved:${feedback.improvedAnswer}`, feedback.improvedAnswer)}
-        />
         {feedback.referenceAnswers.map((reference, index) => {
           const key = `tts:recap:reference:${index}:${reference.text}`
           return (

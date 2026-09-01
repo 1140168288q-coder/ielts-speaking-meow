@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { isoDateTimeSchema } from './models'
+import { ieltsPartSchema, isoDateTimeSchema } from './models'
 
 const nonEmptyText = (maximumLength: number) =>
   z.string().trim().min(1).max(maximumLength)
@@ -30,6 +30,7 @@ export const personalMaterialSchema = z
     title: nonEmptyText(160),
     content: nonEmptyText(5_000),
     kind: personalMaterialKindSchema,
+    sourcePart: z.union([ieltsPartSchema, z.null()]).default(null),
     topicTags: z.array(nonEmptyText(80)).max(20),
     questionIds: z.array(nonEmptyText(120)).max(100),
     sourceSessionId: nonEmptyText(120).nullable(),
@@ -58,6 +59,7 @@ export const materialSuggestionSchema = z.object({
   content: nonEmptyText(800),
   kind: personalMaterialKindSchema,
   topicTags: z.array(nonEmptyText(40)).max(6),
+  sourcePart: z.union([ieltsPartSchema, z.null()]).default(null),
 })
 
 export const materialSuggestionListSchema = z

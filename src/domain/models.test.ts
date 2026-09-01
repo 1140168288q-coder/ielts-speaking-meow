@@ -58,15 +58,18 @@ describe('AI feedback schema', () => {
   const feedback = {
     summary: '回答切题，重点改进过去时态。',
     strengths: ['有具体例子。'],
-    problems: ['过去时态混用。'],
+    problems: ['过去时态混用。', '结尾还可以补一个具体细节。'],
     grammarSuggestions: ['先想好动词过去式。'],
     vocabularySuggestions: [],
-    improvedAnswer: 'I like reading books because they help me relax.',
     referenceAnswers: [
-      { label: '简单自然版', text: 'I like reading books because they help me relax.' },
+      { label: '简单优化版', text: 'I like reading books because they help me relax.' },
       { label: '自然提升版', text: 'I enjoy reading books because they help me unwind.' },
-      { label: '另一种表达版', text: 'Reading is my favourite way to relax.' },
     ],
+    naturalUpgradeSuggestions: {
+      addableContent: [],
+      advancedChanges: ['可以在结尾补一个个人细节。'],
+    },
+    answerFramework: [{ label: '直接回答', template: 'I usually ___ because ___.' }],
   }
 
   it('accepts the V1.7 text-analysis contract', () => {
@@ -74,11 +77,11 @@ describe('AI feedback schema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('rejects more than three reference answers or suggestion items', () => {
+  it('rejects more than two prioritized problems or reference answers', () => {
     expect(
       aiFeedbackSchema.safeParse({
         ...feedback,
-        problems: ['one', 'two', 'three', 'four'],
+        problems: ['one', 'two', 'three'],
       }).success,
     ).toBe(false)
     expect(
@@ -86,18 +89,18 @@ describe('AI feedback schema', () => {
         ...feedback,
         referenceAnswers: [
           ...feedback.referenceAnswers,
-          { label: '第四个版本', text: 'A fourth version.' },
+          { label: '第三个版本', text: 'A third version.' },
         ],
       }).success,
     ).toBe(false)
   })
 
 
-  it('requires exactly the three product reference versions in order', () => {
+  it('requires exactly the two product reference versions in order', () => {
     expect(
       aiFeedbackSchema.safeParse({
         ...feedback,
-        referenceAnswers: feedback.referenceAnswers.slice(0, 2),
+        referenceAnswers: [feedback.referenceAnswers[0]!],
       }).success,
     ).toBe(false)
     expect(

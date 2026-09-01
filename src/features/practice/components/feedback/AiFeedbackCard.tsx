@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AiFeedback } from '../../../../domain'
-import { ReferenceAnswerCard, TtsSection } from './ReferenceAnswers'
+import { ReferenceAnswerCard } from './ReferenceAnswers'
 
 export function AiFeedbackCard({
   feedback,
@@ -75,21 +75,11 @@ export function AiFeedbackCard({
         </details>
       ) : null}
 
-      <details className="improved-answer-details" open={detail === 'expanded'}>
-        <summary>优化答案（保持你的水平，不是范文）</summary>
-        <TtsSection
-          title="优化答案"
-          text={feedback.improvedAnswer}
-          playingKey={playingKey}
-          onToggle={onToggle}
-        />
-      </details>
-
       {references.length > 0 ? (
         <section className="reference-answers">
           <div className="reference-heading">
-            <p className="eyebrow">3 个参考回答</p>
-            <h3>逐个看，不要一次读三篇</h3>
+            <p className="eyebrow">2 个参考回答</p>
+            <h3>先看简单优化，再看自然提升</h3>
           </div>
           <div className="reference-tabs" role="tablist" aria-label="参考回答版本">
             {references.map((reference, index) => (
@@ -113,6 +103,36 @@ export function AiFeedbackCard({
             />
           ) : null}
         </section>
+      ) : null}
+
+      {feedback.naturalUpgradeSuggestions.addableContent.length > 0 ||
+      feedback.naturalUpgradeSuggestions.advancedChanges.length > 0 ? (
+        <details className="feedback-details natural-upgrade" open={detail === 'expanded'}>
+          <summary>自然提升版的补充建议</summary>
+          {feedback.naturalUpgradeSuggestions.addableContent.length > 0 ? (
+            <div>
+              <strong>可添加内容</strong>
+              <ul>
+                {feedback.naturalUpgradeSuggestions.addableContent.map((item, index) => (
+                  <li key={`addable-${index}`}>
+                    {item.content}
+                    {item.replaceable ? '（示例内容，可替换）' : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {feedback.naturalUpgradeSuggestions.advancedChanges.length > 0 ? (
+            <div>
+              <strong>进阶修改建议</strong>
+              <ul>
+                {feedback.naturalUpgradeSuggestions.advancedChanges.map((item, index) => (
+                  <li key={`advanced-${index}`}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </details>
       ) : null}
     </section>
   )

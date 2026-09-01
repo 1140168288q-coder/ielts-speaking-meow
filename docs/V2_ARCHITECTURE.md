@@ -17,7 +17,7 @@
 → 可选手动计时
 → 本地规则 + 教学 RAG + 该账号长期 Memory
 → 精简 AI 反馈（优先 2–3 点）
-→ 对照、试听优化答案和 3 个参考回答
+→ 对照、试听简单优化版和自然提升版
 → 插入自己的可复用素材
 → 第二次回答
 → 保存值得再次说出口的表达/素材
@@ -148,9 +148,10 @@ Memory 不另存一份容易失真的“用户画像”，而是每次从当前�
 隐私偏好：
 
 - `memoryEnabled=false`：训练页不构建长期 Memory；
-- `sharePersonalMaterialsWithAi=false`（默认）：个人素材可在本地显示和插入答案，
-  但不进入发送给 AI 的 learnerContext；
-- 用户显式开启后，也只发送当前题最相关的少量素材；
+- `autoMatchPersonalMaterialsWithAi=true`（默认）：AI 分析时自动匹配当前题最相关的
+  个人素材；用户关闭后仍可在本地查看和手动插入素材；
+- 统一 Memory 作为个性化大脑：优先当前 Part/主题，其他 Part 只有确认适用、相关且
+  不冲突时才加入上下文；UI、保存和云同步仍保留每条数据的 sourcePart；
 - 从不发送其他账号、完整历史、原始导入文件、历史录音、TTS 缓存或密钥；
 - learnerContext 有明确长度预算，避免提示词膨胀和隐私过度收集。
 
@@ -165,9 +166,9 @@ Memory 不另存一份容易失真的“用户画像”，而是每次从当前�
 - `problems`（2–3 个最值得改的点）；
 - `grammarSuggestions`；
 - `vocabularySuggestions`；
-- `improvedAnswer`；
-- 恰好三个 `referenceAnswers`，标签顺序固定为：
-  简单自然版 / 自然提升版 / 另一种表达版。
+- 恰好两个 `referenceAnswers`，标签顺序固定为：简单优化版 / 自然提升版；
+- `naturalUpgradeSuggestions`（可添加内容、进阶修改建议）和 `answerFramework`；
+- 第二次回答使用独立分析契约，只返回真实错误的完整句修正和待确认 Memory 候选。
 
 服务端还会做内容策略校验：
 

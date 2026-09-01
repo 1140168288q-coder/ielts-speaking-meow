@@ -123,6 +123,7 @@ describe('local progress', () => {
       questionId: 'p1-home-001',
       sessionId: 'session-1',
       sourceAttempt: 2,
+      sourcePart: 1,
       createdAt: '2026-08-01T08:00:00.000Z',
     }
     const queue = selectExpressionReviewQueue(

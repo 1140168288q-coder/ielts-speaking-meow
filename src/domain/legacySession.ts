@@ -38,6 +38,17 @@ const legacyRevisionsSchema = z
   })
   .passthrough()
 
+const legacyReferenceAnswersSchema = z
+  .array(
+    z
+      .object({
+        label: z.string().optional(),
+        text: z.string().trim().min(1),
+      })
+      .passthrough(),
+  )
+  .optional()
+
 const legacyAiFeedbackSchema = z
   .object({
     keyIssues: z.array(legacyKeyIssueSchema).optional(),
@@ -45,6 +56,8 @@ const legacyAiFeedbackSchema = z
     revisions: legacyRevisionsSchema.optional(),
     summary: legacySummarySchema.optional(),
     versions: z.array(answerVersionOptionSchema).optional(),
+    improvedAnswer: z.string().trim().min(1).optional(),
+    referenceAnswers: legacyReferenceAnswersSchema,
   })
   .passthrough()
 
@@ -78,6 +91,7 @@ export function normalizeStoredTrainingSession(
   const record = value as Record<string, unknown>
   const migrated: Record<string, unknown> = {
     ...record,
+    part: inferPart(record.questionId),
     aiFeedback: migrateLegacyAiFeedback(legacy.data.aiFeedback),
   }
   const parsed = trainingSessionSchema.safeParse(migrated)
@@ -99,7 +113,7 @@ function migrateLegacyAiFeedback(value: unknown): AiFeedback {
   const fallbackProblem = legacy.summary?.problem ?? ''
   const problems =
     allProblems.length > 0
-      ? allProblems.slice(0, 3)
+      ? allProblems.slice(0, 2)
       : fallbackProblem
         ? [fallbackProblem]
         : ['这次回答还有一些可以改进的地方。']
@@ -111,13 +125,18 @@ function migrateLegacyAiFeedback(value: unknown): AiFeedback {
     .map((part) => part.trim())
     .filter(Boolean)
     .join(' ')
-  const improvedAnswer =
-    legacy.revisions?.naturalVersion ||
+  const simpleAnswer =
     legacy.revisions?.minimalFix ||
-    versions[1]?.text ||
+    legacy.improvedAnswer ||
     versions[0]?.text ||
-    legacy.revisions?.stretchVersion ||
+    legacy.referenceAnswers?.[0]?.text ||
+    legacy.revisions?.naturalVersion ||
     ''
+  const naturalAnswer =
+    legacy.revisions?.naturalVersion ||
+    versions[1]?.text ||
+    legacy.referenceAnswers?.[1]?.text ||
+    simpleAnswer
 
   return aiFeedbackSchema.parse({
     summary:
@@ -134,13 +153,32 @@ function migrateLegacyAiFeedback(value: unknown): AiFeedback {
       .map((issue) => issue.action ?? issue.observation ?? '')
       .filter(Boolean)
       .slice(0, 3),
-    improvedAnswer:
-      improvedAnswer.length > 0
-        ? improvedAnswer
-        : 'Keep your original answer and apply the suggestions above.',
-    referenceAnswers: versions.map((version, index) => ({
-      label: ['简单自然版', '自然提升版', '另一种表达版'][index] ?? '另一种表达版',
-      text: version.text,
-    })),
+    referenceAnswers: [
+      {
+        label: '简单优化版',
+        text:
+          simpleAnswer.length > 0
+            ? simpleAnswer
+            : 'Keep your original answer and apply the suggestions above.',
+      },
+      {
+        label: '自然提升版',
+        text:
+          naturalAnswer.length > 0
+            ? naturalAnswer
+            : 'Keep your original answer and add one clear supporting detail.',
+      },
+    ],
+    naturalUpgradeSuggestions: {
+      addableContent: [],
+      advancedChanges: (legacy.secondAttemptTips ?? []).slice(0, 3),
+    },
+    answerFramework: [],
   })
+}
+
+function inferPart(questionId: unknown): 1 | 2 | 3 | null {
+  if (typeof questionId !== 'string') return null
+  const match = /^p([123])-/u.exec(questionId)
+  return match === null ? null : Number(match[1]) as 1 | 2 | 3
 }

@@ -15,7 +15,10 @@ from pydantic import BaseModel, Field
 from ..config import Settings
 from ..errors import not_configured, provider_error
 from .http_client import raise_for_upstream, timeout_guard
-from .feedback_policy import validate_feedback_policy
+from .feedback_policy import (
+    validate_feedback_policy,
+    validate_second_attempt_policy,
+)
 from .ielts_speaking_skill import IELTS_SPEAKING_SKILL
 from .verification import LastCallRecord
 
@@ -45,6 +48,15 @@ MATERIAL_SUGGEST_SYSTEM = (
     "essay."
 )
 
+SECOND_ATTEMPT_SYSTEM = (
+    "You are an IELTS Speaking tutor reviewing a learner's second text answer. "
+    "Return JSON only. Apply simple optimization only: report complete corrected "
+    "sentences with real grammar, collocation or clear naturalness errors, and "
+    "extract explicit personal facts for the learner to confirm as Memory. Do not "
+    "use RAG, previous answers, existing Memory or personal materials. Never invent "
+    "facts, scores or speech-performance claims."
+)
+
 MAX_MATERIAL_DIGEST_CHARACTERS = 4_000
 
 MAX_AI_IMPORT_CHARACTERS = 60_000
@@ -57,6 +69,23 @@ class ReferenceAnswer(BaseModel):
     text: str = Field(min_length=1, max_length=1_500)
 
 
+class NaturalUpgradeSuggestion(BaseModel):
+    content: str = Field(min_length=1, max_length=500)
+    source: Literal["memory", "personal_material", "rag", "ai_example"]
+    sourcePart: Literal[1, 2, 3, "unclassified"] | None
+    replaceable: bool
+
+
+class NaturalUpgradeSuggestions(BaseModel):
+    addableContent: list[NaturalUpgradeSuggestion] = Field(max_length=4)
+    advancedChanges: list[str] = Field(max_length=3)
+
+
+class AnswerFrameworkItem(BaseModel):
+    label: str = Field(min_length=1, max_length=120)
+    template: str = Field(min_length=1, max_length=320)
+
+
 class TextFeedback(BaseModel):
     """客户端与服务端共同约定的结构化反馈,不包含任何评分字段。"""
 
@@ -65,8 +94,28 @@ class TextFeedback(BaseModel):
     problems: list[str] = Field(min_length=2, max_length=2)
     grammarSuggestions: list[str] = Field(default_factory=list, max_length=2)
     vocabularySuggestions: list[str] = Field(default_factory=list, max_length=2)
-    improvedAnswer: str = Field(min_length=1, max_length=1_500)
-    referenceAnswers: list[ReferenceAnswer] = Field(min_length=3, max_length=3)
+    referenceAnswers: list[ReferenceAnswer] = Field(min_length=2, max_length=2)
+    naturalUpgradeSuggestions: NaturalUpgradeSuggestions
+    answerFramework: list[AnswerFrameworkItem] = Field(max_length=6)
+
+
+class CorrectedSentence(BaseModel):
+    original: str = Field(min_length=1, max_length=1_000)
+    corrected: str = Field(min_length=1, max_length=1_000)
+    reason: str = Field(min_length=1, max_length=320)
+
+
+class MemoryCandidate(BaseModel):
+    content: str = Field(min_length=1, max_length=320)
+    kind: Literal["person", "place", "experience", "preference", "opinion", "other"]
+    topicTags: list[str] = Field(max_length=12)
+    sourceSentence: str = Field(min_length=1, max_length=500)
+    sourcePart: Literal[1, 2, 3]
+
+
+class SecondAttemptFeedback(BaseModel):
+    correctedSentences: list[CorrectedSentence] = Field(max_length=10)
+    memoryCandidates: list[MemoryCandidate] = Field(max_length=10)
 
 
 class ImportQuestion(BaseModel):
@@ -88,6 +137,7 @@ class MaterialSuggestionItem(BaseModel):
     content: str = Field(min_length=1, max_length=800)
     kind: Literal["person", "place", "experience", "object", "opinion"]
     topicTags: list[str] = Field(default_factory=list, max_length=6)
+    sourcePart: Literal[1, 2, 3] | None = None
 
 
 class MaterialSuggestionList(BaseModel):
@@ -123,17 +173,29 @@ class DeepSeekService:
                     "vocabularySuggestions": [
                         "用中文写 0-2 条贴合用户水平的词汇建议,一条一个替换"
                     ],
-                    "improvedAnswer": (
-                        "保持用户原本想法、水平和表达习惯的优化版英文回答,"
-                        "不要突然变成明显难以模仿的高级英语"
-                    ),
                     "referenceAnswers": [
                         {
-                            "label": (
-                                "固定使用:简单自然版 / 自然提升版 / 另一种表达版"
-                            ),
-                            "text": "自然口语化的英文参考回答,不是作文或背诵范文",
+                            "label": "简单优化版",
+                            "text": "只修正用户原回答,不增加新事实",
+                        },
+                        {
+                            "label": "自然提升版",
+                            "text": "结合适用的 Memory、个人素材、RAG 和可替换示例",
                         }
+                    ],
+                    "naturalUpgradeSuggestions": {
+                        "addableContent": [
+                            {
+                                "content": "可添加的理由、例子或细节",
+                                "source": "memory | personal_material | rag | ai_example",
+                                "sourcePart": "来源 Part 或 unclassified/null",
+                                "replaceable": True,
+                            }
+                        ],
+                        "advancedChanges": ["结构或自然表达建议"],
+                    },
+                    "answerFramework": [
+                        {"label": "中文提示", "template": "从两个参考版本提炼的英文句子开头和可替换槽位,例如 My hometown is [city]."}
                     ],
                 },
                 "analysisDimensions": [
@@ -145,12 +207,12 @@ class DeepSeekService:
                     "content development",
                 ],
                 "rules": [
-                    "referenceAnswers 必须恰好 3 个,label 固定依次为:"
-                    "简单自然版、自然提升版、另一种表达版",
-                    "简单自然版:最接近用户原回答,用户最容易直接模仿",
-                    "自然提升版:词汇和句型稍有提升,作为主要推荐版本",
-                    "另一种表达版:换一种思路或口语风格,但难度不要明显高于用户当前水平",
-                    "三个版本都必须像真实口语,不要写成作文或背诵范文",
+                    "referenceAnswers 必须恰好 2 个,label 固定依次为:"
+                    "简单优化版、自然提升版",
+                    "简单优化版:只修正用户原回答,不增加新事实",
+                    "自然提升版:优先使用适用的 Memory,其次使用匹配个人素材和 RAG,"
+                    "必要时可补充少量明确标记为可替换的 AI 示例",
+                    "两个版本都必须像真实口语,不要写成作文或背诵范文",
                     "优先指出最重要的问题,不要一次纠完所有小错",
                     "修改表达时保持用户原本水平和表达习惯",
                     "Part 1 重点是直接回答加一个理由或细节",
@@ -170,11 +232,13 @@ class DeepSeekService:
                 "contextRules": [
                     "tutorContext 是 IELTS 教学原则,优先按其重点给建议,"
                     "并按当前 Part 和题型主动应用,但不要长篇复述这些原则",
-                    "learnerContext 是学习者的长期记忆聚合(练过次数、"
-                    "近期重点、其本人可复用素材);如果其中素材适合本题,"
-                    "改进版和参考回答可主动、自然地沿用一到两处素材原句或短语,"
-                    "但不要生硬粘贴,也不要把素材当作范文整段背诵",
-                    "当前题目和用户原回答始终优先;不得用上下文替用户虚构事实",
+                    "learnerContext 是统一的个性化 Memory 大脑,其中包含带来源 Part 的"
+                    "候选记忆、个人语料和个人素材;当前 Part 和当前主题优先,"
+                    "其他 Part 只有在明确相关、不冲突且不偏题时才可使用",
+                    "匹配到的个人素材如果确实适合自然提升版,应自然加入;不适合则忽略",
+                    "当前题目和用户原回答始终优先;简单优化版不得用上下文新增事实",
+                    "自然提升版可以添加少量 AI 示例,但必须在 addableContent 中标记为可替换",
+                    "answerFramework 必须基于两个参考版本的共同结构提炼,只写可练习的句子开头和槽位,不要复制完整答案",
                     "若没有上下文,就按题目和答案正常分析",
                     "answerDurationSeconds 仅是可选计时上下文,不得据此评价语速",
                     "永远不要评价 pronunciation、speech rate、pauses、"
@@ -185,6 +249,48 @@ class DeepSeekService:
             ensure_ascii=False,
         )
         return await self._complete_validated(FEEDBACK_SYSTEM, user, TextFeedback)
+
+    async def get_second_attempt_feedback(self, payload: dict) -> dict:
+        user = json.dumps(
+            {
+                "task": "review-ielts-speaking-second-attempt",
+                "requiredShape": {
+                    "correctedSentences": [
+                        {
+                            "original": "用户确实出错的完整原句",
+                            "corrected": "按简单优化标准修正后的完整句子",
+                            "reason": "简短中文说明",
+                        }
+                    ],
+                    "memoryCandidates": [
+                        {
+                            "content": "用户明确说出的个人事实或观点",
+                            "kind": "person | place | experience | preference | opinion | other",
+                            "topicTags": ["简短标签"],
+                            "sourceSentence": "对应英文原句",
+                            "sourcePart": "当前 Part",
+                        }
+                    ],
+                },
+                "rules": [
+                    "只返回确实有语法、搭配、用词或明显不自然问题的完整句子",
+                    "正确但可以更高级的句子不要返回",
+                    "如果没有明确错误,correctedSentences 返回空数组",
+                    "不得使用 RAG、第一次回答、参考答案、已有 Memory 或个人素材",
+                    "memoryCandidates 只能提取答案中明确出现的真实个人信息",
+                    "不得推测或虚构事实,不得把模板内容当作 Memory",
+                    "所有 Memory 候选必须由用户确认后才能保存",
+                    "不得评价发音、语速、停顿、语调或给出任何分数",
+                ],
+                "part": payload.get("part"),
+                "question": payload.get("question"),
+                "answer": payload.get("answer"),
+            },
+            ensure_ascii=False,
+        )
+        return await self._complete_validated(
+            SECOND_ATTEMPT_SYSTEM, user, SecondAttemptFeedback
+        )
 
     async def organize_questions(self, fileName: str, extractedText: str) -> list[dict]:
         user = json.dumps(
@@ -214,6 +320,7 @@ class DeepSeekService:
         memoryDigest: str,
         existingTitles: list[str],
         maxCount: int = 4,
+        targetPart: int | None = None,
     ) -> list[dict]:
         max_count = max(1, min(6, maxCount))
         user = json.dumps(
@@ -237,7 +344,9 @@ class DeepSeekService:
                     "只能归纳/泛化 digest 中已有的主题,不得虚构具体人物、地点或事件细节",
                     "不要重复 existingTitles 已覆盖的话题",
                     "content 像教练写的便签,引导用户补全自己的真实细节",
+                    "优先整理 targetPart 的信息;其他 Part 只有明确相关时才可使用",
                 ],
+                "targetPart": targetPart,
                 "memoryDigest": memoryDigest[:MAX_MATERIAL_DIGEST_CHARACTERS],
                 "existingTitles": existingTitles[:50],
             },
@@ -347,6 +456,8 @@ class DeepSeekService:
             result = validated.model_dump(mode="json")
             if schema is TextFeedback:
                 validate_feedback_policy(result)
+            elif schema is SecondAttemptFeedback:
+                validate_second_attempt_policy(result)
         except Exception:
             logger.warning("DeepSeek output failed schema validation")
             raise provider_error("Text AI 返回结构不完整,已保留本地结果。")

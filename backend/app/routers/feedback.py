@@ -26,6 +26,12 @@ class FeedbackPayload(BaseModel):
     learnerContext: str = Field(default="", max_length=2_000)
 
 
+class SecondAttemptFeedbackPayload(BaseModel):
+    part: int = Field(ge=1, le=3)
+    question: dict
+    answer: str = Field(min_length=1, max_length=10_000)
+
+
 class OrganizePayload(BaseModel):
     fileName: str = Field(default="material", max_length=255)
     extractedText: str = Field(max_length=60_000)
@@ -35,6 +41,7 @@ class MaterialSuggestPayload(BaseModel):
     memoryDigest: str = Field(min_length=1, max_length=4_000)
     existingTitles: list[str] = Field(default_factory=list, max_length=50)
     maxCount: int = Field(default=4, ge=1, le=6)
+    targetPart: int | None = Field(default=None, ge=1, le=3)
 
 
 async def consume_feature(
@@ -70,6 +77,22 @@ async def feedback(
         raise not_configured("DeepSeek(Text AI)")
     await consume_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
     return await service.get_feedback(payload.model_dump())
+
+
+@router.post("/v1/feedback/second-attempt")
+async def second_attempt_feedback(
+    request: Request,
+    payload: SecondAttemptFeedbackPayload,
+    auth: Annotated[AuthContext, Depends(require_verified_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict:
+    if not payload.answer.strip():
+        raise invalid_request("二次回答分析需要作答文本。")
+    service = request.app.state.services["deepseek"]
+    if not service.is_configured:
+        raise not_configured("DeepSeek(Text AI)")
+    await consume_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
+    return await service.get_second_attempt_feedback(payload.model_dump())
 
 
 @router.post("/v1/organize")
@@ -108,5 +131,6 @@ async def suggest_materials(
         payload.memoryDigest,
         [title for title in payload.existingTitles if title.strip()],
         payload.maxCount,
+        payload.targetPart,
     )
     return {"suggestions": suggestions}

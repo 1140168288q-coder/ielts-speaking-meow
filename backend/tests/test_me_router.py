@@ -220,12 +220,12 @@ FEEDBACK_RESULT = {
     "problems": ["The example is too general.", "The ending needs one more detail."],
     "grammarSuggestions": ["Keep the present tense consistent."],
     "vocabularySuggestions": ["Use a more specific activity verb."],
-    "improvedAnswer": "I read short novels after work because they help me relax.",
     "referenceAnswers": [
-        {"label": "简单自然版", "text": "I read after work because it helps me relax."},
+        {"label": "简单优化版", "text": "I read after work because it helps me relax."},
         {"label": "自然提升版", "text": "I often unwind with a short novel after work."},
-        {"label": "另一种表达版", "text": "After a busy day, reading is my favourite way to relax."},
     ],
+    "naturalUpgradeSuggestions": {"addableContent": [], "advancedChanges": []},
+    "answerFramework": [],
 }
 
 FEEDBACK_REQUEST = {

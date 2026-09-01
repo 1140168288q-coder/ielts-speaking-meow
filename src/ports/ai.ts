@@ -1,4 +1,8 @@
-import type { AiFeedback, Question } from '../domain/models'
+import type {
+  AiFeedback,
+  Question,
+  SecondAttemptAnalysis,
+} from '../domain/models'
 import type { ImportQuestionCandidate } from '../domain/imports'
 import type { MaterialSuggestion } from '../domain/personalMaterials'
 
@@ -22,6 +26,11 @@ export interface LLMFeedbackRequest {
   learnerContext?: string
 }
 
+export interface LLMSecondAttemptRequest {
+  question: Question
+  answer: string
+}
+
 /**
  * Text AI boundary. Implementations must runtime-validate vendor responses
  * before returning them from this interface. 密钥只在自建 Backend 侧,
@@ -31,6 +40,9 @@ export interface LLMProvider {
   readonly id: string
   isConfigured(): boolean
   getFeedback(request: LLMFeedbackRequest): Promise<AiFeedback>
+  getSecondAttemptAnalysis?: (
+    request: LLMSecondAttemptRequest,
+  ) => Promise<SecondAttemptAnalysis>
 }
 
 export interface MaterialQuestionRequest {
@@ -55,6 +67,7 @@ export interface MaterialSuggestionRequest {
   /** 已有素材标题,用于让 AI 避免重复提炼。 */
   existingTitles: string[]
   maxCount?: number
+  targetPart?: 1 | 2 | 3
 }
 
 /**

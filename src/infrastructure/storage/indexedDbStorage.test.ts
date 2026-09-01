@@ -9,10 +9,13 @@ const UPDATED_AT = '2026-08-09T10:05:00.000+08:00'
 const sessionFixture: TrainingSession = {
   id: 'session-1',
   questionId: 'p1-home',
+  part: 1,
   status: 'first-ready',
   attempts: [],
   localFeedback: [],
   aiFeedback: null,
+  secondAttemptAnalysis: null,
+  confirmedMemoryFacts: [],
   comparison: null,
   createdAt: CREATED_AT,
   updatedAt: CREATED_AT,
@@ -25,6 +28,7 @@ const expressionFixture: SavedExpression = {
   questionId: 'p1-home',
   sessionId: sessionFixture.id,
   sourceAttempt: 2,
+  sourcePart: 1,
   createdAt: CREATED_AT,
 }
 

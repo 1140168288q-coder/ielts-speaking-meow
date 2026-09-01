@@ -7,6 +7,7 @@ import {
 import { CheckCircle2 } from 'lucide-react'
 import type { PracticeService } from '../../application/practiceService'
 import type {
+  MemoryCandidate,
   Question,
   TrainingSession,
 } from '../../domain'
@@ -27,6 +28,7 @@ import { ReusableMaterialCard } from './components/ReusableMaterialCard'
 import { PersonalMaterialIdeasCard } from './components/PersonalMaterialIdeasCard'
 import { PracticeTopBar } from './components/PracticeTopBar'
 import { ReferenceRecap } from './components/feedback/ReferenceAnswers'
+import { AnswerFrameworkCard } from './components/feedback/AnswerFrameworkCard'
 import { AnswerEntryStage } from './stages/AnswerEntryStage'
 import { ReviewFirstStage } from './stages/ReviewFirstStage'
 import { SubmitCorpusStage } from './stages/SubmitCorpusStage'
@@ -173,7 +175,7 @@ export function PracticeFlow({
       const generation = ++aiRequestGenerationRef.current
       aiRequestInFlightRef.current = true
       setAiBusy(true)
-      setAiNote('正在获取 AI 文本分析和 3 个参考回答…')
+      setAiNote('正在获取 AI 文本分析和 2 个参考回答…')
       try {
         const feedback = await textAi.getFeedback({
           question,
@@ -188,7 +190,7 @@ export function PracticeFlow({
             : {}),
         })
 
-        if (generation !== aiRequestGenerationRef.current) return
+      if (generation !== aiRequestGenerationRef.current) return
         const updated = await service.applyAiFeedbackIfAnswerCurrent(
           targetSession.id,
           {
@@ -222,6 +224,66 @@ export function PracticeFlow({
     [learnerContext, question, service, textAi, tutorContext],
   )
 
+  const requestSecondAnalysis = useCallback(
+    async (targetSession: TrainingSession) => {
+      const getSecondAttemptAnalysis = textAi.getSecondAttemptAnalysis
+      const attempt = targetSession.attempts.find(
+        (item) => item.attemptNumber === 2,
+      )
+      if (
+        !textAi.isConfigured() ||
+        getSecondAttemptAnalysis === undefined ||
+        attempt?.transcript.status !== 'ready' ||
+        attempt.transcript.text.trim().length === 0
+      ) {
+        return
+      }
+      const analyzeSecondAttempt = getSecondAttemptAnalysis
+
+      if (aiRequestInFlightRef.current) return
+      const generation = ++aiRequestGenerationRef.current
+      aiRequestInFlightRef.current = true
+      setAiBusy(true)
+      setAiNote('正在按简单优化标准检查第二次回答…')
+      try {
+        const analysis = await analyzeSecondAttempt({
+          question,
+          answer: attempt.transcript.text,
+        })
+        if (generation !== aiRequestGenerationRef.current) return
+        const updated = await service.applySecondAttemptAnalysisIfAnswerCurrent(
+          targetSession.id,
+          {
+            attemptId: attempt.id,
+            text: attempt.transcript.text,
+            updatedAt: attempt.transcript.updatedAt,
+          },
+          analysis,
+        )
+        if (generation !== aiRequestGenerationRef.current) return
+        if (updated === null) {
+          setAiNote('答案文本已发生变化，本次二答分析未保存；可以重试。')
+          return
+        }
+        onChangeRef.current(updated)
+        setAiNote(null)
+      } catch (error) {
+        if (generation !== aiRequestGenerationRef.current) return
+        setAiNote(
+          error instanceof Error
+            ? `${error.message}；可以先手动确认语料。`
+            : '二答 AI 分析暂不可用；可以先手动确认语料。',
+        )
+      } finally {
+        if (generation === aiRequestGenerationRef.current) {
+          aiRequestInFlightRef.current = false
+          if (mountedRef.current) setAiBusy(false)
+        }
+      }
+    },
+    [question, service, textAi],
+  )
+
   const saveAnswer = async (
     attemptNumber: 1 | 2,
     text: string,
@@ -253,7 +315,8 @@ export function PracticeFlow({
       void requestAiFeedback(saved)
     } else {
       clearPracticeDraft(session, attemptNumber)
-      setMessage('第二次回答已保存。现在可以完成练习，或挑一句收进个人语料。')
+      setMessage('第二次回答已保存，正在整理修正句和可加入 Memory 的信息。')
+      void requestSecondAnalysis(saved)
     }
   }
 
@@ -261,6 +324,7 @@ export function PracticeFlow({
     onExitGuardChange(true)
     setBusy(true)
     try {
+      await stopTts()
       const updated = await service.prepareSecondAttempt(session.id)
       onChange(updated)
       setMessage(null)
@@ -273,18 +337,26 @@ export function PracticeFlow({
     }
   }
 
-  const submitCorpus = async (text: string) => {
+  const submitCorpus = async (
+    correctedSentences: string[],
+    memoryCandidates: MemoryCandidate[],
+  ) => {
     onExitGuardChange(true)
     setBusy(true)
     setMessage(null)
     try {
-      const result = await service.submitSecondAnswerToCorpus(
+      const result = await service.finalizeSecondAttempt(
         session.id,
-        text,
-        question.topic,
+        {
+          correctedSentences,
+          memoryCandidates,
+          topic: question.topic,
+        },
       )
       onChange(result.session)
-      setMessage('第二次回答已收录到个人语料。')
+      setMessage(
+        `第二次回答已完成${result.expressions.length > 0 ? `，收录 ${result.expressions.length} 句个人语料` : ''}${memoryCandidates.length > 0 ? `，加入 ${memoryCandidates.length} 条 Memory` : ''}。`,
+      )
     } catch (error) {
       showError(error, '收录失败，请重试。')
     } finally {
@@ -332,7 +404,7 @@ export function PracticeFlow({
   const reusePersonalMaterial = (item: ReusablePersonalMaterial) => {
     setInsertSeed((current) => ({
       nonce: (current?.nonce ?? 0) + 1,
-      text: item.material.title,
+      text: `${item.material.title}：${item.material.content}`,
     }))
   }
 
@@ -398,7 +470,11 @@ export function PracticeFlow({
 
       {stage === 'second-answer' ? (
         <div className="practice-stack">
-          <TutorKnowledgeCard docs={tutorKnowledge} />
+          {aiFeedback ? (
+            <AnswerFrameworkCard feedback={aiFeedback} />
+          ) : (
+            <TutorKnowledgeCard docs={tutorKnowledge} />
+          )}
           {aiFeedback ? (
             <ReferenceRecap
               feedback={aiFeedback}
@@ -434,9 +510,16 @@ export function PracticeFlow({
 
       {stage === 'second-submit' && secondAttempt ? (
         <SubmitCorpusStage
+          key={`${secondAttempt.id}:${session.secondAttemptAnalysis ? JSON.stringify(session.secondAttemptAnalysis) : 'pending'}`}
           attempt={secondAttempt}
+          analysis={session.secondAttemptAnalysis ?? null}
+          aiBusy={aiBusy}
+          aiNote={aiNote}
           busy={busy}
-          onSubmit={(text) => void submitCorpus(text)}
+          onRetryAnalysis={() => void requestSecondAnalysis(session)}
+          onSubmit={(correctedSentences, memoryCandidates) =>
+            void submitCorpus(correctedSentences, memoryCandidates)
+          }
           onComplete={() => void completePractice()}
         />
       ) : null}

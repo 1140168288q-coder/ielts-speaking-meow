@@ -3,6 +3,7 @@ import {
   type PersonalMaterial,
   type PersonalMaterialKind,
 } from '../domain/personalMaterials'
+import type { IeltsPart } from '../domain/models'
 import type { LocalStorage } from '../ports/storage'
 
 export interface PersonalMaterialServiceOptions {
@@ -16,6 +17,8 @@ export interface PersonalMaterialInput {
   title: string
   content: string
   kind: PersonalMaterialKind
+  /** 新建或保存时必须明确归属 Part；旧记录仍可保持 null 直到用户归类。 */
+  sourcePart: IeltsPart
   topicTags: string[]
   questionIds?: string[]
   sourceSessionId?: string | null
@@ -91,6 +94,7 @@ export class PersonalMaterialService {
     materialId: string,
     input: PersonalMaterialInput,
   ): Promise<PersonalMaterial> {
+    assertExplicitPart(input)
     const existing = await this.requireOwnedMaterial(materialId)
     const updated = personalMaterialSchema.parse({
       ...existing,
@@ -123,6 +127,7 @@ export class PersonalMaterialService {
   private async persistNew(
     input: PersonalMaterialInput,
   ): Promise<PersonalMaterial> {
+    assertExplicitPart(input)
     const timestamp = this.now().toISOString()
     const material = personalMaterialSchema.parse({
       id: this.createId(),
@@ -177,6 +182,7 @@ function normalizeInput(input: PersonalMaterialInput) {
     title: input.title.trim(),
     content: input.content.trim(),
     kind: input.kind,
+    sourcePart: input.sourcePart,
     topicTags: normalizeTextList(input.topicTags),
     questionIds: normalizeTextList(input.questionIds ?? []),
     sourceSessionId: input.sourceSessionId?.trim() || null,
@@ -185,4 +191,10 @@ function normalizeInput(input: PersonalMaterialInput) {
 
 function normalizeTextList(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+}
+
+function assertExplicitPart(input: PersonalMaterialInput): void {
+  if (input.sourcePart !== 1 && input.sourcePart !== 2 && input.sourcePart !== 3) {
+    throw new Error('新建或保存个人素材前，请先选择归属 Part。')
+  }
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Brain, Check, ChevronRight, Play, Square } from 'lucide-react'
 import type {
+  IeltsPart,
   Question,
   SavedExpression,
   TrainingSession,
@@ -16,13 +17,60 @@ import { EmptyState } from '../../app/components/EmptyState'
 
 export { EmptyState } from '../../app/components/EmptyState'
 
-export function LearnerMemoryPanel({ sessions }: { sessions: TrainingSession[] }) {
+export function LearnerMemoryPanel({
+  sessions,
+  onUpdateFactPart,
+}: {
+  sessions: TrainingSession[]
+  onUpdateFactPart?: (sessionId: string, factId: string, sourcePart: IeltsPart | null) => Promise<void>
+}) {
+  const [selectedPart, setSelectedPart] = useState<IeltsPart | 'all' | 'unclassified'>(1)
+  const [factBusyId, setFactBusyId] = useState<string | null>(null)
+  const [factMessage, setFactMessage] = useState<string | null>(null)
   const recent = sessions
     .slice()
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 12)
-  const problemThemes = [...new Set(recent.flatMap((item) => item.aiFeedback?.problems ?? []))].slice(0, 2)
-  const strengths = [...new Set(recent.flatMap((item) => item.aiFeedback?.strengths ?? []))].slice(0, 2)
+  const visibleRecent = recent.filter((session) =>
+    selectedPart === 'all'
+      ? true
+      : selectedPart === 'unclassified'
+        ? sessionPart(session) === null
+        : sessionPart(session) === selectedPart,
+  )
+  const problemThemes = [...new Set(visibleRecent.flatMap((item) => item.aiFeedback?.problems ?? []))].slice(0, 2)
+  const strengths = [...new Set(visibleRecent.flatMap((item) => item.aiFeedback?.strengths ?? []))].slice(0, 2)
+  const memoryFacts = sessions
+    .flatMap((session) => (session.confirmedMemoryFacts ?? []).map((fact) => ({ sessionId: session.id, fact })))
+    .filter((item, index, all) =>
+      all.findIndex((candidate) => candidate.fact.content === item.fact.content) === index,
+    )
+    .filter((item) =>
+      selectedPart === 'all'
+        ? true
+        : selectedPart === 'unclassified'
+          ? item.fact.sourcePart === null
+          : item.fact.sourcePart === selectedPart,
+    )
+    .slice(0, 8)
+
+  const reclassifyFact = async (
+    sessionId: string,
+    factId: string,
+    sourcePart: IeltsPart | null,
+  ) => {
+    if (!onUpdateFactPart || factBusyId !== null) return
+    setFactBusyId(factId)
+    setFactMessage(null)
+    try {
+      await onUpdateFactPart(sessionId, factId, sourcePart)
+      setFactMessage('Memory 归类已更新。')
+    } catch (error) {
+      setFactMessage(error instanceof Error ? error.message : 'Memory 归类保存失败。')
+    } finally {
+      setFactBusyId(null)
+    }
+  }
 
   return (
     <details className="learner-memory-details">
@@ -33,6 +81,48 @@ export function LearnerMemoryPanel({ sessions }: { sessions: TrainingSession[] }
           <p className="eyebrow">Your speaking trail</p>
           <h2>每一次开口，都被悄悄记住</h2>
           <p>练过的每一题都在告诉你：哪里已经稳了，哪里值得再来一次。</p>
+          <div className="question-filter-chips" role="group" aria-label="Memory Part 筛选">
+            <button type="button" className={selectedPart === 'all' ? 'active' : ''} aria-pressed={selectedPart === 'all'} onClick={() => setSelectedPart('all')}>全部 Memory</button>
+            {([1, 2, 3] as const).map((part) => (
+              <button key={part} type="button" className={selectedPart === part ? 'active' : ''} aria-pressed={selectedPart === part} onClick={() => setSelectedPart(part)}>Part {part}</button>
+            ))}
+            <button type="button" className={selectedPart === 'unclassified' ? 'active' : ''} aria-pressed={selectedPart === 'unclassified'} onClick={() => setSelectedPart('unclassified')}>未分类</button>
+          </div>
+          {factMessage ? <small role="status">{factMessage}</small> : null}
+          {memoryFacts.length ? (
+            <div className="memory-signals">
+              {memoryFacts.map(({ sessionId, fact }) => (
+                <article key={fact.id} className="memory-fact-item">
+                  <span>P{fact.sourcePart ?? '未分类'} · {fact.content}</span>
+                  {onUpdateFactPart ? (
+                    <div className="question-filter-chips" role="group" aria-label={`归类 Memory：${fact.content}`}>
+                      {([1, 2, 3] as const).map((part) => (
+                        <button
+                          key={part}
+                          type="button"
+                          className={fact.sourcePart === part ? 'active' : ''}
+                          aria-pressed={fact.sourcePart === part}
+                          disabled={factBusyId !== null}
+                          onClick={() => void reclassifyFact(sessionId, fact.id, part)}
+                        >
+                          P{part}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className={fact.sourcePart === null ? 'active' : ''}
+                        aria-pressed={fact.sourcePart === null}
+                        disabled={factBusyId !== null}
+                        onClick={() => void reclassifyFact(sessionId, fact.id, null)}
+                      >
+                        未分类
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : null}
           {problemThemes.length || strengths.length ? (
             <div className="memory-signals">
               {problemThemes.map((item) => <span key={`problem:${item}`}>继续练 · {item}</span>)}
@@ -45,6 +135,12 @@ export function LearnerMemoryPanel({ sessions }: { sessions: TrainingSession[] }
       </section>
     </details>
   )
+}
+
+function sessionPart(session: TrainingSession): IeltsPart | null {
+  if (session.part !== null) return session.part
+  const match = /^p([123])-/u.exec(session.questionId)
+  return match === null ? null : Number(match[1]) as IeltsPart
 }
 
 export function HistoryView({
@@ -133,7 +229,7 @@ export function ExpressionLibrary({
 }: {
   expressions: SavedExpression[]
   audioFocus: AudioFocus
-  onUpdate: (expressionId: string, text: string, topic: string) => Promise<void>
+  onUpdate: (expressionId: string, text: string, topic: string, sourcePart: IeltsPart | null) => Promise<void>
   onDelete: (expressionId: string) => Promise<void>
   onReviewed: (expressionId: string) => Promise<void>
   onPractice: (questionId: string) => void
@@ -143,6 +239,8 @@ export function ExpressionLibrary({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [editTopic, setEditTopic] = useState('')
+  const [editSourcePart, setEditSourcePart] = useState<IeltsPart | null>(null)
+  const [selectedPart, setSelectedPart] = useState<IeltsPart | 'unclassified'>(1)
   const [busyId, setBusyId] = useState<string | null>(null)
   const { speakingKey, toggle: toggleTts } = useTtsToggle(audioFocus)
   const reviewIds = useMemo(
@@ -151,9 +249,12 @@ export function ExpressionLibrary({
   )
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const visibleExpressions = expressions.filter((item) =>
-    !normalizedQuery ||
-    item.text.toLocaleLowerCase().includes(normalizedQuery) ||
-    item.topic.toLocaleLowerCase().includes(normalizedQuery),
+    (selectedPart === 'unclassified'
+      ? item.sourcePart === null
+      : item.sourcePart === selectedPart) &&
+    (!normalizedQuery ||
+      item.text.toLocaleLowerCase().includes(normalizedQuery) ||
+      item.topic.toLocaleLowerCase().includes(normalizedQuery)),
   )
 
   const speak = async (expressionId: string, text: string) => {
@@ -181,11 +282,12 @@ export function ExpressionLibrary({
     setEditingId(item.id)
     setEditText(item.text)
     setEditTopic(item.topic)
+    setEditSourcePart(item.sourcePart)
   }
 
   const saveEdit = (item: SavedExpression) => {
     void run(item.id, async () => {
-      await onUpdate(item.id, editText, editTopic)
+      await onUpdate(item.id, editText, editTopic, editSourcePart)
       setEditingId(null)
       setMessage('表达已更新并保存在本机。')
     })
@@ -233,6 +335,12 @@ export function ExpressionLibrary({
               placeholder="输入英文或主题"
             />
           </label>
+          <div className="question-filter-chips" role="group" aria-label="个人语料 Part 筛选">
+            {([1, 2, 3] as const).map((part) => (
+              <button key={part} type="button" className={selectedPart === part ? 'active' : ''} aria-pressed={selectedPart === part} onClick={() => setSelectedPart(part)}>Part {part}</button>
+            ))}
+            <button type="button" className={selectedPart === 'unclassified' ? 'active' : ''} aria-pressed={selectedPart === 'unclassified'} onClick={() => setSelectedPart('unclassified')}>未分类</button>
+          </div>
         </>
       ) : null}
       {expressions.length ? (
@@ -240,11 +348,20 @@ export function ExpressionLibrary({
           {visibleExpressions.map((item) => (
             <article key={item.id}>
               <div className="expression-meta">
-                <span>{item.topic}{reviewIds.has(item.id) ? ' · 待听读' : ''}</span>
+                <span>P{item.sourcePart ?? '未分类'} · {item.topic}{reviewIds.has(item.id) ? ' · 待听读' : ''}</span>
                 <small>{formatDate(item.createdAt)}</small>
               </div>
               {editingId === item.id ? (
                 <div className="expression-edit-form">
+                  <fieldset>
+                    <legend>归属 Part</legend>
+                    <div className="question-filter-chips">
+                      {([1, 2, 3] as const).map((part) => (
+                        <button key={part} type="button" className={editSourcePart === part ? 'active' : ''} aria-pressed={editSourcePart === part} onClick={() => setEditSourcePart(part)}>Part {part}</button>
+                      ))}
+                      <button type="button" className={editSourcePart === null ? 'active' : ''} aria-pressed={editSourcePart === null} onClick={() => setEditSourcePart(null)}>未分类</button>
+                    </div>
+                  </fieldset>
                   <label>
                     <span>主题</span>
                     <input value={editTopic} maxLength={80} onChange={(event) => setEditTopic(event.target.value)} />
@@ -254,7 +371,7 @@ export function ExpressionLibrary({
                     <textarea value={editText} maxLength={1000} onChange={(event) => setEditText(event.target.value)} />
                   </label>
                   <div>
-                    <button type="button" disabled={!editText.trim() || !editTopic.trim() || busyId === item.id} onClick={() => saveEdit(item)}>
+                    <button type="button" disabled={!editText.trim() || !editTopic.trim() || editSourcePart === null || busyId === item.id} onClick={() => saveEdit(item)}>
                       保存修改
                     </button>
                     <button type="button" className="expression-muted-action" onClick={() => setEditingId(null)}>

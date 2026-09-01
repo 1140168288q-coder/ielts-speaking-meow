@@ -3,12 +3,14 @@ import {
   aiFeedbackSchema,
   importQuestionCandidateListSchema,
   materialSuggestionListSchema,
+  secondAttemptAnalysisSchema,
   type AiFeedback,
   type ImportQuestionCandidate,
   type MaterialSuggestion,
 } from '../../domain'
 import type {
   LLMFeedbackRequest,
+  LLMSecondAttemptRequest,
   LLMProvider,
   MaterialQuestionOrganizer,
   MaterialQuestionRequest,
@@ -80,6 +82,31 @@ export class BackendTextProvider
     )
   }
 
+  async getSecondAttemptAnalysis(request: LLMSecondAttemptRequest) {
+    const question = {
+      part: request.question.part,
+      topic: request.question.topic,
+      prompt: request.question.prompt,
+      ...('cuePoints' in request.question
+        ? { cuePoints: request.question.cuePoints }
+        : {}),
+    }
+    const data = await this.client.postJson<unknown>(
+      '/v1/feedback/second-attempt',
+      {
+        part: request.question.part,
+        question,
+        answer: request.answer,
+      },
+      TEXT_TIMEOUT_MS,
+    )
+    return parseValidated(
+      data,
+      secondAttemptAnalysisSchema,
+      '第二次回答分析结果不完整,已保留你的答案。',
+    )
+  }
+
   async extractQuestions(
     request: MaterialQuestionRequest,
   ): Promise<ImportQuestionCandidate[]> {
@@ -112,6 +139,9 @@ export class BackendTextProvider
         memoryDigest: request.memoryDigest,
         existingTitles: request.existingTitles.slice(0, 50),
         maxCount: request.maxCount ?? 4,
+        ...(request.targetPart === undefined
+          ? {}
+          : { targetPart: request.targetPart }),
       },
       TEXT_TIMEOUT_MS,
     )

@@ -11,6 +11,7 @@ const expression: SavedExpression = {
   questionId: 'p1-home-001',
   sessionId: 'session-1',
   sourceAttempt: 2,
+  sourcePart: 1,
   createdAt: '2026-08-01T08:00:00.000Z',
   reviewCount: 0,
   lastReviewedAt: null,
@@ -61,6 +62,7 @@ describe('ExpressionLibrary', () => {
       expression.id,
       'It helps me recharge after work.',
       'Daily life',
+      1,
     ))
 
     await user.click(screen.getByRole('button', { name: '已听读' }))

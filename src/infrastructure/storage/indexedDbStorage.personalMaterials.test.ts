@@ -12,6 +12,7 @@ const aliceMaterial: PersonalMaterial = {
   title: '外婆教我做饭',
   content: 'My grandmother taught me how to make dumplings one summer.',
   kind: 'experience',
+  sourcePart: 1,
   topicTags: ['family', 'food'],
   questionIds: ['p2-skill-from-older-person'],
   sourceSessionId: 'session-alice-cooking',
@@ -42,6 +43,7 @@ const legacyExpression: SavedExpression = {
   questionId: 'p2-place-to-relax',
   sessionId: 'session-legacy',
   sourceAttempt: 2,
+  sourcePart: 1,
   createdAt: CREATED_AT,
 }
 

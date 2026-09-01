@@ -428,7 +428,10 @@ export class IndexedDbStorage
       defaultPart: stored.defaultPart,
       feedbackDetail: stored.feedbackDetail,
       memoryEnabled: stored.memoryEnabled,
-      sharePersonalMaterialsWithAi: stored.sharePersonalMaterialsWithAi,
+      autoMatchPersonalMaterialsWithAi:
+        stored.autoMatchPersonalMaterialsWithAi ??
+        stored.sharePersonalMaterialsWithAi ??
+        true,
       reduceMotion: stored.reduceMotion,
       homeTitleOverride: stored.homeTitleOverride ?? null,
       homeSubtitleOverride: stored.homeSubtitleOverride ?? null,

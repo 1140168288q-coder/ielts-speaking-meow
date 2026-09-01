@@ -17,7 +17,7 @@ export const userPreferencesSchema = z
     defaultPart: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     feedbackDetail: z.enum(['focused', 'expanded']),
     memoryEnabled: z.boolean(),
-    sharePersonalMaterialsWithAi: z.boolean(),
+    autoMatchPersonalMaterialsWithAi: z.boolean(),
     reduceMotion: z.boolean(),
     /** 首页问候主标题;null 表示使用内置默认文案。 */
     homeTitleOverride: z.string().max(40).nullable().default(null),
@@ -49,7 +49,7 @@ export function createDefaultUserPreferences(
     defaultPart: 1,
     feedbackDetail: 'focused',
     memoryEnabled: true,
-    sharePersonalMaterialsWithAi: false,
+    autoMatchPersonalMaterialsWithAi: true,
     reduceMotion: false,
     homeTitleOverride: null,
     homeSubtitleOverride: null,

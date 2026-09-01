@@ -9,7 +9,7 @@ export function TutorKnowledgeCard({
   return (
     <details className="tutor-knowledge-card">
       <summary>
-        本题备考要点（{docs.length} 条）· 离线可用
+        本题要点（{docs.length} 条）· 离线可用
       </summary>
       <div className="tutor-knowledge-list">
         {docs.map((item) => (

@@ -6,6 +6,7 @@ const material: PersonalMaterial = {
   title: '周末去外婆家',
   content: 'I visit my grandmother on weekends and help her cook dinner.',
   kind: 'experience',
+  sourcePart: 2,
   topicTags: ['family', 'weekend'],
   questionIds: ['p1-weekends', 'p2-important-person'],
   sourceSessionId: 'session-weekend-1',

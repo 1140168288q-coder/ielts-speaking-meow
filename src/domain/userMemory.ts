@@ -1,4 +1,10 @@
-import type { Question, SavedExpression, TrainingSession } from './models'
+import type {
+  ConfirmedMemoryFact,
+  IeltsPart,
+  Question,
+  SavedExpression,
+  TrainingSession,
+} from './models'
 import type { PersonalMaterial } from './personalMaterials'
 
 /**
@@ -24,6 +30,13 @@ export interface LearnerMemory {
   recentStrengths: string[]
   reusableExpressions: ReusableExpression[]
   relevantMaterials: ReusablePersonalMaterial[]
+  reusableMemoryFacts: ReusableMemoryFact[]
+}
+
+export interface ReusableMemoryFact {
+  fact: ConfirmedMemoryFact
+  score: number
+  reason: string
 }
 
 export interface ReusablePersonalMaterial {
@@ -60,6 +73,7 @@ export function buildLearnerMemory(
     3,
   )
   const relevantMaterials = findReusablePersonalMaterials(question, materials, 2)
+  const reusableMemoryFacts = findReusableMemoryFacts(question, sessions, 4)
 
   return {
     topicPracticeCount,
@@ -68,11 +82,12 @@ export function buildLearnerMemory(
     recentStrengths,
     reusableExpressions,
     relevantMaterials,
+    reusableMemoryFacts,
   }
 }
 
 /**
- * 跨题复用匹配:同题 > 同 topic > 共享实义词 > 同 Part。
+ * 跨题复用匹配:同题 > 同 topic > 共享实义词 > 当前 Part 加权 > 其他 Part。
  * 分数只用于排序,不在 UI 上展示数字。
  */
 export function findReusableExpressions(
@@ -110,7 +125,7 @@ export function findReusableExpressions(
           }
         }
       }
-      if (expression.questionId.startsWith(`p${question.part}-`)) {
+      if (expression.sourcePart === question.part || expression.questionId.startsWith(`p${question.part}-`)) {
         score += 3
       }
       score += Math.min(10, expression.reuseCount ?? 0)
@@ -151,12 +166,49 @@ export function findReusablePersonalMaterials(
         score += 12 + overlap * 4
         if (!reason) reason = '主题相近'
       }
+      if (material.sourcePart === question.part) {
+        score += 4
+        if (!reason) reason = '同 Part 的相关素材'
+      }
       return { material, score, reason }
     })
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || b.material.updatedAt.localeCompare(a.material.updatedAt))
     .slice(0, maximum)
     .map((item) => ({ ...item, reason: item.reason || '可用于本题的个人素材' }))
+}
+
+/**
+ * Memory 是跨 Part 的个性化大脑。当前 Part 和当前主题优先，但其他 Part
+ * 的已确认事实只要与本题有明确关键词关联，也可以作为候选上下文。
+ */
+export function findReusableMemoryFacts(
+  question: Question,
+  sessions: TrainingSession[],
+  maximum = 4,
+): ReusableMemoryFact[] {
+  const questionTokens = new Set(tokenize(`${question.topic} ${question.prompt}`))
+  const candidates = sessions.flatMap((session) => session.confirmedMemoryFacts ?? [])
+  const seen = new Set<string>()
+  return candidates
+    .map((fact) => {
+      const identity = `${fact.content}:${fact.sourceSentence}`
+      if (seen.has(identity)) return null
+      seen.add(identity)
+      const factTokens = tokenize(`${fact.content} ${fact.sourceSentence} ${fact.topicTags.join(' ')}`)
+      const overlap = factTokens.filter((token) => questionTokens.has(token)).length
+      let score = overlap * 10
+      let reason = overlap > 0 ? '与你的个人信息相关' : ''
+      if (fact.sourcePart === question.part) {
+        score += 5
+        reason = reason ? `${reason} · 同 Part 优先` : '同 Part 的个人信息'
+      }
+      return { fact, score, reason }
+    })
+    .filter((item): item is ReusableMemoryFact => item !== null && item.score >= 10)
+    .sort((left, right) => right.score - left.score || right.fact.createdAt.localeCompare(left.fact.createdAt))
+    .slice(0, maximum)
+    .map((item) => ({ ...item, reason: item.reason || '可关联的个人信息' }))
 }
 
 /**
@@ -197,6 +249,17 @@ export function buildLearnerContext(
             `[${item.expression.topic}] ${item.expression.text}`,
         )
         .join(' | '),
+    )
+  }
+  if (memory.reusableMemoryFacts.length > 0) {
+    lines.push(
+      '学习者确认的统一 Memory（当前 Part 优先,其他 Part 仅在相关时使用）:' +
+        memory.reusableMemoryFacts
+          .map(
+            (item) =>
+              `[来源 Part ${item.fact.sourcePart ?? '未分类'}] ${item.fact.content}（${item.reason}）`,
+          )
+          .join(' | '),
     )
   }
   if (memory.relevantMaterials.length > 0) {
@@ -260,6 +323,7 @@ export interface MaterialSuggestionContext {
   digest: string
   /** 按练习次数排序的常练话题,供本地启发式降级使用。 */
   topics: Array<{ topic: string; count: number }>
+  targetPart: IeltsPart | null
 }
 
 /**
@@ -270,18 +334,32 @@ export function buildMaterialSuggestionContext(
   sessions: TrainingSession[],
   expressions: SavedExpression[],
   knownQuestions: Question[] = [],
+  materials: PersonalMaterial[] = [],
+  targetPart: IeltsPart | null = null,
 ): MaterialSuggestionContext {
   const questionsById = new Map(knownQuestions.map((item) => [item.id, item]))
-  const topicCounts = new Map<string, number>()
-  for (const session of sessions) {
+  const topicCounts = new Map<string, { count: number; currentPartCount: number }>()
+  const orderedSessions = [...sessions].sort((left, right) => {
+    if (targetPart === null) return 0
+    const leftPart = left.part ?? partFromQuestionId(left.questionId)
+    const rightPart = right.part ?? partFromQuestionId(right.questionId)
+    return Number(rightPart === targetPart) - Number(leftPart === targetPart)
+  })
+  for (const session of orderedSessions) {
     const topic = questionsById.get(session.questionId)?.topic?.trim()
     if (topic) {
-      topicCounts.set(topic, (topicCounts.get(topic) ?? 0) + 1)
+      const current = topicCounts.get(topic) ?? { count: 0, currentPartCount: 0 }
+      current.count += 1
+      if (targetPart !== null && (session.part ?? partFromQuestionId(session.questionId)) === targetPart) {
+        current.currentPartCount += 1
+      }
+      topicCounts.set(topic, current)
     }
   }
   const topics = [...topicCounts.entries()]
-    .map(([topic, count]) => ({ topic, count }))
-    .sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic))
+    .map(([topic, counts]) => ({ topic, count: counts.count, currentPartCount: counts.currentPartCount }))
+    .sort((a, b) => b.currentPartCount - a.currentPartCount || b.count - a.count || a.topic.localeCompare(b.topic))
+    .map(({ topic, count }) => ({ topic, count }))
 
   const lines: string[] = []
   lines.push(
@@ -300,7 +378,11 @@ export function buildMaterialSuggestionContext(
   }
 
   const expressionsByTopic = new Map<string, string[]>()
-  for (const expression of expressions.slice(0, 60)) {
+  const orderedExpressions = [...expressions].sort((left, right) => {
+    if (targetPart === null) return 0
+    return Number(right.sourcePart === targetPart) - Number(left.sourcePart === targetPart)
+  })
+  for (const expression of orderedExpressions.slice(0, 60)) {
     const key = expression.topic.trim() || '未分类'
     const bucket = expressionsByTopic.get(key) ?? []
     if (bucket.length < 2) {
@@ -315,7 +397,31 @@ export function buildMaterialSuggestionContext(
     lines.push(`学习者确认的个人语料(英语表达):${parts.join(' ; ')}`)
   }
 
-  return { digest: lines.join('\n').slice(0, 1_200), topics }
+  const facts = orderedSessions
+    .flatMap((session) => session.confirmedMemoryFacts ?? [])
+    .filter((fact, index, all) => all.findIndex((item) => item.content === fact.content) === index)
+    .slice(0, 12)
+  if (facts.length > 0) {
+    lines.push(
+      `学习者确认的统一 Memory${targetPart === null ? '' : `（Part ${targetPart} 优先）`}:` +
+        facts.map((fact) => `[来源 Part ${fact.sourcePart}] ${fact.content}`).join('；'),
+    )
+  }
+
+  const confirmedMaterials = materials
+    .filter((material) => material.status === 'confirmed' && material.deletedAt === null)
+    .sort((left, right) => Number(right.sourcePart === targetPart) - Number(left.sourcePart === targetPart))
+    .slice(0, 10)
+  if (confirmedMaterials.length > 0) {
+    lines.push(
+      `学习者确认的个人素材${targetPart === null ? '' : `（Part ${targetPart} 优先）`}:` +
+        confirmedMaterials
+          .map((material) => `[来源 Part ${material.sourcePart ?? '未分类'}] ${material.title}:${material.content.slice(0, 180)}`)
+          .join('；'),
+    )
+  }
+
+  return { digest: lines.join('\n').slice(0, 1_900), topics, targetPart }
 }
 
 /**
@@ -331,6 +437,7 @@ export function buildLocalMaterialSuggestions(
   content: string
   kind: 'experience'
   topicTags: string[]
+  sourcePart: IeltsPart | null
 }> {
   const normalizedExisting = new Set(
     existingTitles.map((title) => title.trim().toLowerCase()),
@@ -340,6 +447,7 @@ export function buildLocalMaterialSuggestions(
     content: string
     kind: 'experience'
     topicTags: string[]
+    sourcePart: IeltsPart | null
   }> = []
   for (const { topic, count } of context.topics) {
     if (suggestions.length >= maxCount) break
@@ -359,7 +467,13 @@ export function buildLocalMaterialSuggestions(
         '你看到了什么、听到了什么？为什么它让你印象深刻？把真实细节写下来，考场上就能直接用。',
       kind: 'experience',
       topicTags: [topic],
+      sourcePart: context.targetPart,
     })
   }
   return suggestions
+}
+
+function partFromQuestionId(questionId: string): IeltsPart | null {
+  const match = /^p([123])-/u.exec(questionId)
+  return match === null ? null : Number(match[1]) as IeltsPart
 }

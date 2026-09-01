@@ -43,7 +43,7 @@ export interface SettingsControllerProps {
      | 'defaultPart'
      | 'feedbackDetail'
      | 'memoryEnabled'
-     | 'sharePersonalMaterialsWithAi'
+     | 'autoMatchPersonalMaterialsWithAi'
      | 'reduceMotion'
      | 'homeTitleOverride'
      | 'homeSubtitleOverride'
@@ -79,7 +79,7 @@ const DEFAULT_PREFERENCES = {
   defaultPart: 1,
   feedbackDetail: 'focused',
   memoryEnabled: true,
-  sharePersonalMaterialsWithAi: false,
+  autoMatchPersonalMaterialsWithAi: true,
   reduceMotion: false,
   homeTitleOverride: null,
   homeSubtitleOverride: null,

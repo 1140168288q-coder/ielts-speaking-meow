@@ -15,7 +15,7 @@ export function MemoryPrivacyCard({
   preferences,
   onPreferencesChange,
 }: {
-  preferences: Pick<UserPreferences, 'memoryEnabled' | 'sharePersonalMaterialsWithAi'>
+    preferences: Pick<UserPreferences, 'memoryEnabled' | 'autoMatchPersonalMaterialsWithAi'>
   onPreferencesChange: (update: UserPreferencesUpdate) => Promise<void>
 }) {
   const [preferenceFeedback, setPreferenceFeedback] = useState<Feedback | null>(null)
@@ -51,11 +51,10 @@ export function MemoryPrivacyCard({
       <label className="settings-switch">
         <input
           type="checkbox"
-          checked={preferences.sharePersonalMaterialsWithAi}
-          disabled={!preferences.memoryEnabled}
-          onChange={(event) => void savePreference({ sharePersonalMaterialsWithAi: event.target.checked })}
+          checked={preferences.autoMatchPersonalMaterialsWithAi}
+          onChange={(event) => void savePreference({ autoMatchPersonalMaterialsWithAi: event.target.checked })}
         />
-        <span><strong>允许把匹配的个人生活素材发给 AI</strong><small>默认关闭；仅发送与本题相关的短片段，不发送完整素材库。</small></span>
+        <span><strong>AI 分析时自动匹配可用素材</strong><small>默认开启；仅发送与本题相关的短片段，不发送完整素材库。</small></span>
       </label>
       {preferenceFeedback ? (
         <span className={`settings-feedback ${preferenceFeedback.tone}`}>{preferenceFeedback.text}</span>

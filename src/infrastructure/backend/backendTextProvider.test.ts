@@ -11,11 +11,30 @@ const VALID_FEEDBACK = {
   problems: ['过去时态混用。'],
   grammarSuggestions: ['先想好动词过去式。'],
   vocabularySuggestions: ['用 relaxing 代替 good。'],
-  improvedAnswer: 'I like reading books because they help me relax.',
   referenceAnswers: [
-    { label: '简单自然版', text: 'I like reading books because they help me relax.' },
+    { label: '简单优化版', text: 'I like reading books because they help me relax.' },
     { label: '自然提升版', text: 'I enjoy reading books because they help me unwind.' },
-    { label: '另一种表达版', text: 'Reading is my favourite way to relax after a busy day.' },
+  ],
+  naturalUpgradeSuggestions: { addableContent: [], advancedChanges: [] },
+  answerFramework: [{ label: '直接回答', template: 'I usually ___ because ___.' }],
+}
+
+const VALID_SECOND_ATTEMPT = {
+  correctedSentences: [
+    {
+      original: 'I go there last year.',
+      corrected: 'I went there last year.',
+      reason: '过去时间使用过去式。',
+    },
+  ],
+  memoryCandidates: [
+    {
+      content: '我去年去了北京。',
+      kind: 'experience',
+      topicTags: ['travel'],
+      sourceSentence: 'I went to Beijing last year.',
+      sourcePart: 1,
+    },
   ],
 }
 
@@ -89,7 +108,7 @@ describe('BackendTextProvider', () => {
     const feedback = await provider.getFeedback(feedbackRequest())
 
     expect(feedback.summary).toBe('回答切题，重点改进过去时态。')
-    expect(feedback.referenceAnswers).toHaveLength(3)
+    expect(feedback.referenceAnswers).toHaveLength(2)
     expect(feedback.referenceAnswers[1]?.label).toBe('自然提升版')
 
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
@@ -109,6 +128,22 @@ describe('BackendTextProvider', () => {
       },
       answer: 'I like reading books in my free time.',
       answerDurationSeconds: 12,
+    })
+  })
+
+  it('sends the second answer to the dedicated simple-correction endpoint', async () => {
+    const { provider, fetch } = createProvider(VALID_SECOND_ATTEMPT)
+    const analysis = await provider.getSecondAttemptAnalysis({
+      question: firstQuestion(),
+      answer: 'I go there last year. I went to Beijing last year.',
+    })
+
+    expect(analysis.correctedSentences[0]?.corrected).toBe('I went there last year.')
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('http://backend.test/v1/feedback/second-attempt')
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      part: firstQuestion().part,
+      answer: 'I go there last year. I went to Beijing last year.',
     })
   })
 

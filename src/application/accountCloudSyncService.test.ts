@@ -519,6 +519,7 @@ function makeSession(
     id,
     ownerId,
     questionId: 'question-1',
+    part: 1,
     status: 'first-review',
     attempts: [{
       id: `${id}-attempt`,
@@ -553,6 +554,8 @@ function makeSession(
     }],
     localFeedback: [],
     aiFeedback: null,
+    secondAttemptAnalysis: null,
+    confirmedMemoryFacts: [],
     comparison: null,
     createdAt: CREATED_AT,
     updatedAt,
@@ -576,6 +579,7 @@ function makeExpression(id: string, ownerId: string): SavedExpression {
     questionId: 'question-1',
     sessionId: 'session-1',
     sourceAttempt: 1,
+    sourcePart: 1,
     createdAt: CREATED_AT,
     updatedAt: UPDATED_AT,
   }
@@ -588,6 +592,7 @@ function makeMaterial(id: string, ownerId: string): PersonalMaterial {
     title: 'My neighbourhood park',
     content: 'A quiet park where I walk after dinner.',
     kind: 'place',
+    sourcePart: 1,
     topicTags: ['parks'],
     questionIds: ['question-1'],
     sourceSessionId: null,

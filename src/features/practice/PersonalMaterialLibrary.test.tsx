@@ -13,6 +13,7 @@ const materials: PersonalMaterial[] = [
     title: 'My grandmother',
     content: 'She taught me to cook and always tells funny family stories.',
     kind: 'person',
+    sourcePart: 1,
     topicTags: ['family', 'cooking'],
     questionIds: [],
     sourceSessionId: null,
@@ -28,6 +29,7 @@ const materials: PersonalMaterial[] = [
     title: 'Riverside park',
     content: 'A quiet park where I used to ride my bike after school.',
     kind: 'place',
+    sourcePart: 2,
     topicTags: ['hometown', 'outdoors'],
     questionIds: [],
     sourceSessionId: null,
@@ -46,6 +48,7 @@ const candidate: PersonalMaterialCandidate = {
   content: 'My friends and I played cards while the train was delayed.',
   kind: 'experience',
   topicTags: ['travel'],
+  sourcePart: 2,
 }
 
 function renderLibrary(
@@ -81,6 +84,7 @@ describe('PersonalMaterialLibrary', () => {
     expect(screen.getByText('没有找到匹配素材')).toBeInTheDocument()
     await user.clear(screen.getByRole('searchbox', { name: '搜索个人素材' }))
 
+    await user.click(screen.getByRole('button', { name: 'Part 2' }))
     await user.click(screen.getByRole('button', { name: '已归档' }))
     expect(screen.getByText('Riverside park')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '地点' }))
@@ -104,6 +108,7 @@ describe('PersonalMaterialLibrary', () => {
       'He repairs old cameras and taught me to be patient.',
     )
     await user.type(create.getByRole('textbox', { name: '主题标签' }), 'family，hobbies，family')
+    await user.click(create.getByRole('button', { name: 'Part 1' }))
     await user.click(create.getByRole('button', { name: '保存素材' }))
 
     await waitFor(() => expect(props.onCreate).toHaveBeenCalledWith({
@@ -113,6 +118,7 @@ describe('PersonalMaterialLibrary', () => {
       topicTags: ['family', 'hobbies'],
       questionIds: [],
       sourceSessionId: null,
+      sourcePart: 1,
     }))
 
     await user.click(screen.getByRole('button', { name: '编辑' }))
@@ -135,11 +141,13 @@ describe('PersonalMaterialLibrary', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const props = renderLibrary()
 
+    await user.click(screen.getByRole('button', { name: 'Part 2' }))
     await user.click(screen.getByRole('button', { name: '确认收录' }))
     await waitFor(() => expect(props.onConfirmCandidate).toHaveBeenCalledWith(candidate))
     await user.click(screen.getByRole('button', { name: '忽略' }))
     expect(props.onDismissCandidate).toHaveBeenCalledWith(candidate.candidateId)
 
+    await user.click(screen.getByRole('button', { name: 'Part 1' }))
     await user.click(screen.getByRole('button', { name: '归档' }))
     await waitFor(() => expect(props.onArchive).toHaveBeenCalledWith('material-person'))
     await user.click(screen.getByRole('button', { name: '删除' }))
@@ -147,6 +155,7 @@ describe('PersonalMaterialLibrary', () => {
     expect(confirm).toHaveBeenCalledTimes(2)
 
     await user.click(screen.getByRole('button', { name: '已归档' }))
+    await user.click(screen.getByRole('button', { name: 'Part 2' }))
     await user.click(screen.getByRole('button', { name: '恢复' }))
     await waitFor(() => expect(props.onRestore).toHaveBeenCalledWith('material-place'))
   })

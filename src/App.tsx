@@ -243,8 +243,14 @@ export function App() {
    * 一键提炼个人素材:云端可用时走 /v1/materials/suggest,否则用本地启发式
    * 生成"可写角度"草稿。结果只是候选,用户确认后才写入素材库。
    */
-  const handleSuggestMaterials = async (): Promise<PersonalMaterialCandidate[]> => {
-    const context = buildMaterialSuggestionContext(sessions, expressions, allQuestions)
+  const handleSuggestMaterials = async (targetPart: 1 | 2 | 3): Promise<PersonalMaterialCandidate[]> => {
+    const context = buildMaterialSuggestionContext(
+      sessions,
+      expressions,
+      allQuestions,
+      personalMaterials,
+      targetPart,
+    )
     const existingTitles = personalMaterials.map((material) => material.title)
     const localSuggestions = () =>
       buildLocalMaterialSuggestions(context, existingTitles)
@@ -261,6 +267,7 @@ export function App() {
           memoryDigest: context.digest,
           existingTitles,
           maxCount: 4,
+          targetPart,
         })
       } catch (error) {
         const canUseLocalFallback =
@@ -274,6 +281,7 @@ export function App() {
       candidateId: `suggest-${index + 1}-${Date.now()}`,
       status: 'candidate' as const,
       ...suggestion,
+      sourcePart: suggestion.sourcePart ?? targetPart,
     }))
     setMaterialCandidates(nextCandidates)
     return nextCandidates
@@ -297,7 +305,7 @@ export function App() {
 
   const startQuestion = async (question: Question) => {
     try {
-      const nextSession = await runtime.practiceService.createSession(question.id)
+      const nextSession = await runtime.practiceService.createSession(question.id, question.part)
       setSessions((current) => [nextSession, ...current])
       openSession(nextSession)
     } catch (error) {
@@ -336,9 +344,31 @@ export function App() {
     }
   }
 
-  const updateExpression = async (expressionId: string, text: string, topic: string) => {
-    await runtime.practiceService.updateExpression(expressionId, { text, topic })
+  const updateExpression = async (
+    expressionId: string,
+    text: string,
+    topic: string,
+    sourcePart: 1 | 2 | 3 | null,
+  ) => {
+    await runtime.practiceService.updateExpression(expressionId, { text, topic, sourcePart })
     await refreshLibrary()
+  }
+
+  const updateMemoryFactPart = async (
+    sessionId: string,
+    factId: string,
+    sourcePart: 1 | 2 | 3 | null,
+  ) => {
+    const updated = await runtime.practiceService.updateMemoryFactPart(
+      sessionId,
+      factId,
+      sourcePart,
+    )
+    setSession((current) => current?.id === sessionId ? updated : current)
+    setSessions((current) => [
+      updated,
+      ...current.filter((item) => item.id !== sessionId),
+    ])
   }
 
   const deleteExpression = async (expressionId: string) => {
@@ -495,18 +525,20 @@ export function App() {
       questionData?.legacyQuestionsById.get(session.questionId) ??
       null
     : null
-  const activeMemory = activeQuestion && preferences.memoryEnabled
+  const activeMemory = activeQuestion
     ? {
-        reusableExpressions: findReusableExpressions(
+        reusableExpressions: preferences.memoryEnabled
+          ? findReusableExpressions(
           activeQuestion,
           expressions,
           3,
-        ),
+          )
+          : [],
         learnerContext: buildLearnerContext(
           activeQuestion,
-          sessions,
-          expressions,
-          preferences.sharePersonalMaterialsWithAi ? personalMaterials : [],
+          preferences.memoryEnabled ? sessions : [],
+          preferences.memoryEnabled ? expressions : [],
+          preferences.autoMatchPersonalMaterialsWithAi ? personalMaterials : [],
           allQuestions,
         ),
         personalMaterials: findReusablePersonalMaterials(
@@ -602,7 +634,7 @@ export function App() {
           />
         ) : view === 'history' ? (
           <ReviewCenter active="history" onChange={navigateSafely}>
-            <LearnerMemoryPanel sessions={sessions} />
+            <LearnerMemoryPanel sessions={sessions} onUpdateFactPart={updateMemoryFactPart} />
             <HistoryView
               questions={questionsForHistory}
               sessions={sessions}

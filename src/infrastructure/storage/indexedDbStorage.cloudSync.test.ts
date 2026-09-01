@@ -22,6 +22,7 @@ const legacyExpression: SavedExpression = {
   questionId: 'p1-free-time',
   sessionId: 'session-legacy',
   sourceAttempt: 2,
+  sourcePart: 1,
   createdAt: CREATED_AT,
 }
 

@@ -4,6 +4,11 @@ import {
 } from '../domain/accounts'
 import {
   aiFeedbackSchema,
+  secondAttemptAnalysisSchema,
+  type ConfirmedMemoryFact,
+  type IeltsPart,
+  type MemoryCandidate,
+  type SecondAttemptAnalysis,
   savedExpressionSchema,
   trainingSessionSchema,
   type AiFeedback,
@@ -62,16 +67,19 @@ export class PracticeService {
       dependencies.getCurrentUserId ?? (() => LOCAL_DEFAULT_USER_ID)
   }
 
-  async createSession(questionId: string): Promise<TrainingSession> {
+  async createSession(questionId: string, part: 1 | 2 | 3 | null = null): Promise<TrainingSession> {
     const timestamp = this.now().toISOString()
     const session = trainingSessionSchema.parse({
       id: this.createId(),
       ownerId: this.getCurrentUserId(),
       questionId,
+      part,
       status: 'first-ready',
       attempts: [],
       localFeedback: [],
       aiFeedback: null,
+      secondAttemptAnalysis: null,
+      confirmedMemoryFacts: [],
       aiComparison: null,
       comparison: null,
       createdAt: timestamp,
@@ -131,6 +139,7 @@ export class PracticeService {
       localFeedback: [],
       comparison: null,
       aiComparison: null,
+      ...(attemptNumber === 2 ? { secondAttemptAnalysis: null } : {}),
       updatedAt: timestamp,
     })
 
@@ -167,6 +176,34 @@ export class PracticeService {
     }
 
     return this.persistAiFeedback(session, parsedFeedback)
+  }
+
+  async applySecondAttemptAnalysisIfAnswerCurrent(
+    sessionId: string,
+    snapshot: AnswerTextSnapshot,
+    analysis: SecondAttemptAnalysis,
+  ): Promise<TrainingSession | null> {
+    const parsedAnalysis = secondAttemptAnalysisSchema.parse(analysis)
+    const session = await this.requireSession(sessionId)
+    const secondAttempt = session.attempts.find(
+      (attempt) => attempt.attemptNumber === 2,
+    )
+    if (
+      secondAttempt?.id !== snapshot.attemptId ||
+      secondAttempt.transcript.status !== 'ready' ||
+      secondAttempt.transcript.text !== snapshot.text ||
+      secondAttempt.transcript.updatedAt !== snapshot.updatedAt
+    ) {
+      return null
+    }
+
+    const updated = trainingSessionSchema.parse({
+      ...session,
+      secondAttemptAnalysis: parsedAnalysis,
+      updatedAt: this.now().toISOString(),
+    })
+    await this.localStorage.upsertSession(updated)
+    return updated
   }
 
   private async persistAiFeedback(
@@ -236,16 +273,47 @@ export class PracticeService {
     if (cleanText.length === 0) {
       throw new Error('请先挑选一句值得复用的表达。')
     }
-    if (cleanText.length > 320) {
-      throw new Error('个人语料请保留一句或一个短表达，不超过 320 个字符。')
+    const result = await this.finalizeSecondAttempt(sessionId, {
+      correctedSentences: [cleanText],
+      memoryCandidates: [],
+      topic,
+    })
+    const expression = result.expressions[0]
+    if (expression === undefined) {
+      throw new Error('个人语料保存失败。')
+    }
+    return { session: result.session, expression }
+  }
+
+  async finalizeSecondAttempt(
+    sessionId: string,
+    input: {
+      correctedSentences: string[]
+      memoryCandidates: MemoryCandidate[]
+      topic: string
+    },
+  ): Promise<{ session: TrainingSession; expressions: SavedExpression[] }> {
+    const session = await this.requireSession(sessionId)
+    const secondAttempt = session.attempts.find(
+      (attempt) => attempt.attemptNumber === 2,
+    )
+    if (!secondAttempt) {
+      throw new Error('请先完成第二次回答，再提交收录。')
     }
 
+    const sourcePart = session.part ?? inferPartFromQuestionId(session.questionId)
     const timestamp = this.now().toISOString()
-    const expression = savedExpressionSchema.parse({
+    const expressionTexts = [...new Set(
+      input.correctedSentences
+        .map((text) => text.trim())
+        .filter((text) => text.length > 0),
+    )]
+    const expressions = expressionTexts.map((text) => savedExpressionSchema.parse({
       id: this.createId(),
       ownerId: this.getCurrentUserId(),
-      text: cleanText,
-      topic,
+      text,
+      topic: input.topic.trim() || '未分类',
+      sourcePart,
       questionId: session.questionId,
       sessionId,
       sourceAttempt: 2,
@@ -253,17 +321,62 @@ export class PracticeService {
       updatedAt: timestamp,
       reviewCount: 0,
       lastReviewedAt: null,
-    })
-    await this.localStorage.upsertExpression(expression)
+      reuseCount: 0,
+    }))
+    for (const expression of expressions) {
+      await this.localStorage.upsertExpression(expression)
+    }
+
+    const existingFacts = session.confirmedMemoryFacts ?? []
+    const existingFactKeys = new Set(existingFacts.map((fact) => fact.content))
+    const memoryFacts: ConfirmedMemoryFact[] = input.memoryCandidates
+      .filter((candidate) => sourcePart !== null && candidate.sourcePart === sourcePart)
+      .filter((candidate) => {
+        if (existingFactKeys.has(candidate.content)) return false
+        existingFactKeys.add(candidate.content)
+        return true
+      })
+      .map((candidate) => ({
+        id: this.createId(),
+        content: candidate.content,
+        kind: candidate.kind,
+        topicTags: candidate.topicTags,
+        sourceSentence: candidate.sourceSentence,
+        sourcePart: candidate.sourcePart,
+        sourceAttempt: 2,
+        createdAt: timestamp,
+      }))
 
     const updated = trainingSessionSchema.parse({
       ...session,
+      confirmedMemoryFacts: [...existingFacts, ...memoryFacts],
       status: 'completed',
       updatedAt: timestamp,
     })
     await this.localStorage.upsertSession(updated)
     await this.setQuestionDone(session.questionId, true)
-    return { session: updated, expression }
+    return { session: updated, expressions }
+  }
+
+  async updateMemoryFactPart(
+    sessionId: string,
+    factId: string,
+    sourcePart: IeltsPart | null,
+  ): Promise<TrainingSession> {
+    const session = await this.requireSession(sessionId)
+    const facts = session.confirmedMemoryFacts ?? []
+    if (!facts.some((fact) => fact.id === factId)) {
+      throw new Error('这条 Memory 不存在，或不属于当前账号。')
+    }
+    const updated = trainingSessionSchema.parse({
+      ...session,
+      confirmedMemoryFacts: facts.map((fact) =>
+        fact.id === factId ? { ...fact, sourcePart } : fact,
+      ),
+      updatedAt: this.now().toISOString(),
+    })
+    await this.localStorage.upsertSession(updated)
+    return updated
   }
 
   async listQuestionPracticeStates(): Promise<QuestionPracticeState[]> {
@@ -306,13 +419,17 @@ export class PracticeService {
 
   async updateExpression(
     expressionId: string,
-    changes: Pick<SavedExpression, 'text' | 'topic'>,
+    changes: Pick<SavedExpression, 'text' | 'topic' | 'sourcePart'>,
   ): Promise<SavedExpression> {
+    if (changes.sourcePart === null) {
+      throw new Error('保存个人语料前，请先选择归属 Part。')
+    }
     const existing = await this.requireExpression(expressionId)
     const updated = savedExpressionSchema.parse({
       ...existing,
       text: changes.text,
       topic: changes.topic,
+      sourcePart: changes.sourcePart,
       updatedAt: this.now().toISOString(),
     })
     await this.localStorage.upsertExpression(updated)
@@ -393,4 +510,9 @@ export class PracticeService {
     }
     return session
   }
+}
+
+function inferPartFromQuestionId(questionId: string): 1 | 2 | 3 | null {
+  const match = /^p([123])-/u.exec(questionId)
+  return match === null ? null : Number(match[1]) as 1 | 2 | 3
 }

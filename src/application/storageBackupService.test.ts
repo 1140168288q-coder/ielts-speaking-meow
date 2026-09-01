@@ -103,6 +103,7 @@ class MemoryStorage implements LocalStorage, AudioStorage {
 const session: TrainingSession = {
   id: 'backup-session',
   questionId: 'p1-home-001',
+  part: 1,
   status: 'first-review',
   attempts: [
     {
@@ -140,6 +141,8 @@ const session: TrainingSession = {
   ],
   localFeedback: [],
   aiFeedback: null,
+  secondAttemptAnalysis: null,
+  confirmedMemoryFacts: [],
   aiComparison: null,
   comparison: null,
   createdAt: NOW,
@@ -153,6 +156,7 @@ const expression: SavedExpression = {
   questionId: session.questionId,
   sessionId: session.id,
   sourceAttempt: 1,
+  sourcePart: 1,
   createdAt: NOW,
 }
 

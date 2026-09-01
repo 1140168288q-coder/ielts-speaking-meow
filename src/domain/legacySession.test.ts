@@ -101,10 +101,9 @@ describe('normalizeStoredTrainingSession', () => {
     expect(session?.aiFeedback?.grammarSuggestions).toEqual([
       'Use the past tense consistently.',
     ])
-    expect(session?.aiFeedback?.improvedAnswer).toBe(
-      'I like reading books because they help me relax.',
-    )
-    expect(session?.aiFeedback?.referenceAnswers).toHaveLength(3)
+    expect(session?.part).toBe(1)
+    expect(session?.aiFeedback?.referenceAnswers).toHaveLength(2)
+    expect(session?.aiFeedback?.referenceAnswers[0]?.label).toBe('简单优化版')
     expect(session?.aiFeedback?.referenceAnswers[1]?.label).toBe('自然提升版')
   })
 
@@ -121,15 +120,15 @@ describe('normalizeStoredTrainingSession', () => {
       aiFeedback: {
         summary: '新的文本分析。',
         strengths: [],
-        problems: ['一个问题。'],
+        problems: ['一个问题。', '另一个问题。'],
         grammarSuggestions: [],
         vocabularySuggestions: [],
-        improvedAnswer: 'A better answer.',
         referenceAnswers: [
-          { label: '简单自然版', text: 'A simple answer.' },
+          { label: '简单优化版', text: 'A simple answer.' },
           { label: '自然提升版', text: 'A better answer.' },
-          { label: '另一种表达版', text: 'Another answer.' },
         ],
+        naturalUpgradeSuggestions: { addableContent: [], advancedChanges: [] },
+        answerFramework: [],
       },
       readAloud: null,
     }
@@ -137,6 +136,33 @@ describe('normalizeStoredTrainingSession', () => {
     const session = normalizeStoredTrainingSession(current)
     expect(session?.aiFeedback?.summary).toBe('新的文本分析。')
     expect(session?.attempts[0]?.audio).toBeNull()
+  })
+
+  it('limits migrated legacy priorities to the current two-item contract', () => {
+    const manyIssues = normalizeStoredTrainingSession({
+      ...legacySession,
+      aiFeedback: {
+        ...legacySession.aiFeedback,
+        keyIssues: [
+          ...legacySession.aiFeedback.keyIssues,
+          {
+            category: 'vocabulary',
+            title: 'Word choice',
+            observation: 'One word is not a good fit.',
+            action: 'Use a simpler word.',
+            evidence: null,
+          },
+          {
+            category: 'grammar',
+            title: 'Articles',
+            observation: 'An article is missing.',
+            action: 'Add the article.',
+            evidence: null,
+          },
+        ],
+      },
+    })
+    expect(manyIssues?.aiFeedback?.problems).toHaveLength(2)
   })
 
   it('returns null for unrecognizable records', () => {

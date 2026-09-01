@@ -51,25 +51,28 @@ const attempt: PracticeAttempt = {
 const feedback: AiFeedback = {
   summary: '回答切题，重点改进过去时态。',
   strengths: ['有具体例子。'],
-  problems: ['过去时态混用。'],
+  problems: ['过去时态混用。', '结尾还可以补一个具体细节。'],
   grammarSuggestions: ['先想好动词过去式。'],
   vocabularySuggestions: ['用 relaxing 代替 good。'],
-  improvedAnswer: 'I like reading books because they help me relax.',
   referenceAnswers: [
-    { label: '简单自然版', text: 'I like reading books because they help me relax.' },
+    { label: '简单优化版', text: 'I like reading books because they help me relax.' },
     { label: '自然提升版', text: 'I enjoy reading books because they help me unwind.' },
-    { label: '另一种表达版', text: 'Reading is my favourite way to relax after a busy day.' },
   ],
+  naturalUpgradeSuggestions: { addableContent: [], advancedChanges: ['可以补充一个具体细节。'] },
+  answerFramework: [{ label: '直接回答', template: 'I usually ___ because ___.' }],
 }
 
 function makeSession(overrides: Partial<TrainingSession> = {}): TrainingSession {
   return {
     id: 'session-1',
     questionId: question.id,
+    part: question.part,
     status: 'first-ready',
     attempts: [],
     localFeedback: [],
     aiFeedback: null,
+    secondAttemptAnalysis: null,
+    confirmedMemoryFacts: [],
     comparison: null,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -98,6 +101,8 @@ function createService(
   return {
     saveTextAttempt: vi.fn(),
     applyAiFeedbackIfAnswerCurrent: vi.fn(),
+    applySecondAttemptAnalysisIfAnswerCurrent: vi.fn(),
+    finalizeSecondAttempt: vi.fn(),
     prepareSecondAttempt: vi.fn(),
     completeSession: vi.fn(),
     submitSecondAnswerToCorpus: vi.fn(),
@@ -198,15 +203,11 @@ describe('PracticeFlow V1.7 text answer flow', () => {
     expect(screen.getByText('过去时态混用。')).toBeInTheDocument()
     expect(screen.getByText('先想好动词过去式。')).toBeInTheDocument()
     expect(screen.getByText('用 relaxing 代替 good。')).toBeInTheDocument()
-    expect(screen.getAllByText('简单自然版').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('简单优化版').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('自然提升版').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('另一种表达版').length).toBeGreaterThanOrEqual(1)
 
-    // improvedAnswer 与“简单自然版”内容相同,是产品允许的;这里只确认存在。
-    expect(screen.getAllByText(feedback.improvedAnswer).length).toBeGreaterThanOrEqual(2)
-
-    // 优化答案按钮:第一次播放,第二次立即停止。
-    const improvedToggle = screen.getByRole('button', { name: '试听' })
+    // 参考答案按钮:第一次播放,第二次立即停止。
+    const improvedToggle = screen.getByRole('button', { name: '试听 简单优化版' })
     await user.click(improvedToggle)
     expect(screen.getByRole('button', { name: '停止' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '停止' }))
@@ -216,7 +217,7 @@ describe('PracticeFlow V1.7 text answer flow', () => {
 
     // 播放 A 时点 B:先切换参考回答 tab,再点 B 的试听;
     // UI 只保留 B 的播放状态,并提交 B 的新文本。
-    await user.click(screen.getByRole('button', { name: '试听' }))
+    await user.click(screen.getByRole('button', { name: '试听 简单优化版' }))
     await user.click(screen.getByRole('tab', { name: '自然提升版' }))
     await user.click(screen.getByRole('button', { name: '试听 自然提升版' }))
     expect(screen.getByRole('button', { name: '停止' })).toBeInTheDocument()
@@ -229,6 +230,37 @@ describe('PracticeFlow V1.7 text answer flow', () => {
         ]),
       ]),
     )
+  })
+
+  it('keeps the question replayable in the second-answer stage', async () => {
+    const user = userEvent.setup()
+    const audioFocus = createAudioFocus()
+
+    render(
+      <PracticeFlow
+        question={question}
+        session={makeSession({
+          status: 'second-ready',
+          attempts: [attempt],
+          aiFeedback: feedback,
+        })}
+        service={createService()}
+        audioFocus={audioFocus}
+        textAi={createTextAi()}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={() => undefined}
+        onBack={() => undefined}
+      />,
+    )
+
+    const questionButton = screen.getByRole('button', { name: '播放题目' })
+    await user.click(questionButton)
+    expect(screen.getByRole('button', { name: '停止播报' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '停止播报' }))
+    expect(
+      (audioFocus.stopTTS as ReturnType<typeof vi.fn>).mock.calls.length,
+    ).toBeGreaterThan(0)
   })
 
 

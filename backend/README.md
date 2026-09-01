@@ -49,7 +49,8 @@ FastAPI Backend(密钥在环境变量,日志脱敏)
 | GET | `/v1/sync/pull?cursor=0&limit=200` | `Authorization: Bearer <token>`；按单调 cursor 增量拉取，limit 范围 1–500 |
 | GET | `/health` | 存活 + DeepSeek / TTS 详情:密钥是否配置、模型 / 音色、最近一次真实调用的验证状态(verified / unverified / failed + 时间),不含密钥 |
 | POST | `/health/verify` | 需要 Bearer token；真实小规模验证 DeepSeek 与 TTS 上游 |
-| POST | `/v1/feedback` | 需要已验证邮箱的 Bearer token；JSON `{part, question, answer, answerDurationSeconds?, tutorContext?, learnerContext?}` → V2.0 文本分析结构(`summary` / `strengths` / `problems` / `grammarSuggestions` / `vocabularySuggestions` / `improvedAnswer` / 恰好 3 个 `referenceAnswers`) |
+| POST | `/v1/feedback` | 需要已验证邮箱的 Bearer token；JSON `{part, question, answer, answerDurationSeconds?, tutorContext?, learnerContext?}` → 文本分析结构(`summary` / `strengths` / `problems` / `grammarSuggestions` / `vocabularySuggestions` / 恰好 2 个 `referenceAnswers` / `naturalUpgradeSuggestions` / `answerFramework`) |
+| POST | `/v1/feedback/second-attempt` | 需要已验证邮箱的 Bearer token；JSON `{part, question, answer}` → 仅包含错误后的完整句修正和可确认的个人信息候选，不读取第一答、RAG 或 Memory |
 | POST | `/v1/tts` | 需要 Bearer token；JSON `{text, language?, rate?, pitch?}` → `audio/mpeg` 二进制；rate/pitch 映射火山 speed_ratio / pitch_ratio(0.5–2.0) |
 | POST | `/v1/organize` | 需要 Bearer token；JSON `{fileName, extractedText}` → `{questions: [...]}` |
 
@@ -201,8 +202,11 @@ outbox。冲突不会由服务端静默覆盖；客户端应先采用 `current` 
 - 只分析答案文本：语法、词汇、连贯性、表达自然度、是否切题、内容展开；
 - 优先指出最重要的问题，不过度纠错；
 - 修改表达时保持用户原本水平和表达习惯，不突然拔高到难以模仿的高级英语；
-- 每个答案返回恰好 3 个参考回答：简单自然版 / 自然提升版 / 另一种表达版，
-  都必须是真实口语，不是作文或背诵范文；
+- 每个答案返回恰好 2 个参考回答：简单优化版 / 自然提升版；简单优化版只基于
+  用户原答案，自然提升版才结合当前题相关 RAG、统一 Memory、个人素材和必要的 AI 示例；
+- 自然提升版额外返回可添加内容、进阶修改建议和“本题要点”句式框架；
+- 第二次回答通过独立接口分析，只返回真实错误的完整句修正和明确个人信息候选，
+  客户端必须在用户确认后分别保存到个人语料或统一 Memory；
 - 不评价 Pronunciation、语速、停顿、语调；不给出 IELTS Band 分数或水平评分。
 
 ## 安全基线

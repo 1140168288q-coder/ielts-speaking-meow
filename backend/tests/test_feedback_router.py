@@ -14,20 +14,29 @@ TEXT_FEEDBACK = {
     "problems": ["过去时有两处混用。", "结尾展开还可以再具体一点。"],
     "grammarSuggestions": ["下次说过去经历时，先想好动词的过去式。"],
     "vocabularySuggestions": ["可以把 good 换成具体一点的词，例如 relaxing。"],
-    "improvedAnswer": "I like reading books in my free time because they help me relax after a busy day.",
     "referenceAnswers": [
         {
-            "label": "简单自然版",
+            "label": "简单优化版",
             "text": "I like reading books in my free time because they help me relax.",
         },
         {
             "label": "自然提升版",
             "text": "In my free time, I enjoy reading books because they help me unwind and learn something new.",
         },
-        {
-            "label": "另一种表达版",
-            "text": "Reading is my favourite way to relax. A good book lets me escape and learn new things.",
-        },
+    ],
+    "naturalUpgradeSuggestions": {
+        "addableContent": [
+            {
+                "content": "可以补充一本具体的书或一个阅读场景。",
+                "source": "rag",
+                "sourcePart": 1,
+                "replaceable": False,
+            }
+        ],
+        "advancedChanges": ["可以在结尾再补一个个人细节。"],
+    },
+    "answerFramework": [
+        {"label": "直接回答", "template": "I usually ___ because ___."}
     ],
 }
 
@@ -36,6 +45,31 @@ FEEDBACK_PAYLOAD = {
     "question": {"part": 1, "topic": "Hobbies", "prompt": "What do you like to do in your free time?"},
     "answer": "I like reading books in my free time.",
     "answerDurationSeconds": 14,
+}
+
+SECOND_ATTEMPT_FEEDBACK = {
+    "correctedSentences": [
+        {
+            "original": "I go there last year.",
+            "corrected": "I went there last year.",
+            "reason": "过去时间要使用过去式。",
+        }
+    ],
+    "memoryCandidates": [
+        {
+            "content": "我去年和朋友去了北京。",
+            "kind": "experience",
+            "topicTags": ["travel", "friends"],
+            "sourceSentence": "I went to Beijing with my friends last year.",
+            "sourcePart": 1,
+        }
+    ],
+}
+
+SECOND_ATTEMPT_PAYLOAD = {
+    "part": 1,
+    "question": {"part": 1, "topic": "Travel", "prompt": "Do you like travelling?"},
+    "answer": "I go there last year. I went to Beijing with my friends last year.",
 }
 
 
@@ -58,7 +92,7 @@ async def test_feedback_happy_path(make_app):
     assert response.status_code == 200
     body = response.json()
     assert body["summary"] == "回答切题，先肯定；重点是时态需要再稳一点。"
-    assert len(body["referenceAnswers"]) == 3
+    assert len(body["referenceAnswers"]) == 2
     assert body["referenceAnswers"][1]["label"] == "自然提升版"
     assert body["problems"]
 
@@ -103,6 +137,31 @@ async def test_feedback_sends_text_only_payload(make_app):
     assert parsed_user["tutorContext"].startswith("【Part 1")
     assert parsed_user["learnerContext"].startswith("本机历史")
     assert "contextRules" in parsed_user
+
+
+async def test_second_attempt_feedback_returns_only_corrections_and_memory_candidates(make_app):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": json.dumps(SECOND_ATTEMPT_FEEDBACK)}}],
+        })
+
+    app, _ = make_app(handler)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(
+            client, "/v1/feedback/second-attempt", SECOND_ATTEMPT_PAYLOAD
+        )
+
+    assert response.status_code == 200
+    assert response.json() == SECOND_ATTEMPT_FEEDBACK
+    user_prompt = json.loads(captured["body"]["messages"][1]["content"])
+    assert user_prompt["task"] == "review-ielts-speaking-second-attempt"
+    assert "learnerContext" not in user_prompt
+    assert "memoryCandidates" in user_prompt["requiredShape"]
 
 
 async def test_feedback_rejects_empty_answer(make_app):
@@ -179,7 +238,8 @@ MATERIAL_SUGGESTIONS = {
             "title": "关于 hometown 的素材草稿",
             "content": "写一写你小时候常去的那条街：谁常在那里、你做过什么。",
             "kind": "place",
-            "topicTags": ["hometown", "childhood"],
+                "topicTags": ["hometown", "childhood"],
+                "sourcePart": 1,
         },
     ]
 }
@@ -205,6 +265,7 @@ async def test_material_suggest_happy_path(make_app):
                 "memoryDigest": "本机历史:共完成 3 次单题练习;常练话题:hometown(2次)。",
                 "existingTitles": ["My grandmother"],
                 "maxCount": 4,
+                "targetPart": 1,
             },
         )
     assert response.status_code == 200
@@ -213,6 +274,7 @@ async def test_material_suggest_happy_path(make_app):
     user_prompt = json.loads(captured["body"]["messages"][1]["content"])
     assert user_prompt["memoryDigest"].startswith("本机历史")
     assert user_prompt["existingTitles"] == ["My grandmother"]
+    assert user_prompt["targetPart"] == 1
 
 
 async def test_material_suggest_rejects_blank_digest(make_app):

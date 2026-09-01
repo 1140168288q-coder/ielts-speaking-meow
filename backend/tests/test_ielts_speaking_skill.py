@@ -5,7 +5,7 @@ from app.services.ielts_speaking_skill import (
 
 
 def test_ielts_speaking_skill_is_rules_only_and_part_aware():
-    assert IELTS_SPEAKING_SKILL_VERSION == "2026.08-v1"
+    assert IELTS_SPEAKING_SKILL_VERSION == "2026.08-v2"
     assert "Part 1" in IELTS_SPEAKING_SKILL
     assert "Part 2" in IELTS_SPEAKING_SKILL
     assert "Part 3" in IELTS_SPEAKING_SKILL

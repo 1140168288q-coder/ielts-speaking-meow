@@ -16,6 +16,7 @@ import type {
   PersonalMaterial,
   PersonalMaterialKind,
 } from '../../domain/personalMaterials'
+import type { IeltsPart } from '../../domain/models'
 import type {
   PersonalMaterialCandidate,
   PersonalMaterialInput,
@@ -49,7 +50,7 @@ export interface PersonalMaterialLibraryProps {
   onRestore: (materialId: string) => Promise<void>
   onDelete: (materialId: string) => Promise<void>
   /** 根据练习记忆与个人语料提炼候选素材;确认前不落盘。 */
-  onSuggestMaterials?: () => Promise<PersonalMaterialCandidate[]>
+  onSuggestMaterials?: (targetPart: IeltsPart) => Promise<PersonalMaterialCandidate[]>
   onConfirmCandidate?: (
     candidate: PersonalMaterialCandidate,
   ) => Promise<void>
@@ -69,6 +70,7 @@ export function PersonalMaterialLibrary({
   onDismissCandidate,
 }: PersonalMaterialLibraryProps) {
   const [query, setQuery] = useState('')
+  const [selectedPart, setSelectedPart] = useState<IeltsPart | 'unclassified'>(1)
   const [kind, setKind] = useState<PersonalMaterialKind | 'all'>('all')
   const [status, setStatus] = useState<StatusFilter>('active')
   const [creating, setCreating] = useState(false)
@@ -86,15 +88,25 @@ export function PersonalMaterialLibrary({
           ? material.status === 'archived'
           : material.status !== 'archived'
       const kindMatches = kind === 'all' || material.kind === kind
+      const partMatches =
+        selectedPart === 'unclassified'
+          ? material.sourcePart === null
+          : material.sourcePart === selectedPart
       const textMatches =
         normalizedQuery.length === 0 ||
         [material.title, material.content, ...material.topicTags]
           .join(' ')
           .toLocaleLowerCase()
           .includes(normalizedQuery)
-      return statusMatches && kindMatches && textMatches
+      return statusMatches && kindMatches && partMatches && textMatches
     })
-  }, [kind, materials, query, status])
+  }, [kind, materials, query, selectedPart, status])
+
+  const visibleCandidates = candidates.filter((candidate) =>
+    selectedPart === 'unclassified'
+      ? (candidate.sourcePart ?? null) === null
+      : candidate.sourcePart === selectedPart,
+  )
 
   const run = async (
     itemId: string,
@@ -137,7 +149,8 @@ export function PersonalMaterialLibrary({
     setMessage(null)
     setSuggestBusy(true)
     try {
-      const suggested = await onSuggestMaterials()
+      if (selectedPart === 'unclassified') return
+      const suggested = await onSuggestMaterials(selectedPart)
       setMessage(
         suggested.length > 0
           ? '提炼完成：请勾选真正属于你的素材，确认后才会保存。'
@@ -151,6 +164,8 @@ export function PersonalMaterialLibrary({
       setSuggestBusy(false)
     }
   }
+
+  const partLabel = (part: IeltsPart | null) => part === null ? '未分类' : `Part ${part}`
 
   return (
     <section className="page-stack library-page">
@@ -177,12 +192,13 @@ export function PersonalMaterialLibrary({
           <button
             type="button"
             className="secondary-button"
-            disabled={suggestBusy}
+            disabled={suggestBusy || selectedPart === 'unclassified'}
             onClick={() => void runSuggest()}
           >
             <Sparkles aria-hidden="true" size={17} />
             {suggestBusy ? '正在从记忆里提炼…' : '从练习记忆里提炼素材'}
           </button>
+          {selectedPart === 'unclassified' ? <small>请先选择 Part 1、2 或 3，再按该 Part 提炼素材。</small> : null}
           {suggestError ? (
             <span className="settings-feedback error" role="alert">{suggestError}</span>
           ) : null}
@@ -191,17 +207,17 @@ export function PersonalMaterialLibrary({
 
       {message ? <div className="notice" role="status">{message}</div> : null}
 
-      {candidates.length > 0 ? (
+      {visibleCandidates.length > 0 ? (
         <section aria-labelledby="material-candidates-title">
           <div className="question-group-heading">
             <span id="material-candidates-title">待你确认的候选素材</span>
-            <small>{candidates.length} 条</small>
+            <small>{visibleCandidates.length} 条</small>
           </div>
           <div className="expression-list">
-            {candidates.map((candidate) => (
+            {visibleCandidates.map((candidate) => (
               <article key={candidate.candidateId}>
                 <div className="expression-meta">
-                  <span>候选素材 · {kindLabels[candidate.kind]}</span>
+                  <span>候选素材 · {kindLabels[candidate.kind]} · {partLabel(candidate.sourcePart ?? null)}</span>
                   <small>尚未保存</small>
                 </div>
                 <h2>{candidate.title}</h2>
@@ -237,6 +253,27 @@ export function PersonalMaterialLibrary({
       ) : null}
 
       <div className="question-filter-panel">
+        <div className="question-filter-chips" role="group" aria-label="素材 Part 筛选">
+          {([1, 2, 3] as const).map((part) => (
+            <button
+              key={part}
+              type="button"
+              className={selectedPart === part ? 'active' : ''}
+              aria-pressed={selectedPart === part}
+              onClick={() => setSelectedPart(part)}
+            >
+              Part {part}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={selectedPart === 'unclassified' ? 'active' : ''}
+            aria-pressed={selectedPart === 'unclassified'}
+            onClick={() => setSelectedPart('unclassified')}
+          >
+            未分类
+          </button>
+        </div>
         <label className="question-search">
           <Search size={18} aria-hidden="true" />
           <span className="sr-only">搜索个人素材</span>
@@ -285,7 +322,7 @@ export function PersonalMaterialLibrary({
           >
             已归档
           </button>
-          <span>{visibleMaterials.length} 条素材</span>
+          <span>{visibleMaterials.length} 条素材 · {partLabel(selectedPart === 'unclassified' ? null : selectedPart)}</span>
         </div>
       </div>
 
@@ -333,7 +370,7 @@ export function PersonalMaterialLibrary({
               ) : (
                 <>
                   <div className="expression-meta">
-                    <span>{kindLabels[material.kind]} · {material.topicTags.join(' · ') || '未添加主题'}</span>
+                    <span>{kindLabels[material.kind]} · {partLabel(material.sourcePart)} · {material.topicTags.join(' · ') || '未添加主题'}</span>
                     <small>{material.status === 'archived' ? '已归档' : formatDate(material.updatedAt)}</small>
                   </div>
                   <h2>{material.title}</h2>
@@ -405,6 +442,7 @@ function MaterialForm({
   const [materialTitle, setMaterialTitle] = useState(initialValue?.title ?? '')
   const [content, setContent] = useState(initialValue?.content ?? '')
   const [kind, setKind] = useState<PersonalMaterialKind>(initialValue?.kind ?? 'experience')
+  const [sourcePart, setSourcePart] = useState<IeltsPart>(initialValue?.sourcePart ?? 1)
   const [tags, setTags] = useState(initialValue?.topicTags.join('，') ?? '')
   const valid = materialTitle.trim().length > 0 && content.trim().length > 0
 
@@ -418,6 +456,7 @@ function MaterialForm({
           title: materialTitle,
           content,
           kind,
+          sourcePart,
           topicTags: parseTags(tags),
           questionIds: initialValue?.questionIds ?? [],
           sourceSessionId: initialValue?.sourceSessionId ?? null,
@@ -425,6 +464,22 @@ function MaterialForm({
       }}
     >
       <h2>{title}</h2>
+      <fieldset>
+        <legend>归属 Part</legend>
+        <div className="question-filter-chips">
+          {([1, 2, 3] as const).map((part) => (
+            <button
+              key={part}
+              type="button"
+              className={sourcePart === part ? 'active' : ''}
+              aria-pressed={sourcePart === part}
+              onClick={() => setSourcePart(part)}
+            >
+              Part {part}
+            </button>
+          ))}
+        </div>
+      </fieldset>
       <fieldset>
         <legend>素材类型</legend>
         <div className="question-filter-chips">

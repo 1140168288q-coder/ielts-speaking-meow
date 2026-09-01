@@ -17,7 +17,7 @@ describe('userPreferences', () => {
       ownerId: 'owner-a',
       feedbackDetail: 'focused',
       memoryEnabled: true,
-      sharePersonalMaterialsWithAi: false,
+      autoMatchPersonalMaterialsWithAi: true,
       ttsVoicePreset: 'backend-default',
       ttsVoiceMode: 'natural-first',
       ttsRate: 0.92,

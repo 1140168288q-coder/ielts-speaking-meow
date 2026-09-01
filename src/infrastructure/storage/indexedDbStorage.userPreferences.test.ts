@@ -37,7 +37,7 @@ describe('IndexedDbStorage user preferences', () => {
     const storage = createAdapter()
     const ownerA = updateUserPreferences(
       createDefaultUserPreferences('owner-a'),
-      { theme: 'dark', sharePersonalMaterialsWithAi: true },
+      { theme: 'dark', autoMatchPersonalMaterialsWithAi: true },
       new Date('2026-08-24T08:00:00.000Z'),
     )
     const ownerB = updateUserPreferences(
@@ -74,7 +74,7 @@ describe('IndexedDbStorage user preferences', () => {
       defaultPart: 1,
       feedbackDetail: 'focused',
       memoryEnabled: true,
-      sharePersonalMaterialsWithAi: false,
+      autoMatchPersonalMaterialsWithAi: false,
       reduceMotion: false,
       updatedAt: '2026-08-01T08:00:00.000Z',
     }

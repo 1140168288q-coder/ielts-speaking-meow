@@ -34,6 +34,7 @@ const expression: SavedExpression = {
   questionId: 'p2-describe-a-boring-place-other',
   sessionId: 'session-1',
   sourceAttempt: 2,
+  sourcePart: 2,
   createdAt: '2026-08-01T08:00:00.000Z',
   reviewCount: 1,
   lastReviewedAt: null,
@@ -43,18 +44,25 @@ const expression: SavedExpression = {
 const session: TrainingSession = {
   id: 'session-1',
   questionId: question.id,
+  part: 2,
   status: 'completed',
   attempts: [],
   localFeedback: [],
   aiFeedback: {
     summary: '回答切题。',
     strengths: ['有具体例子。'],
-    problems: ['讲过去经历时过去时态不稳。'],
+    problems: ['讲过去经历时过去时态不稳。', '还可以补一个具体细节。'],
     grammarSuggestions: ['先想好动词过去式。'],
     vocabularySuggestions: [],
-    improvedAnswer: 'The place felt empty and too quiet.',
-    referenceAnswers: [],
+    referenceAnswers: [
+      { label: '简单优化版', text: 'The place felt empty and too quiet.' },
+      { label: '自然提升版', text: 'The place felt empty and too quiet, so I left early.' },
+    ],
+    naturalUpgradeSuggestions: { addableContent: [], advancedChanges: [] },
+    answerFramework: [{ label: '经历', template: 'I went there when ___.' }],
   },
+  secondAttemptAnalysis: null,
+  confirmedMemoryFacts: [],
   comparison: null,
   createdAt: '2026-08-01T08:00:00.000Z',
   updatedAt: '2026-08-02T08:00:00.000Z',
@@ -66,6 +74,7 @@ const material: PersonalMaterial = {
   title: 'A quiet riverside walk',
   content: 'I often walk beside the Yangtze with my father on Sunday mornings.',
   kind: 'experience',
+  sourcePart: 2,
   topicTags: ['river', 'family'],
   questionIds: [question.id],
   sourceSessionId: session.id,
@@ -113,6 +122,27 @@ describe('userMemory', () => {
     expect(matches).toHaveLength(1)
     expect(matches[0]?.material.id).toBe(material.id)
     expect(matches[0]?.reason).toContain('关联')
+  })
+
+  it('uses the unified Memory brain across Parts only when the topic matches', () => {
+    const memorySession: TrainingSession = {
+      ...session,
+      id: 'memory-session',
+      part: 1,
+      confirmedMemoryFacts: [{
+        id: 'fact-1',
+        content: 'I often visit a quiet park near my hometown.',
+        kind: 'place',
+        topicTags: ['place', 'hometown'],
+        sourceSentence: 'I often visit a quiet park near my hometown.',
+        sourcePart: 1,
+        sourceAttempt: 2,
+        createdAt: '2026-08-03T08:00:00.000Z',
+      }],
+    }
+    const memory = buildLearnerMemory(question, [memorySession], [], [], [question])
+    expect(memory.reusableMemoryFacts[0]?.fact.content).toContain('quiet park')
+    expect(memory.reusableMemoryFacts[0]?.reason).not.toContain('同 Part')
   })
 
   it('aggregates a material suggestion digest from local history only', () => {

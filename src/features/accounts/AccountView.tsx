@@ -18,7 +18,7 @@ export function AccountView({
   onSwitched: (account: AccountProfile) => void
   onOpenSettings?: () => void
   cloudPanel?: ReactNode
-  preferences?: Pick<UserPreferences, 'memoryEnabled' | 'sharePersonalMaterialsWithAi'>
+  preferences?: Pick<UserPreferences, 'memoryEnabled' | 'autoMatchPersonalMaterialsWithAi'>
   onPreferencesChange?: (update: UserPreferencesUpdate) => Promise<void>
 }) {
   const [accounts, setAccounts] = useState<AccountProfile[]>([])

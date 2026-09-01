@@ -2,6 +2,7 @@ import {
   type AiFeedback,
   type PracticeTexts,
   type SavedExpression,
+  type SecondAttemptAnalysis,
   type TrainingSession,
 } from '../domain/models'
 import type { QuestionPracticeState } from '../domain/questionPracticeState'
@@ -158,15 +159,15 @@ const createService = (
 const FEEDBACK: AiFeedback = {
   summary: '回答切题，重点是过去时态需要更稳。',
   strengths: ['有具体例子。'],
-  problems: ['过去时态混用。'],
+  problems: ['过去时态混用。', '结尾还可以补一个具体细节。'],
   grammarSuggestions: ['先想好动词过去式。'],
   vocabularySuggestions: ['用 relaxing 代替 good。'],
-  improvedAnswer: 'I like reading books because they help me relax.',
   referenceAnswers: [
-    { label: '简单自然版', text: 'I like reading books because they help me relax.' },
+    { label: '简单优化版', text: 'I like reading books because they help me relax.' },
     { label: '自然提升版', text: 'I enjoy reading books because they help me unwind.' },
-    { label: '另一种表达版', text: 'Reading is my favourite way to relax after a busy day.' },
   ],
+  naturalUpgradeSuggestions: { addableContent: [], advancedChanges: [] },
+  answerFramework: [{ label: '直接回答', template: 'I usually ___ because ___.' }],
 }
 
 describe('PracticeService V1.7 text-answer flow', () => {
@@ -238,7 +239,7 @@ describe('PracticeService V1.7 text-answer flow', () => {
 
     expect(updated?.status).toBe('feedback-ready')
     expect(updated?.aiFeedback?.summary).toBe(FEEDBACK.summary)
-    expect(updated?.aiFeedback?.referenceAnswers).toHaveLength(3)
+    expect(updated?.aiFeedback?.referenceAnswers).toHaveLength(2)
 
     const stale = await service.applyAiFeedbackIfAnswerCurrent(
       session.id,
@@ -266,6 +267,85 @@ describe('PracticeService V1.7 text-answer flow', () => {
 
     expect(secondReady.status).toBe('second-ready')
     expect(secondReady.attempts).toHaveLength(1)
+  })
+
+  it('stores second-answer corrections as corpus and asks before adding Memory facts', async () => {
+    const storage = new MemoryPersistence()
+    const service = createService(storage)
+    const created = await service.createSession('p1-hobbies', 1)
+    const first = await service.saveTextAttempt(created.id, 1, 'I like reading.', null)
+    const ready = await service.prepareSecondAttempt(first.id)
+    const second = await service.saveTextAttempt(ready.id, 2, 'I go there last year.', null)
+    const analysis: SecondAttemptAnalysis = {
+      correctedSentences: [{
+        original: 'I go there last year.',
+        corrected: 'I went there last year.',
+        reason: '过去时间使用过去式。',
+      }],
+      memoryCandidates: [{
+        content: '我去年去了北京。',
+        kind: 'experience',
+        topicTags: ['travel'],
+        sourceSentence: 'I went to Beijing last year.',
+        sourcePart: 1,
+      }],
+    }
+
+    const analyzed = await service.applySecondAttemptAnalysisIfAnswerCurrent(
+      second.id,
+      {
+        attemptId: second.attempts.find((item) => item.attemptNumber === 2)!.id,
+        text: 'I go there last year.',
+        updatedAt: second.attempts.find((item) => item.attemptNumber === 2)!.transcript.updatedAt,
+      },
+      analysis,
+    )
+    expect(analyzed?.secondAttemptAnalysis).toEqual(analysis)
+
+    const result = await service.finalizeSecondAttempt(second.id, {
+      correctedSentences: ['I went there last year.'],
+      memoryCandidates: analysis.memoryCandidates,
+      topic: 'Travel',
+    })
+    expect(result.session.status).toBe('completed')
+    expect(result.expressions[0]).toMatchObject({
+      text: 'I went there last year.',
+      sourceAttempt: 2,
+      sourcePart: 1,
+    })
+    expect(result.session.confirmedMemoryFacts[0]).toMatchObject({
+      content: '我去年去了北京。',
+      sourcePart: 1,
+      sourceAttempt: 2,
+    })
+  })
+
+  it('lets the learner reclassify a unified Memory fact without duplicating it', async () => {
+    const storage = new MemoryPersistence()
+    const service = createService(storage)
+    const created = await service.createSession('p1-hobbies', 1)
+    const first = await service.saveTextAttempt(created.id, 1, 'I like reading.', null)
+    const ready = await service.prepareSecondAttempt(first.id)
+    const second = await service.saveTextAttempt(ready.id, 2, 'I read at home.', null)
+    const result = await service.finalizeSecondAttempt(second.id, {
+      correctedSentences: [],
+      memoryCandidates: [{
+        content: '我喜欢在家阅读。',
+        kind: 'preference',
+        topicTags: ['hobbies'],
+        sourceSentence: 'I read at home.',
+        sourcePart: 1,
+      }],
+      topic: 'Hobbies',
+    })
+
+    const reclassified = await service.updateMemoryFactPart(
+      result.session.id,
+      result.session.confirmedMemoryFacts[0]!.id,
+      2,
+    )
+    expect(reclassified.confirmedMemoryFacts).toHaveLength(1)
+    expect(reclassified.confirmedMemoryFacts[0]?.sourcePart).toBe(2)
   })
 
   it('saves the full second answer but only submits a confirmed snippet to the personal corpus', async () => {
@@ -361,7 +441,7 @@ describe('PracticeService V1.7 text-answer flow', () => {
 
     const updated = await service.updateExpression(
       submitted.expression.id,
-      { text: 'I really like reading books.', topic: 'Books' },
+      { text: 'I really like reading books.', topic: 'Books', sourcePart: 1 },
     )
     expect(updated.text).toBe('I really like reading books.')
 
@@ -432,7 +512,7 @@ describe('PracticeService V1.7 text-answer flow', () => {
     await expect(
       aliceService.updateExpression(
         submitted.expression.id,
-        { text: 'Alice cannot edit this.', topic: 'Hobbies' },
+        { text: 'Alice cannot edit this.', topic: 'Hobbies', sourcePart: 1 },
       ),
     ).rejects.toThrow('not found')
   })

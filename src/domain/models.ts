@@ -172,15 +172,11 @@ const aiAnalysisText = (maximumLength: number) =>
     'AI feedback must not include band scores or unsupported speech claims',
   )
 
-const requiredReferenceLabels = [
-  '简单自然版',
-  '自然提升版',
-  '另一种表达版',
-] as const
+const requiredReferenceLabels = ['简单优化版', '自然提升版'] as const
 
 export const referenceAnswerSchema = z
   .object({
-    /** 中文标签,如:简单自然版 / 自然提升版 / 另一种表达版。 */
+    /** 中文标签:简单优化版 / 自然提升版。 */
     label: nonEmptyText(40),
     text: nonEmptyText(1_500),
   })
@@ -191,14 +187,12 @@ export const aiFeedbackSchema = z
     /** 用中文写的整体小结。 */
     summary: aiAnalysisText(500),
     strengths: z.array(aiAnalysisText(320)).max(3),
-    problems: z.array(aiAnalysisText(320)).max(3),
+    problems: z.array(aiAnalysisText(320)).max(2),
     grammarSuggestions: z.array(aiAnalysisText(320)).max(3),
     vocabularySuggestions: z.array(aiAnalysisText(320)).max(3),
-    /** 保持用户原本水平和表达习惯的优化版回答。 */
-    improvedAnswer: nonEmptyText(1_500),
     referenceAnswers: z
       .array(referenceAnswerSchema)
-      .length(3)
+      .length(2)
       .superRefine((answers, context) => {
         requiredReferenceLabels.forEach((label, index) => {
           if (answers[index]?.label !== label) {
@@ -210,11 +204,83 @@ export const aiFeedbackSchema = z
           }
         })
       }),
+    naturalUpgradeSuggestions: z
+      .object({
+        addableContent: z
+          .array(
+            z
+              .object({
+                content: aiAnalysisText(500),
+                source: z.enum(['memory', 'personal_material', 'rag', 'ai_example']),
+                sourcePart: z.union([
+                  ieltsPartSchema,
+                  z.literal('unclassified'),
+                  z.null(),
+                ]),
+                replaceable: z.boolean(),
+              })
+              .strict(),
+          )
+          .max(4),
+        advancedChanges: z.array(aiAnalysisText(320)).max(3),
+      })
+      .strict(),
+    answerFramework: z.array(
+      z
+        .object({
+          label: aiAnalysisText(120),
+          template: aiAnalysisText(320),
+        })
+        .strict(),
+    ).max(6),
   })
   .strict()
 
 export type ReferenceAnswer = z.infer<typeof referenceAnswerSchema>
 export type AiFeedback = z.infer<typeof aiFeedbackSchema>
+
+export const confirmedMemoryFactSchema = z
+  .object({
+    id: nonEmptyText(120),
+    content: nonEmptyText(320),
+    kind: z.enum(['person', 'place', 'experience', 'preference', 'opinion', 'other']),
+    topicTags: z.array(nonEmptyText(80)).max(12),
+    sourceSentence: nonEmptyText(500),
+    sourcePart: z.union([ieltsPartSchema, z.null()]),
+    sourceAttempt: z.literal(2),
+    createdAt: isoDateTimeSchema,
+  })
+  .strict()
+
+export const correctedSentenceSchema = z
+  .object({
+    original: nonEmptyText(1_000),
+    corrected: nonEmptyText(1_000),
+    reason: aiAnalysisText(320),
+  })
+  .strict()
+
+export const memoryCandidateSchema = z
+  .object({
+    content: nonEmptyText(320),
+    kind: z.enum(['person', 'place', 'experience', 'preference', 'opinion', 'other']),
+    topicTags: z.array(nonEmptyText(80)).max(12),
+    sourceSentence: nonEmptyText(500),
+    sourcePart: ieltsPartSchema,
+  })
+  .strict()
+
+export const secondAttemptAnalysisSchema = z
+  .object({
+    correctedSentences: z.array(correctedSentenceSchema).max(10),
+    memoryCandidates: z.array(memoryCandidateSchema).max(10),
+  })
+  .strict()
+
+export type ConfirmedMemoryFact = z.infer<typeof confirmedMemoryFactSchema>
+export type CorrectedSentence = z.infer<typeof correctedSentenceSchema>
+export type MemoryCandidate = z.infer<typeof memoryCandidateSchema>
+export type SecondAttemptAnalysis = z.infer<typeof secondAttemptAnalysisSchema>
 
 export const acousticSpeechMetricsSchema = z
   .object({
@@ -353,10 +419,13 @@ export const trainingSessionSchema = z
     /** 本地账号 userId;V1.8 起写入。旧记录缺省时归“本机用户”。 */
     ownerId: nonEmptyText(120).optional(),
     questionId: nonEmptyText(120),
+    part: z.union([ieltsPartSchema, z.null()]).default(null),
     status: trainingSessionStatusSchema,
     attempts: z.array(practiceAttemptSchema).max(2),
     localFeedback: actionableFeedbackListSchema,
     aiFeedback: aiFeedbackSchema.nullable(),
+    secondAttemptAnalysis: secondAttemptAnalysisSchema.nullable().default(null),
+    confirmedMemoryFacts: z.array(confirmedMemoryFactSchema).max(20).default([]),
     // V1.6 历史字段:读取时保留,新流程不再写入。
     aiComparison: z.unknown().nullable().optional(),
     comparison: attemptComparisonSchema.nullable(),
@@ -392,6 +461,7 @@ export const savedExpressionSchema = z
     ownerId: nonEmptyText(120).optional(),
     text: nonEmptyText(1_000),
     topic: nonEmptyText(80),
+    sourcePart: z.union([ieltsPartSchema, z.null()]).default(null),
     questionId: nonEmptyText(120),
     sessionId: nonEmptyText(120),
     sourceAttempt: z.union([z.literal(1), z.literal(2)]).nullable(),

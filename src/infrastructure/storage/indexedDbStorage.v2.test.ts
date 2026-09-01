@@ -13,10 +13,13 @@ const NOW = '2026-08-10T08:00:00.000Z'
 const legacySession: TrainingSession = {
   id: 'legacy-session',
   questionId: 'p1-home-001',
+  part: 1,
   status: 'first-ready',
   attempts: [],
   localFeedback: [],
   aiFeedback: null,
+  secondAttemptAnalysis: null,
+  confirmedMemoryFacts: [],
   comparison: null,
   createdAt: NOW,
   updatedAt: NOW,
@@ -29,6 +32,7 @@ const legacyExpression: SavedExpression = {
   questionId: legacySession.questionId,
   sessionId: legacySession.id,
   sourceAttempt: 2,
+  sourcePart: 1,
   createdAt: NOW,
 }
 

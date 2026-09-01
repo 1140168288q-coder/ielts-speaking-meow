@@ -196,7 +196,8 @@ src/features/practice/
 - [ ] `PracticeFlow.text.test.tsx`、`LibraryViews.test.tsx` 等不改断言语义全绿
       （允许改 import 行）；
 - [ ] 手测完整闭环：听题→一答（草稿刷新恢复）→反馈（本地+AI 折叠顺序不变）→
-      试听优化答案/三参考回答 Tab→二答（插入语料 reuseCount 不变）→完成页对比→收录语料；
+      试听简单优化版/自然提升版 Tab→二答（插入语料 reuseCount 不变）→
+      第二次回答错误修正与 Memory 确认→完成页对比→收录语料；
 - [ ] TTS 专项：同键二次点击停止、切换内容先停后播、离开练习自动停止，三项全过。
 
 ---
@@ -229,7 +230,7 @@ src/features/practice/
 ### 改动点
 
 1. 把 SettingsController 中「长期了解与隐私」整段（当前 363–389：
-   `memoryEnabled`、`sharePersonalMaterialsWithAi` 两个 switch + `preferenceFeedback`）
+   `memoryEnabled`、`autoMatchPersonalMaterialsWithAi` 两个 switch + `preferenceFeedback`）
    抽为新组件 `features/accounts/MemoryPrivacyCard.tsx`；
 2. `AccountView` 新增可选 props：`preferences`、`onPreferencesChange`，
    由 App.tsx 透传（复用现有 `preferences` / `changeUserPreferences`）；
@@ -247,7 +248,7 @@ src/features/practice/
 
 ### 验收
 
-- [ ] 「我的」页 3 次点击内可关闭 Memory 分享；`sharePersonalMaterialsWithAi`
+- [ ] 「我的」页 3 次点击内可关闭 Memory 分享；`autoMatchPersonalMaterialsWithAi`
       在 `memoryEnabled` 关闭时仍为 disabled；
 - [ ] 设置页不再出现 Memory/隐私区块；两个页面的测试全绿；
 - [ ] 偏好读写仍走 `runtime.storage.saveUserPreferences` 单一路径（App 层 handler 不复制逻辑）。

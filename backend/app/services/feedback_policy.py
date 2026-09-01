@@ -3,9 +3,8 @@ import re
 from collections.abc import Iterable
 
 EXPECTED_REFERENCE_LABELS = (
-    "简单自然版",
+    "简单优化版",
     "自然提升版",
-    "另一种表达版",
 )
 
 _RATING_PATTERN = re.compile(
@@ -49,8 +48,8 @@ def _strings(value: object) -> Iterable[str]:
 
 def validate_feedback_policy(feedback: dict) -> None:
     references = feedback.get("referenceAnswers")
-    if not isinstance(references, list) or len(references) != 3:
-        raise ValueError("referenceAnswers 必须恰好有 3 个版本")
+    if not isinstance(references, list) or len(references) != 2:
+        raise ValueError("referenceAnswers 必须恰好有 2 个版本")
     labels = tuple(
         item.get("label") if isinstance(item, dict) else None
         for item in references
@@ -71,3 +70,11 @@ def validate_feedback_policy(feedback: dict) -> None:
     )
     if _VOICE_PATTERN.search(coaching_text):
         raise ValueError("反馈包含被禁止的语音表现评价")
+
+
+def validate_second_attempt_policy(feedback: dict) -> None:
+    all_text = "\n".join(_strings(feedback))
+    if _RATING_PATTERN.search(all_text):
+        raise ValueError("二答分析包含被禁止的 Band/评分内容")
+    if _VOICE_PATTERN.search(all_text):
+        raise ValueError("二答分析包含被禁止的语音表现评价")

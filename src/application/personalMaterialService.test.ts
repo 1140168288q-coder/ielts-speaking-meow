@@ -64,6 +64,7 @@ const materialInput = {
   title: ' My grandmother ',
   content: ' She taught me how to cook. ',
   kind: 'person' as const,
+  sourcePart: 1 as const,
   topicTags: [' family ', 'cooking', 'family'],
 }
 
@@ -114,6 +115,7 @@ describe('PersonalMaterialService', () => {
       title: 'A rainy trip',
       content: 'Our train stopped for two hours, so we played cards.',
       kind: 'experience',
+      sourcePart: 2,
       topicTags: ['travel'],
     })
     expect((await service.list()).map((item) => item.id)).toEqual([bobMaterial.id])
@@ -132,6 +134,7 @@ describe('PersonalMaterialService', () => {
       title: 'A delayed train',
       content: bobMaterial.content,
       kind: bobMaterial.kind,
+      sourcePart: bobMaterial.sourcePart ?? 2,
       topicTags: ['travel', 'unexpected events'],
     })
     expect(updated.title).toBe('A delayed train')

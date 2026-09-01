@@ -32,7 +32,7 @@ export function PersonalMaterialIdeasCard({
           </article>
         ))}
       </div>
-      <small className="privacy-caption">仅在本机展示，不会自动发送给 AI；需要个性化生成时应再次由你确认。</small>
+      <small className="privacy-caption">是否自动匹配给 AI 由“AI 分析时自动匹配可用素材”设置控制；点击“用作思路”只会把这条内容插入当前答案框。</small>
     </section>
   )
 }

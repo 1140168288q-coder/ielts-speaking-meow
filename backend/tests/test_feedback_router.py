@@ -103,7 +103,10 @@ async def test_feedback_sends_text_only_payload(make_app):
     def handler(request: httpx.Request) -> httpx.Response:
         captured["body"] = json.loads(request.content)
         return httpx.Response(200, json={
-            "choices": [{"message": {"content": json.dumps(TEXT_FEEDBACK)}}],
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {"content": json.dumps(TEXT_FEEDBACK)},
+            }],
         })
 
     app, _ = make_app(handler)
@@ -123,6 +126,8 @@ async def test_feedback_sends_text_only_payload(make_app):
     assert response.status_code == 200
     request_body = captured["body"]
     assert request_body["model"] == "deepseek-v4-flash"
+    assert request_body["thinking"] == {"type": "disabled"}
+    assert request_body["max_tokens"] == 4096
     assert request_body["response_format"] == {"type": "json_object"}
     messages = request_body["messages"]
     assert "friendly IELTS Speaking Tutor" in messages[0]["content"]
@@ -145,7 +150,10 @@ async def test_second_attempt_feedback_returns_only_corrections_and_memory_candi
     def handler(request: httpx.Request) -> httpx.Response:
         captured["body"] = json.loads(request.content)
         return httpx.Response(200, json={
-            "choices": [{"message": {"content": json.dumps(SECOND_ATTEMPT_FEEDBACK)}}],
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {"content": json.dumps(SECOND_ATTEMPT_FEEDBACK)},
+            }],
         })
 
     app, _ = make_app(handler)
@@ -194,6 +202,36 @@ async def test_feedback_invalid_shape_returns_502(make_app):
         response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
     assert response.status_code == 502
     assert response.json()["error"]["code"] == "provider-error"
+    assert app.state.services["deepseek"].calls.request.snapshot(
+        kind="request"
+    )["failureStage"] == "pydantic-fields"
+
+
+async def test_feedback_rejects_truncated_completion(make_app):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{
+                    "finish_reason": "length",
+                    "message": {"content": '{"summary":"truncated"'},
+                }],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 4096},
+            },
+        )
+
+    app, _ = make_app(handler)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "provider-error"
+    assert "finish_reason=length" in response.json()["error"]["message"]
+    request = app.state.services["deepseek"].calls.request.snapshot(kind="request")
+    assert request["failureStage"] == "response-envelope"
+    assert request["finishReason"] == "length"
+    assert request["usage"] == {"prompt_tokens": 10, "completion_tokens": 4096}
 
 
 async def test_feedback_upstream_401(make_app):
@@ -251,7 +289,10 @@ async def test_material_suggest_happy_path(make_app):
     def handler(request: httpx.Request) -> httpx.Response:
         captured["body"] = json.loads(request.content)
         return httpx.Response(200, json={
-            "choices": [{"message": {"content": json.dumps(MATERIAL_SUGGESTIONS)}}],
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {"content": json.dumps(MATERIAL_SUGGESTIONS)},
+            }],
         })
 
     app, _ = make_app(handler)

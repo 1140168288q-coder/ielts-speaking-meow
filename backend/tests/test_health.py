@@ -1,3 +1,5 @@
+import json
+
 import httpx
 
 from tests.conftest import authenticated_headers, configured_settings
@@ -77,8 +79,12 @@ async def test_health_verify_marks_deepseek_and_tts_verified(make_app):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/chat/completions"):
             assert request.headers["Authorization"] == "Bearer sk-test-deepseek"
+            request_body = json.loads(request.content)
+            assert request_body["thinking"] == {"type": "disabled"}
+            assert request_body["response_format"] == {"type": "json_object"}
+            assert request_body["max_tokens"] == 4096
             return httpx.Response(200, json={
-                "choices": [{"message": {"content": "OK"}}],
+                "choices": [{"finish_reason": "stop", "message": {"content": '{"ok":true}'}}],
             })
         # 火山 TTS:返回一段音频块 + 流结束码
         import base64 as b64
@@ -108,6 +114,38 @@ async def test_health_verify_marks_deepseek_and_tts_verified(make_app):
         health = (await client.get("/health")).json()
     assert health["providers"]["deepseek"]["verification"]["status"] == "verified"
     assert health["providers"]["volc_tts"]["verification"]["status"] == "verified"
+    assert health["providers"]["deepseek"]["lastRequest"]["status"] == "never"
+    assert health["providers"]["volc_tts"]["lastRequest"]["status"] == "succeeded"
+
+
+async def test_health_verify_rejects_truncated_deepseek_probe(make_app):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/chat/completions"):
+            return httpx.Response(200, json={
+                "choices": [{
+                    "finish_reason": "length",
+                    "message": {"content": '{"ok":true}'},
+                }],
+            })
+        import base64 as b64
+        import json as jsonlib
+        return httpx.Response(200, content="\n".join(jsonlib.dumps(c) for c in [
+            {"code": 0, "message": "OK", "data": b64.b64encode(b"hi").decode()},
+            {"code": 20000000, "message": "OK", "data": ""},
+        ]))
+
+    app, _ = make_app(handler)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/health/verify", headers=await authenticated_headers(client)
+        )
+    assert response.status_code == 200
+    deepseek = response.json()["providers"]["deepseek"]
+    assert deepseek["status"] == "failed"
+    assert "finish_reason=length" in deepseek["lastError"]
+    assert deepseek["failureStage"] == "response-envelope"
 
 
 async def test_health_verify_failed_credentials_record_error(make_app):

@@ -13,9 +13,21 @@ export class ApiProviderError extends Error {
     readonly code: ApiProviderErrorCode,
     message: string,
     readonly retryable: boolean,
+    readonly details: {
+      status?: number
+      backendCode?: string
+    } = {},
   ) {
     super(message)
     this.name = 'ApiProviderError'
+  }
+
+  get status(): number | undefined {
+    return this.details.status
+  }
+
+  get backendCode(): string | undefined {
+    return this.details.backendCode
   }
 }
 

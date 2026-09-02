@@ -249,7 +249,10 @@ async def test_feedback_quota_is_counted_and_idempotency_key_cannot_be_reused(ma
             200,
             json={
                 "choices": [
-                    {"message": {"content": json.dumps(FEEDBACK_RESULT)}}
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": json.dumps(FEEDBACK_RESULT)},
+                    }
                 ]
             },
         )

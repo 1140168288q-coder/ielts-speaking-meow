@@ -1,6 +1,6 @@
 """Backend 首页与健康检查（不返回任何密钥）。
 
-/health 展示每个供应商的配置、模型和最近一次真实调用/验证状态。
+/health 展示每个供应商的配置、模型、最近一次显式验证和最近一次业务请求。
 """
 import asyncio
 from typing import Annotated
@@ -44,7 +44,10 @@ async def health(request: Request) -> dict:
                 "kind": "text",
                 "configured": services["deepseek"].is_configured,
                 "model": settings.deepseek_model,
-                "verification": services["deepseek"].last_call.snapshot(),
+                "verification": services["deepseek"].calls.verification.snapshot(),
+                "lastRequest": services["deepseek"].calls.request.snapshot(
+                    kind="request"
+                ),
             },
             "volc_tts": {
                 "kind": "tts",
@@ -55,7 +58,10 @@ async def health(request: Request) -> dict:
                     "id": settings.volc_tts_speaker,
                     "name": settings.volc_tts_speaker_name or None,
                 },
-                "verification": services["volc_tts"].last_call.snapshot(),
+                "verification": services["volc_tts"].calls.verification.snapshot(),
+                "lastRequest": services["volc_tts"].calls.request.snapshot(
+                    kind="request"
+                ),
             },
         },
     }

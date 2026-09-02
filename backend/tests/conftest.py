@@ -70,7 +70,11 @@ def deepseek_ok_handler(body: dict) -> Callable[[httpx.Request], httpx.Response]
         content = json.dumps(body)
         return httpx.Response(
             200,
-            json={"choices": [{"message": {"content": content}}]},
+            json={
+                "choices": [
+                    {"finish_reason": "stop", "message": {"content": content}}
+                ]
+            },
         )
 
     return handler

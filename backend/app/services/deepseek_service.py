@@ -10,17 +10,17 @@ import time
 from typing import Literal
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from ..config import Settings
-from ..errors import not_configured, provider_error
+from ..errors import BackendError, not_configured, provider_error
 from .http_client import raise_for_upstream, timeout_guard
 from .feedback_policy import (
     validate_feedback_policy,
     validate_second_attempt_policy,
 )
 from .ielts_speaking_skill import IELTS_SPEAKING_SKILL
-from .verification import LastCallRecord
+from .verification import LastCallRecord, ProviderCallRecords
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,48 @@ SECOND_ATTEMPT_SYSTEM = (
 MAX_MATERIAL_DIGEST_CHARACTERS = 4_000
 
 MAX_AI_IMPORT_CHARACTERS = 60_000
+
+DEEPSEEK_MAX_TOKENS = 4_096
+
+FAILED_FINISH_REASONS = {
+    "length",
+    "content_filter",
+    "insufficient_system_resource",
+}
+
+DeepSeekFailureStage = Literal[
+    "upstream-http",
+    "response-envelope",
+    "json-parse",
+    "pydantic-fields",
+    "content-policy",
+]
+
+
+class DeepSeekFailure(Exception):
+    """内部安全失败摘要,不携带上游正文或异常 repr。"""
+
+    def __init__(
+        self,
+        stage: DeepSeekFailureStage,
+        message: str,
+        *,
+        finish_reason: str | None = None,
+        content_length: int = 0,
+        usage: dict[str, int] | None = None,
+        field_path: str | None = None,
+        http_status: int | None = None,
+        backend_error: BackendError | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.public_message = message
+        self.finish_reason = finish_reason
+        self.content_length = content_length
+        self.usage = usage
+        self.field_path = field_path
+        self.http_status = http_status
+        self.backend_error = backend_error
 
 
 class ReferenceAnswer(BaseModel):
@@ -148,7 +190,7 @@ class DeepSeekService:
     def __init__(self, client: httpx.AsyncClient, settings: Settings) -> None:
         self._client = client
         self._settings = settings
-        self.last_call = LastCallRecord()
+        self.calls = ProviderCallRecords()
 
     @property
     def is_configured(self) -> bool:
@@ -358,14 +400,9 @@ class DeepSeekService:
         return result["suggestions"]
 
     async def verify(self) -> dict:
-        """最小成本的显式验证:一次小规模补全,结果写入 last_call。
-
-        deepseek-v4-flash 是推理模型,思考过程会先消耗 token,因此这里
-        不能给 max_tokens=4(否则 content 为空);只要上游返回 200 且能解析
-        出 choices[0].message 即视为验证通过。
-        """
+        """用与结构化反馈相同的 JSON 模式和额度验证 DeepSeek。"""
         if not self.is_configured:
-            return self.last_call.snapshot()
+            return self.calls.verification.snapshot()
         started = time.perf_counter()
         try:
             base = self._settings.deepseek_base_url.rstrip("/")
@@ -378,29 +415,53 @@ class DeepSeekService:
                     },
                     json={
                         "model": self._settings.deepseek_model,
-                        "max_tokens": 32,
+                        "thinking": {"type": "disabled"},
+                        "response_format": {"type": "json_object"},
+                        "max_tokens": DEEPSEEK_MAX_TOKENS,
                         "messages": [
                             {
+                                "role": "system",
+                                "content": "Return JSON only.",
+                            },
+                            {
                                 "role": "user",
-                                "content": "Reply with the single word: OK",
-                            }
+                                "content": '{"task":"health-check","requiredShape":{"ok":true}}',
+                            },
                         ],
                     },
                 )
             )
-            await raise_for_upstream(response, "DeepSeek")
-            data = response.json()
-            message = data["choices"][0]["message"]
-            content = str(message.get("content") or "").strip()
-            reasoning = str(message.get("reasoning_content") or "").strip()
-            self.last_call.record(
+            try:
+                await raise_for_upstream(response, "DeepSeek")
+            except BackendError as exc:
+                raise DeepSeekFailure(
+                    "upstream-http",
+                    exc.message,
+                    http_status=response.status_code,
+                    backend_error=exc,
+                ) from exc
+            content, finish_reason, usage = self._read_completion(response)
+            self.calls.verification.record(
                 ok=True,
                 latency_ms=round((time.perf_counter() - started) * 1000),
-                result=(content or reasoning or "(empty response, upstream 200)")[:120],
+                result="content received",
+                finish_reason=finish_reason,
+                content_length=len(content),
+                usage=usage,
             )
+        except DeepSeekFailure as exc:
+            self._record_failure(self.calls.verification, started, exc)
+        except BackendError as exc:
+            failure = DeepSeekFailure("upstream-http", exc.message, backend_error=exc)
+            self._record_failure(self.calls.verification, started, failure)
         except Exception as exc:  # noqa: BLE001 - 验证结果必须落盘
-            self.last_call.record(ok=False, message=str(exc))
-        return self.last_call.snapshot()
+            failure = DeepSeekFailure(
+                "response-envelope",
+                "DeepSeek 验证响应无法识别。",
+                field_path=type(exc).__name__,
+            )
+            self._record_failure(self.calls.verification, started, failure)
+        return self.calls.verification.snapshot()
 
     async def _complete_validated(
         self,
@@ -410,11 +471,26 @@ class DeepSeekService:
     ) -> dict:
         if not self.is_configured:
             raise not_configured("DeepSeek(Text AI)")
+        started = time.perf_counter()
         try:
             return await self._complete_checked(system, user, schema)
-        except Exception as exc:  # noqa: BLE001 - 记录最近失败后按原样抛出
-            self.last_call.record(ok=False, message=str(exc))
+        except DeepSeekFailure as exc:
+            self._record_failure(self.calls.request, started, exc)
+            if exc.backend_error is not None:
+                raise exc.backend_error from exc
+            raise provider_error(exc.public_message) from exc
+        except BackendError as exc:
+            failure = DeepSeekFailure("upstream-http", exc.message, backend_error=exc)
+            self._record_failure(self.calls.request, started, failure)
             raise
+        except Exception as exc:  # noqa: BLE001 - 记录最近失败后按安全摘要抛出
+            failure = DeepSeekFailure(
+                "response-envelope",
+                "DeepSeek 请求处理失败,已保留本地结果。",
+                field_path=type(exc).__name__,
+            )
+            self._record_failure(self.calls.request, started, failure)
+            raise provider_error(failure.public_message) from exc
 
     async def _complete_checked(
         self,
@@ -433,7 +509,9 @@ class DeepSeekService:
                 },
                 json={
                     "model": self._settings.deepseek_model,
+                    "thinking": {"type": "disabled"},
                     "response_format": {"type": "json_object"},
+                    "max_tokens": DEEPSEEK_MAX_TOKENS,
                     "messages": [
                         {"role": "system", "content": system},
                         {"role": "user", "content": user},
@@ -441,31 +519,166 @@ class DeepSeekService:
                 },
             )
         )
-        await raise_for_upstream(response, "DeepSeek")
         try:
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-        except (ValueError, KeyError, IndexError, TypeError):
-            raise provider_error("DeepSeek 返回了无法识别的结果。")
-        if not content or not content.strip():
-            raise provider_error("DeepSeek 返回内容为空。")
+            await raise_for_upstream(response, "DeepSeek")
+        except BackendError as exc:
+            raise DeepSeekFailure(
+                "upstream-http",
+                exc.message,
+                http_status=response.status_code,
+                backend_error=exc,
+            ) from exc
 
-        parsed = self._parse_json_content(content)
+        content, finish_reason, usage = self._read_completion(response)
+        try:
+            parsed = self._parse_json_content(content)
+        except (TypeError, ValueError) as exc:
+            raise DeepSeekFailure(
+                "json-parse",
+                "Text AI 返回的 JSON 无效,已保留本地结果。",
+                finish_reason=finish_reason,
+                content_length=len(content),
+                usage=usage,
+                field_path="message.content",
+            ) from exc
         try:
             validated = schema.model_validate(parsed)
             result = validated.model_dump(mode="json")
+        except ValidationError as exc:
+            raise DeepSeekFailure(
+                "pydantic-fields",
+                "Text AI 返回字段校验失败,已保留本地结果。",
+                finish_reason=finish_reason,
+                content_length=len(content),
+                usage=usage,
+                field_path=_validation_field_path(exc),
+            ) from exc
+        try:
             if schema is TextFeedback:
                 validate_feedback_policy(result)
             elif schema is SecondAttemptFeedback:
                 validate_second_attempt_policy(result)
-        except Exception:
-            logger.warning("DeepSeek output failed schema validation")
-            raise provider_error("Text AI 返回结构不完整,已保留本地结果。")
-        self.last_call.record(
+        except ValueError as exc:
+            raise DeepSeekFailure(
+                "content-policy",
+                "Text AI 返回内容不符合应用约束,已保留本地结果。",
+                finish_reason=finish_reason,
+                content_length=len(content),
+                usage=usage,
+                field_path="policy",
+            ) from exc
+        self.calls.request.record(
             ok=True,
             latency_ms=round((time.perf_counter() - started) * 1000),
+            result="validated content",
+            finish_reason=finish_reason,
+            content_length=len(content),
+            usage=usage,
         )
         return result
+
+    @staticmethod
+    def _read_completion(
+        response: httpx.Response,
+    ) -> tuple[str, str, dict[str, int] | None]:
+        try:
+            data = response.json()
+        except (TypeError, ValueError) as exc:
+            raise DeepSeekFailure(
+                "response-envelope",
+                "DeepSeek 返回的响应 envelope 不是有效 JSON。",
+                field_path="$",
+            ) from exc
+        if not isinstance(data, dict):
+            raise DeepSeekFailure(
+                "response-envelope",
+                "DeepSeek 返回的响应 envelope 无法识别。",
+                field_path="$",
+            )
+        usage = _summarize_usage(data.get("usage"))
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise DeepSeekFailure(
+                "response-envelope",
+                "DeepSeek 返回的响应 envelope 缺少 choices[0]。",
+                usage=usage,
+                field_path="choices[0]",
+            )
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            raise DeepSeekFailure(
+                "response-envelope",
+                "DeepSeek 返回的响应 envelope 缺少 choices[0]。",
+                usage=usage,
+                field_path="choices[0]",
+            )
+        finish_reason = choice.get("finish_reason")
+        safe_finish_reason = (
+            finish_reason[:64]
+            if isinstance(finish_reason, str) and finish_reason
+            else "missing"
+        )
+        if finish_reason != "stop":
+            reason_message = (
+                "DeepSeek 返回结果未完整结束"
+                if safe_finish_reason in FAILED_FINISH_REASONS
+                else "DeepSeek 返回结果未以成功状态结束"
+            )
+            raise DeepSeekFailure(
+                "response-envelope",
+                f"{reason_message}（finish_reason={safe_finish_reason}）,已保留本地结果。",
+                finish_reason=safe_finish_reason,
+                usage=usage,
+                field_path="choices[0].finish_reason",
+            )
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            raise DeepSeekFailure(
+                "response-envelope",
+                "DeepSeek 返回的响应 envelope 缺少 choices[0].message。",
+                finish_reason=safe_finish_reason,
+                usage=usage,
+                field_path="choices[0].message",
+            )
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise DeepSeekFailure(
+                "response-envelope",
+                "DeepSeek 返回内容为空。",
+                finish_reason=safe_finish_reason,
+                content_length=len(content) if isinstance(content, str) else 0,
+                usage=usage,
+                field_path="choices[0].message.content",
+            )
+        return content.strip(), safe_finish_reason, usage
+
+    def _record_failure(
+        self,
+        record: LastCallRecord,
+        started: float,
+        failure: DeepSeekFailure,
+    ) -> None:
+        logger.warning(
+            "DeepSeek request failed stage=%s model=%s http_status=%s "
+            "finish_reason=%s content_length=%s usage=%s field_path=%s",
+            failure.stage,
+            self._settings.deepseek_model,
+            failure.http_status if failure.http_status is not None else "-",
+            failure.finish_reason or "-",
+            failure.content_length,
+            failure.usage or "-",
+            failure.field_path or "-",
+        )
+        record.record(
+            ok=False,
+            latency_ms=round((time.perf_counter() - started) * 1000),
+            message=failure.public_message,
+            failure_stage=failure.stage,
+            finish_reason=failure.finish_reason,
+            content_length=failure.content_length,
+            usage=failure.usage,
+            field_path=failure.field_path,
+        )
 
     @staticmethod
     def _parse_json_content(content: str) -> object:
@@ -476,4 +689,30 @@ class DeepSeekService:
         try:
             return json.loads(text)
         except ValueError:
-            raise provider_error("Text AI 返回的 JSON 无效,已保留本地结果。")
+            raise ValueError("invalid JSON content")
+
+
+def _summarize_usage(value: object) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
+    keys = (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+    )
+    summary = {
+        key: item
+        for key in keys
+        if isinstance(item := value.get(key), int) and not isinstance(item, bool)
+    }
+    return summary or None
+
+
+def _validation_field_path(error: ValidationError) -> str:
+    errors = error.errors(include_url=False)
+    if not errors:
+        return "$"
+    location = errors[0].get("loc", ())
+    return ".".join(str(part) for part in location) or "$"

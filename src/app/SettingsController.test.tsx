@@ -228,6 +228,42 @@ describe('SettingsController', () => {
     })
   })
 
+  it('shows backend reachability, configuration, verification and last feedback separately', async () => {
+    const harness = createHarness({
+      health: makeBackendHealth({
+        deepseek: makeProviderHealth({
+          verification: {
+            status: 'unverified',
+            checkedAt: null,
+            latencyMs: null,
+            lastError: null,
+            lastResult: null,
+          },
+          lastRequest: {
+            status: 'failed',
+            checkedAt: '2026-08-15T08:00:00.000Z',
+            latencyMs: 300,
+            lastError: 'Text AI 返回内容不完整（HTTP 502/provider-error）。',
+            lastResult: null,
+            failureStage: 'response-envelope',
+            finishReason: 'length',
+            contentLength: 80,
+            usage: { completion_tokens: 32 },
+            fieldPath: 'choices[0].finish_reason',
+          },
+        }),
+        volc_tts: true,
+      }),
+    })
+    render(<SettingsController {...harness} />)
+
+    expect(await screen.findByText('Backend 可达：是')).toBeTruthy()
+    expect(screen.getByText('DeepSeek 已配置：是')).toBeTruthy()
+    expect(screen.getByText('DeepSeek 已验证：尚未实际验证')).toBeTruthy()
+    expect(screen.getByText(/最近一次反馈：失败/)).toBeTruthy()
+    expect(screen.getByText('AI 反馈需检查')).toBeTruthy()
+  })
+
   it('checks the cloud backend on demand and lists provider status', async () => {
     const user = userEvent.setup()
     const harness = createHarness({

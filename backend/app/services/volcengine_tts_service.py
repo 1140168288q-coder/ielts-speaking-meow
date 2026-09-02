@@ -18,7 +18,7 @@ import httpx
 from ..config import Settings
 from ..errors import BackendError, invalid_request, not_configured, provider_error
 from .http_client import raise_for_upstream
-from .verification import LastCallRecord
+from .verification import ProviderCallRecords
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class VolcengineTTSService:
     def __init__(self, client: httpx.AsyncClient, settings: Settings) -> None:
         self._client = client
         self._settings = settings
-        self.last_call = LastCallRecord()
+        self.calls = ProviderCallRecords()
 
     @property
     def is_configured(self) -> bool:
@@ -86,9 +86,9 @@ class VolcengineTTSService:
                 language=language,
             )
         except Exception as exc:  # noqa: BLE001 - 记录最近失败后按原样抛出
-            self.last_call.record(ok=False, message=str(exc))
+            self.calls.request.record(ok=False, message=str(exc))
             raise
-        self.last_call.record(
+        self.calls.request.record(
             ok=True,
             latency_ms=round((time.perf_counter() - started) * 1000),
             result=f"synthesized {len(audio)} bytes",
@@ -96,14 +96,21 @@ class VolcengineTTSService:
         return audio
 
     async def verify(self) -> dict:
-        """最小成本的显式验证:合成一句 "Hello.",结果写入 last_call。"""
+        """最小成本的显式验证:合成一句 "Hello.",结果写入 verification。"""
         if not self.is_configured:
-            return self.last_call.snapshot()
+            return self.calls.verification.snapshot()
         try:
             await self.synthesize(VERIFY_TEXT)
         except BackendError:
-            pass  # synthesize 已把失败写入 last_call
-        return self.last_call.snapshot()
+            pass  # synthesize 已把失败写入 request
+        request = self.calls.request.snapshot(kind="request")
+        self.calls.verification.record(
+            ok=request["status"] == "succeeded",
+            message=request["lastError"],
+            latency_ms=request["latencyMs"],
+            result=request["lastResult"],
+        )
+        return self.calls.verification.snapshot()
 
     async def _synthesize_checked(
         self,

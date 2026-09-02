@@ -17,6 +17,18 @@ export function makeProviderHealth(
       lastError: null,
       lastResult: null,
     },
+    lastRequest: {
+      status: 'never',
+      checkedAt: null,
+      latencyMs: null,
+      lastError: null,
+      lastResult: null,
+      failureStage: null,
+      finishReason: null,
+      contentLength: null,
+      usage: null,
+      fieldPath: null,
+    },
     ...overrides,
   }
 }

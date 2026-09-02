@@ -90,6 +90,35 @@ describe('BackendClient (web transport)', () => {
       .rejects.toMatchObject({ code: 'not-configured' })
   })
 
+  it('preserves native HTTP status and backend error details', async () => {
+    const nativeRequest = vi.fn().mockRejectedValue({
+      status: 502,
+      data: {
+        error: {
+          code: 'provider-error',
+          message: 'Text AI 返回内容不完整。',
+        },
+      },
+    })
+    const client = new BackendClient({
+      baseUrl: 'https://backend.test',
+      isNative: () => true,
+      nativeRequest,
+    })
+
+    const error = await client.postJson('/v1/feedback', {}, 5_000).then(
+      () => null,
+      (reason: unknown) => reason,
+    )
+    expect(error).toMatchObject({
+      code: 'server',
+      status: 502,
+      backendCode: 'provider-error',
+    })
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toContain('HTTP 502/provider-error')
+  })
+
   it('maps rate-limited envelopes to retryable errors', async () => {
     const fetch = vi.fn().mockResolvedValue(
       jsonResponse({ error: { code: 'rate-limited', message: '太频繁' } }, 429),

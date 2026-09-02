@@ -2,6 +2,7 @@ import type {
   BackendClient,
   BackendHealth,
   BackendProviderHealth,
+  BackendProviderRequest,
   BackendProviderVerification,
 } from './backendClient'
 
@@ -65,6 +66,11 @@ export class BackendHealthCache {
     provider: BackendProviderName,
   ): BackendProviderVerification | null {
     return this.providerInfo(provider)?.verification ?? null
+  }
+
+  /** 某供应商最近一次普通业务请求,与显式验证状态分开。 */
+  lastRequestOf(provider: BackendProviderName): BackendProviderRequest | null {
+    return this.providerInfo(provider)?.lastRequest ?? null
   }
 
   /** 拉取 /health 并更新缓存;并发调用合并为同一次请求;失败不抛出。 */

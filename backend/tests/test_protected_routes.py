@@ -85,7 +85,10 @@ async def test_one_accounts_logout_does_not_revoke_another_accounts_access(make_
             200,
             json={
                 "choices": [
-                    {"message": {"content": json.dumps({"questions": questions})}}
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": json.dumps({"questions": questions})},
+                    }
                 ]
             },
         )

@@ -324,6 +324,9 @@ export function SettingsController({
   }
 
   const health = snapshot.health
+  const deepseek = health?.providers.deepseek
+  const deepseekVerified = deepseek?.verification?.status === 'verified'
+  const deepseekReady = health !== null && deepseek?.configured === true && deepseekVerified
   const usesPlainHttp = addressDraft.trim().toLowerCase().startsWith('http://')
   const selectedVoicePreset = getTtsVoicePreset(preferences.ttsVoicePreset)
   const selectedVoicePlayback = resolveTtsVoicePlaybackSettings(
@@ -472,13 +475,19 @@ export function SettingsController({
             <p className="eyebrow">Smart services</p>
             <h2>AI 反馈与自然音色</h2>
           </div>
-          <span className={health === null ? 'service-state offline' : 'service-state online'}>
-            {health === null ? '当前离线' : '服务正常'}
+          <span className={deepseekReady ? 'service-state online' : 'service-state offline'}>
+            {health === null ? '当前离线 · Backend 不可达' : deepseekReady ? 'AI 反馈可用' : 'AI 反馈需检查'}
           </span>
         </div>
         <p className="settings-note">
           云端用于生成精简反馈和自然朗读。即使断网，答题、保存、本地提示和系统朗读仍然可用。
         </p>
+        <ul className="settings-providers">
+          <li>Backend 可达：{health === null ? '否' : '是'}</li>
+          <li>DeepSeek 已配置：{deepseek?.configured === true ? '是' : '否'}</li>
+          <li>DeepSeek 已验证：{verificationSummary(deepseek)}</li>
+          <li>最近一次反馈：{requestSummary(deepseek)}</li>
+        </ul>
         <div className="settings-actions">
           <button
             type="button"
@@ -684,6 +693,26 @@ function providerSummary(provider: BackendProviderHealth | undefined): string {
       ? `已验证${verification.checkedAt ? ` · ${formatCheckedAt(new Date(verification.checkedAt).getTime())}` : ''}`
       : `验证失败${verification.lastError ? ` · ${verification.lastError}` : ''}`
   return `${provider.model ?? ''} · ${verificationLabel}`
+}
+
+function verificationSummary(provider: BackendProviderHealth | undefined): string {
+  if (provider === undefined) return '未读取'
+  if (!provider.configured) return '未配置'
+  const verification = provider.verification
+  if (verification === undefined || verification.status === 'unverified') {
+    return '尚未实际验证'
+  }
+  if (verification.status === 'verified') {
+    return '是'
+  }
+  return `否${verification.lastError ? ` · ${verification.lastError}` : ''}`
+}
+
+function requestSummary(provider: BackendProviderHealth | undefined): string {
+  const request = provider?.lastRequest
+  if (request === undefined || request.status === 'never') return '尚未请求'
+  if (request.status === 'succeeded') return '成功'
+  return `失败${request.lastError ? ` · ${request.lastError}` : ''}`
 }
 
 function ttsSummary(provider: BackendProviderHealth | undefined): string {

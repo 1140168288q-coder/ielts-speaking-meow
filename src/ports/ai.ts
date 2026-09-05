@@ -15,6 +15,11 @@ export interface LLMFeedbackRequest {
   answer: string
   answerDurationSeconds: number | null
   /**
+   * 同一次逻辑分析在自动/手动重试间复用的稳定标识。只用于 Backend
+   * 额度幂等，不包含答案正文。
+   */
+  idempotencyKey?: string
+  /**
    * 本地 RAG 检索出的 IELTS 教学原则(不含用户答案)。
    * 客户端只负责检索,第三方调用仍全部经由自建 Backend。
    */
@@ -29,6 +34,8 @@ export interface LLMFeedbackRequest {
 export interface LLMSecondAttemptRequest {
   question: Question
   answer: string
+  /** 同一次二答分析重试复用的稳定额度幂等标识。 */
+  idempotencyKey?: string
 }
 
 /**

@@ -63,6 +63,44 @@ async def consume_feature(
     )
 
 
+async def authorize_feature(
+    request: Request,
+    db: AsyncSession,
+    auth: AuthContext,
+    feature: FeatureKey,
+    *,
+    units: int,
+) -> None:
+    """只检查额度，避免上游失败也产生计量事件。"""
+    _, idempotency_key = usage_identifiers(request)
+    await request.app.state.feature_authorization_service.authorize(
+        db,
+        auth.user,
+        feature,
+        units=units,
+        idempotency_key=idempotency_key,
+    )
+
+
+async def settle_feature(
+    request: Request,
+    db: AsyncSession,
+    auth: AuthContext,
+    feature: FeatureKey,
+    *,
+    units: int,
+) -> None:
+    request_id, idempotency_key = usage_identifiers(request)
+    await request.app.state.feature_authorization_service.settle(
+        db,
+        auth.user,
+        feature,
+        units=units,
+        request_id=request_id,
+        idempotency_key=idempotency_key,
+    )
+
+
 @router.post("/v1/feedback")
 async def feedback(
     request: Request,
@@ -75,8 +113,10 @@ async def feedback(
     service = request.app.state.services["deepseek"]
     if not service.is_configured:
         raise not_configured("DeepSeek(Text AI)")
-    await consume_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
-    return await service.get_feedback(payload.model_dump())
+    await authorize_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
+    result = await service.get_feedback(payload.model_dump())
+    await settle_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
+    return result
 
 
 @router.post("/v1/feedback/second-attempt")
@@ -91,8 +131,10 @@ async def second_attempt_feedback(
     service = request.app.state.services["deepseek"]
     if not service.is_configured:
         raise not_configured("DeepSeek(Text AI)")
-    await consume_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
-    return await service.get_second_attempt_feedback(payload.model_dump())
+    await authorize_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
+    result = await service.get_second_attempt_feedback(payload.model_dump())
+    await settle_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
+    return result
 
 
 @router.post("/v1/organize")

@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-v4-flash"
     deepseek_base_url: str = "https://api.deepseek.com"
+    # DeepSeek 请求预算：服务端总预算小于客户端 105 秒；最多两次尝试。
+    deepseek_connect_timeout_seconds: float = Field(default=10.0, gt=0, le=30)
+    deepseek_read_timeout_seconds: float = Field(default=75.0, gt=0, le=90)
+    deepseek_write_timeout_seconds: float = Field(default=10.0, gt=0, le=30)
+    deepseek_pool_timeout_seconds: float = Field(default=10.0, gt=0, le=30)
+    deepseek_total_timeout_seconds: float = Field(default=90.0, gt=0, le=120)
+    deepseek_max_attempts: int = Field(default=2, ge=1, le=2)
+    deepseek_retry_backoff_seconds: float = Field(default=0.25, ge=0, le=5)
 
     # ---- 火山引擎:新版控制台鉴权(单头 X-Api-Key)----
     volc_api_key: str = ""
@@ -71,6 +79,10 @@ class Settings(BaseSettings):
             raise ValueError("SYNC_MAX_BATCH_BYTES 不得小于 SYNC_MAX_ITEM_BYTES")
         if self.sync_max_request_bytes < self.sync_max_batch_bytes:
             raise ValueError("SYNC_MAX_REQUEST_BYTES 不得小于 SYNC_MAX_BATCH_BYTES")
+        if self.deepseek_total_timeout_seconds <= self.deepseek_connect_timeout_seconds:
+            raise ValueError(
+                "DEEPSEEK_TOTAL_TIMEOUT_SECONDS 必须大于连接超时预算"
+            )
         return self
 
     @field_validator("database_url")

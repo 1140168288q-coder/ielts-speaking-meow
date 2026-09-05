@@ -19,6 +19,16 @@ def provider_error(message: str = "第三方服务返回异常,请稍后重试�
     return BackendError(502, "provider-error", message)
 
 
+def upstream_auth_error(message: str) -> BackendError:
+    """上游凭证/权限错误，客户端不应自动重试。"""
+    return BackendError(502, "upstream-auth", message)
+
+
+def upstream_not_found(message: str) -> BackendError:
+    """上游接口或资源配置错误，客户端不应自动重试。"""
+    return BackendError(502, "upstream-not-found", message)
+
+
 def upstream_timeout(message: str = "第三方服务响应超时,请稍后重试。") -> BackendError:
     return BackendError(504, "upstream-timeout", message)
 

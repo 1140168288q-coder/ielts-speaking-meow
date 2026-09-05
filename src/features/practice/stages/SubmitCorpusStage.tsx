@@ -13,6 +13,7 @@ export function SubmitCorpusStage({
   analysis,
   aiBusy,
   aiNote,
+  aiRetryable = true,
   busy,
   onRetryAnalysis,
   onSubmit,
@@ -22,24 +23,38 @@ export function SubmitCorpusStage({
   analysis: SecondAttemptAnalysis | null
   aiBusy: boolean
   aiNote: string | null
+  aiRetryable?: boolean
   busy: boolean
   onRetryAnalysis: () => void
   onSubmit: (correctedSentences: string[], memoryCandidates: MemoryCandidate[]) => void
   onComplete: () => void
 }) {
-  const [correctionDrafts, setCorrectionDrafts] = useState<string[]>([])
-  const [selectedCorrections, setSelectedCorrections] = useState<number[]>([])
+  const [correctionDrafts, setCorrectionDrafts] = useState<string[]>(() =>
+    analysis?.correctedSentences.map((item) => item.corrected) ?? [],
+  )
+  const [selectedCorrections, setSelectedCorrections] = useState<number[]>(() =>
+    analysis?.correctedSentences.map((_, index) => index) ?? [],
+  )
   const [selectedMemory, setSelectedMemory] = useState<number[]>([])
   const [manualDraft, setManualDraft] = useState(() => suggestReusableSnippet(attempt.transcript.text))
   const [manualSelected, setManualSelected] = useState(true)
   const lastAttemptId = useRef(attempt.id)
+  const analysisSignature = analysis === null ? 'none' : JSON.stringify(analysis)
+  const lastAnalysisSignature = useRef(analysisSignature)
 
   useEffect(() => {
-    if (lastAttemptId.current === attempt.id) return
+    if (
+      lastAttemptId.current === attempt.id &&
+      lastAnalysisSignature.current === analysisSignature
+    ) return
     lastAttemptId.current = attempt.id
+    lastAnalysisSignature.current = analysisSignature
+    setCorrectionDrafts(analysis?.correctedSentences.map((item) => item.corrected) ?? [])
+    setSelectedCorrections(analysis?.correctedSentences.map((_, index) => index) ?? [])
+    setSelectedMemory([])
     setManualDraft(suggestReusableSnippet(attempt.transcript.text))
     setManualSelected(true)
-  }, [attempt.id, attempt.transcript.text])
+  }, [analysis, analysisSignature, attempt.id, attempt.transcript.text])
 
   const toggleIndex = (
     current: number[],
@@ -67,7 +82,9 @@ export function SubmitCorpusStage({
 
   const selectedCount = analysis === null
     ? (manualSelected && manualDraft.trim() ? 1 : 0)
-    : selectedCorrections.length + selectedMemory.length
+    : selectedCorrections
+      .filter((index) => correctionDrafts[index]?.trim())
+      .length + selectedMemory.length
 
   return (
     <section className="submit-corpus-card">
@@ -87,7 +104,7 @@ export function SubmitCorpusStage({
         <div className="inline-note" role="status">正在检查第二次回答…</div>
       ) : null}
       {aiNote ? <div className="inline-note" role="status">{aiNote}</div> : null}
-      {aiNote && !aiBusy ? (
+      {aiNote && !aiBusy && aiRetryable ? (
         <button type="button" className="secondary-button" onClick={onRetryAnalysis}>
           重试二答分析
         </button>
@@ -117,7 +134,11 @@ export function SubmitCorpusStage({
                       <textarea
                         rows={2}
                         value={correctionDrafts[index] ?? item.corrected}
-                        onChange={(event) => setCorrectionDrafts((current) => current.map((text, itemIndex) => itemIndex === index ? event.target.value : text))}
+                        onChange={(event) => setCorrectionDrafts((current) => {
+                          const next = [...current]
+                          next[index] = event.target.value
+                          return next
+                        })}
                       />
                       <small>{item.reason}</small>
                     </span>

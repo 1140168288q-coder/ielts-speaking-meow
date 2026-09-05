@@ -58,6 +58,8 @@ const backendHealthSchema = z
   })
   .passthrough()
 
+const MOBILE_CONNECT_TIMEOUT_MS = 10_000
+
 export type BackendHealth = z.infer<typeof backendHealthSchema>
 export type BackendProviderHealth = z.infer<typeof providerHealthSchema>
 export type BackendProviderVerification = z.infer<typeof providerVerificationSchema>
@@ -82,6 +84,13 @@ export interface BackendClientOptions {
   nativeRequest?: (options: HttpOptions) => Promise<HttpResponse>
   getAccessToken?: () => Promise<string | null>
   onUnauthorized?: () => void | Promise<void>
+}
+
+export interface BackendPostOptions {
+  /** 同一逻辑请求的额度幂等标识，不携带答案或 AI 返回内容。 */
+  idempotencyKey?: string
+  /** 只对具备稳定幂等标识的瞬时失败进行一次重试。 */
+  retry?: boolean
 }
 
 /**
@@ -144,7 +153,7 @@ export class BackendClient {
    * 合成一句 "Hello."),返回各供应商的最新验证状态。
    */
   async verifyProviders(
-    timeoutMs = 45_000,
+    timeoutMs = 105_000,
   ): Promise<Record<string, BackendProviderVerification>> {
     const payload = await this.postJson<unknown>(
       '/health/verify',
@@ -172,17 +181,51 @@ export class BackendClient {
     return verified
   }
 
-  async postJson<T>(path: string, body: unknown, timeoutMs: number): Promise<T> {
-    return mapTransportFailure(() =>
-      this.requestJson<T>(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        nativeBody: body,
-        nativeResponseType: 'json',
-        timeoutMs,
-      }),
-    )
+  async postJson<T>(
+    path: string,
+    body: unknown,
+    timeoutMs: number,
+    options: BackendPostOptions = {},
+  ): Promise<T> {
+    const attempts = options.retry && options.idempotencyKey ? 2 : 1
+    const startedAt = nowMilliseconds()
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const remainingTimeoutMs = Math.max(
+        1,
+        timeoutMs - (nowMilliseconds() - startedAt),
+      )
+      try {
+        return await mapTransportFailure(() =>
+          this.requestJson<T>(path, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(options.idempotencyKey
+                ? { 'X-Idempotency-Key': options.idempotencyKey }
+                : {}),
+            },
+            body: JSON.stringify(body),
+            nativeBody: body,
+            nativeResponseType: 'json',
+            timeoutMs: remainingTimeoutMs,
+          }),
+        )
+      } catch (error) {
+        if (
+          attempt === 0 &&
+          attempts === 2 &&
+          shouldRetryPost(error)
+        ) {
+          const remaining = timeoutMs - (nowMilliseconds() - startedAt)
+          if (remaining <= 1) throw error
+          const jitteredDelay = 200 + Math.floor(Math.random() * 101)
+          await delay(Math.min(jitteredDelay, remaining))
+          continue
+        }
+        throw error
+      }
+    }
+    throw new ApiProviderError('network', '云端请求失败，请重试。', true)
   }
 
   async postBinary(path: string, body: unknown, timeoutMs: number): Promise<Blob> {
@@ -194,7 +237,7 @@ export class BackendClient {
           headers: await this.withRequestHeaders({ 'Content-Type': 'application/json' }),
           data: body,
           responseType: 'arraybuffer',
-          connectTimeout: timeoutMs,
+          connectTimeout: connectTimeoutFor(timeoutMs),
           readTimeout: timeoutMs,
         })
         this.assertSuccess(response.status, response.data)
@@ -222,7 +265,7 @@ export class BackendClient {
         method: 'GET',
         headers: await this.withRequestHeaders({}),
         responseType: 'json',
-        connectTimeout: timeoutMs,
+        connectTimeout: connectTimeoutFor(timeoutMs),
         readTimeout: timeoutMs,
       })
       this.assertSuccess(response.status, response.data)
@@ -257,7 +300,7 @@ export class BackendClient {
           ? { dataType: options.nativeDataType }
           : {}),
         responseType: options.nativeResponseType,
-        connectTimeout: options.timeoutMs,
+        connectTimeout: connectTimeoutFor(options.timeoutMs),
         readTimeout: options.timeoutMs,
       })
       this.assertSuccess(response.status, response.data)
@@ -364,11 +407,27 @@ export class BackendClient {
         errorDetails,
       )
     }
+    if (code === 'upstream-auth' || code === 'upstream-not-found') {
+      throw new ApiProviderError(
+        'request-failed',
+        messageWithDetail,
+        false,
+        errorDetails,
+      )
+    }
     if (code === 'rate-limited') {
       throw new ApiProviderError(
         'rate-limited',
         messageWithDetail,
         true,
+        errorDetails,
+      )
+    }
+    if (code === 'quota-exceeded') {
+      throw new ApiProviderError(
+        'request-failed',
+        messageWithDetail,
+        false,
         errorDetails,
       )
     }
@@ -458,4 +517,23 @@ function createRequestId(): string {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds))
+}
+
+function connectTimeoutFor(readTimeoutMs: number): number {
+  return Math.min(MOBILE_CONNECT_TIMEOUT_MS, readTimeoutMs)
+}
+
+function shouldRetryPost(error: unknown): boolean {
+  if (!(error instanceof ApiProviderError) || !error.retryable) return false
+  // DeepSeek/Backend 已经完成了自己的单次重试；客户端只恢复到 Backend
+  // 的网络/连接级瞬时故障，避免同一故障在两层叠加成四次上游调用。
+  return (
+    error.code === 'network' ||
+    (error.code === 'timeout' && error.backendCode === undefined) ||
+    error.code === 'rate-limited'
+  )
+}
+
+function nowMilliseconds(): number {
+  return globalThis.performance?.now?.() ?? Date.now()
 }

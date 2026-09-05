@@ -1,7 +1,7 @@
 """共享 httpx 客户端。测试时注入 MockTransport 即可,不需要 mock 网络。"""
 import httpx
 
-from ..errors import provider_error, upstream_timeout
+from ..errors import provider_error, upstream_auth_error, upstream_not_found, upstream_timeout
 
 
 def build_http_client(timeout_seconds: float) -> httpx.AsyncClient:
@@ -16,11 +16,11 @@ async def raise_for_upstream(response: httpx.Response, context: str) -> None:
     if 200 <= response.status_code < 300:
         return
     if response.status_code == 401:
-        raise provider_error(f"{context}:凭证无效(401)。")
+        raise upstream_auth_error(f"{context}:凭证无效(401)。")
     if response.status_code == 403:
-        raise provider_error(f"{context}:无权限访问(403)。")
+        raise upstream_auth_error(f"{context}:无权限访问(403)。")
     if response.status_code == 404:
-        raise provider_error(f"{context}:接口或资源不存在(404)。")
+        raise upstream_not_found(f"{context}:接口或资源不存在(404)。")
     if response.status_code == 429:
         raise provider_error(f"{context}:第三方限流(429),请稍后重试。")
     if response.status_code >= 500:

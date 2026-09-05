@@ -18,10 +18,11 @@ import type {
   MaterialSuggester,
 } from '../../ports/ai'
 import { ApiProviderError } from '../ai/providerErrors'
-import type { BackendClient } from './backendClient'
+import type { BackendClient, BackendPostOptions } from './backendClient'
 import type { BackendHealthCache } from './backendHealth'
 
-const TEXT_TIMEOUT_MS = 45_000
+// Backend's 90s total budget must settle before the mobile/browser transport.
+const TEXT_TIMEOUT_MS = 105_000
 
 /**
  * Text AI 通过自建 Backend 调用(Backend 内部再调 DeepSeek)。
@@ -59,22 +60,22 @@ export class BackendTextProvider
         ? { category: request.question.category }
         : {}),
     }
-    const data = await this.client.postJson<unknown>(
-      '/v1/feedback',
-      {
-        part: request.question.part,
-        question,
-        answer: request.answer,
-        answerDurationSeconds: request.answerDurationSeconds,
-        ...(request.tutorContext
-          ? { tutorContext: request.tutorContext }
-          : {}),
-        ...(request.learnerContext
-          ? { learnerContext: request.learnerContext }
-          : {}),
-      },
-      TEXT_TIMEOUT_MS,
-    )
+    const body = {
+      part: request.question.part,
+      question,
+      answer: request.answer,
+      answerDurationSeconds: request.answerDurationSeconds,
+      ...(request.tutorContext
+        ? { tutorContext: request.tutorContext }
+        : {}),
+      ...(request.learnerContext
+        ? { learnerContext: request.learnerContext }
+        : {}),
+    }
+    const options = postOptions(request.idempotencyKey)
+    const data = options
+      ? await this.client.postJson<unknown>('/v1/feedback', body, TEXT_TIMEOUT_MS, options)
+      : await this.client.postJson<unknown>('/v1/feedback', body, TEXT_TIMEOUT_MS)
     return parseValidated(
       data,
       aiFeedbackSchema,
@@ -91,15 +92,24 @@ export class BackendTextProvider
         ? { cuePoints: request.question.cuePoints }
         : {}),
     }
-    const data = await this.client.postJson<unknown>(
-      '/v1/feedback/second-attempt',
-      {
-        part: request.question.part,
-        question,
-        answer: request.answer,
-      },
-      TEXT_TIMEOUT_MS,
-    )
+    const body = {
+      part: request.question.part,
+      question,
+      answer: request.answer,
+    }
+    const options = postOptions(request.idempotencyKey)
+    const data = options
+      ? await this.client.postJson<unknown>(
+        '/v1/feedback/second-attempt',
+        body,
+        TEXT_TIMEOUT_MS,
+        options,
+      )
+      : await this.client.postJson<unknown>(
+        '/v1/feedback/second-attempt',
+        body,
+        TEXT_TIMEOUT_MS,
+      )
     return parseValidated(
       data,
       secondAttemptAnalysisSchema,
@@ -152,6 +162,12 @@ export class BackendTextProvider
     )
     return envelope.suggestions
   }
+}
+
+function postOptions(idempotencyKey: string | undefined): BackendPostOptions | undefined {
+  return idempotencyKey
+    ? { idempotencyKey, retry: true }
+    : undefined
 }
 
 const organizeResponseSchema = z.object({

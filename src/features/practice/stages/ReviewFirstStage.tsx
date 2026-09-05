@@ -9,6 +9,7 @@ export function ReviewFirstStage({
   aiConfigured,
   aiBusy,
   aiNote,
+  aiRetryable = true,
   busy,
   feedbackDetail,
   speakingKey,
@@ -21,6 +22,7 @@ export function ReviewFirstStage({
   aiConfigured: boolean
   aiBusy: boolean
   aiNote: string | null
+  aiRetryable?: boolean
   busy: boolean
   feedbackDetail: 'focused' | 'expanded'
   speakingKey: string | null
@@ -42,7 +44,7 @@ export function ReviewFirstStage({
         <LocalFeedbackCard busy={aiBusy} attempt={firstAttempt} />
       )}
       {aiNote ? <div className="inline-note">{aiNote}</div> : null}
-      {aiConfigured && !aiFeedback ? (
+      {aiConfigured && !aiFeedback && aiRetryable ? (
         <button
           type="button"
           className="secondary-button"

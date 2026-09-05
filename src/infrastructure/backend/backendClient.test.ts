@@ -135,6 +135,80 @@ describe('BackendClient (web transport)', () => {
       .rejects.toMatchObject({ code: 'network', retryable: true })
   })
 
+  it('retries a transient idempotent POST once with the same logical key', async () => {
+    const fetch = vi.fn()
+      .mockRejectedValueOnce(new TypeError('temporary network failure'))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+    const client = createClient(fetch)
+
+    await expect(
+      client.postJson(
+        '/v1/feedback',
+        { answer: 'short test' },
+        5_000,
+        { idempotencyKey: 'feedback:session-1:1:attempt-1', retry: true },
+      ),
+    ).resolves.toEqual({ ok: true })
+
+    expect(fetch).toHaveBeenCalledTimes(2)
+    const firstHeaders = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers)
+    const secondHeaders = new Headers((fetch.mock.calls[1]?.[1] as RequestInit).headers)
+    expect(firstHeaders.get('X-Idempotency-Key')).toBe('feedback:session-1:1:attempt-1')
+    expect(secondHeaders.get('X-Idempotency-Key')).toBe('feedback:session-1:1:attempt-1')
+    expect(firstHeaders.get('X-Request-ID')).not.toBe(secondHeaders.get('X-Request-ID'))
+  })
+
+  it('does not retry a non-retryable authenticated failure even with a key', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { code: 'unauthorized' } }, 401))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+    const client = createClient(fetch)
+
+    await expect(
+      client.postJson(
+        '/v1/feedback',
+        { answer: 'short test' },
+        5_000,
+        { idempotencyKey: 'feedback:session-1:1:attempt-1', retry: true },
+      ),
+    ).rejects.toMatchObject({ code: 'request-failed', retryable: false })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not duplicate a Backend upstream failure that was already retried server-side', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { code: 'provider-error' } }, 502))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+    const client = createClient(fetch)
+
+    await expect(
+      client.postJson(
+        '/v1/feedback',
+        { answer: 'short test' },
+        5_000,
+        { idempotencyKey: 'feedback:session-1:1:attempt-1', retry: true },
+      ),
+    ).rejects.toMatchObject({ code: 'server', retryable: true })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats quota exhaustion as non-retryable', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({ error: { code: 'quota-exceeded', message: '额度已用完' } }, 429),
+    )
+    const client = createClient(fetch)
+
+    await expect(
+      client.postJson(
+        '/v1/feedback',
+        { answer: 'short test' },
+        5_000,
+        { idempotencyKey: 'feedback:session-1:1:attempt-1', retry: true },
+      ),
+    ).rejects.toMatchObject({ code: 'request-failed', retryable: false })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('returns binary audio for postBinary', async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(new Uint8Array([1, 2, 3]), {

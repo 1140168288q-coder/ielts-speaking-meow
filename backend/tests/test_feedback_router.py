@@ -1,7 +1,11 @@
 import json
+import logging
 
 import httpx
+import pytest
+from sqlalchemy import func, select
 
+from app.commercial_models import UsageEvent
 from tests.conftest import (
     authenticated_headers,
     configured_settings,
@@ -195,7 +199,14 @@ async def test_feedback_not_configured(make_app):
 
 
 async def test_feedback_invalid_shape_returns_502(make_app):
-    app, _ = make_app(deepseek_ok_handler({"summary": "missing everything"}))
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return deepseek_ok_handler({"summary": "missing everything"})(request)
+
+    app, _ = make_app(handler)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -205,6 +216,66 @@ async def test_feedback_invalid_shape_returns_502(make_app):
     assert app.state.services["deepseek"].calls.request.snapshot(
         kind="request"
     )["failureStage"] == "pydantic-fields"
+    assert calls == 2
+    async with app.state.database.session_factory() as db:
+        assert await db.scalar(select(func.count()).select_from(UsageEvent)) == 0
+
+
+async def test_feedback_rejects_unknown_ai_fields(make_app):
+    invalid = {**TEXT_FEEDBACK, "bandScore": 7}
+    app, _ = make_app(deepseek_ok_handler(invalid))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "provider-error"
+    assert app.state.services["deepseek"].calls.request.snapshot(
+        kind="request"
+    )["failureStage"] == "pydantic-fields"
+    async with app.state.database.session_factory() as db:
+        assert await db.scalar(select(func.count()).select_from(UsageEvent)) == 0
+
+
+async def test_feedback_failure_log_contains_only_safe_summary(make_app):
+    answer_marker = "PRIVATE_ANSWER_MARKER_7f9e"
+    app, _ = make_app(
+        lambda request: httpx.Response(503, json={"answer": answer_marker})
+    )
+    records: list[str] = []
+
+    class RecordingHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record.getMessage())
+
+    service_logger = logging.getLogger("app.services.deepseek_service")
+    handler = RecordingHandler()
+    previous_level = service_logger.level
+    previous_disabled = service_logger.disabled
+    service_logger.disabled = False
+    service_logger.setLevel(logging.WARNING)
+    service_logger.addHandler(handler)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        try:
+            response = await post_authenticated(
+                client,
+                "/v1/feedback",
+                {**FEEDBACK_PAYLOAD, "answer": answer_marker},
+            )
+        finally:
+            service_logger.removeHandler(handler)
+            service_logger.setLevel(previous_level)
+            service_logger.disabled = previous_disabled
+
+    assert response.status_code == 502
+    log_text = "\n".join(records)
+    assert answer_marker not in log_text
+    assert "Authorization" not in log_text
+    assert "Bearer" not in log_text
+    assert "stage=upstream-http" in log_text
 
 
 async def test_feedback_rejects_truncated_completion(make_app):
@@ -234,6 +305,27 @@ async def test_feedback_rejects_truncated_completion(make_app):
     assert request["usage"] == {"prompt_tokens": 10, "completion_tokens": 4096}
 
 
+async def test_feedback_timeout_is_retried_once_without_quota_charge(make_app):
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        raise httpx.ReadTimeout("simulated upstream timeout")
+
+    app, _ = make_app(handler, configured_settings(free_feedback_monthly_quota=5))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
+
+    assert response.status_code == 504
+    assert response.json()["error"]["code"] == "upstream-timeout"
+    assert calls == 2
+    async with app.state.database.session_factory() as db:
+        assert await db.scalar(select(func.count()).select_from(UsageEvent)) == 0
+
+
 async def test_feedback_upstream_401(make_app):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"error": {"message": "bad key"}})
@@ -245,6 +337,82 @@ async def test_feedback_upstream_401(make_app):
         response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
     assert response.status_code == 502
     assert "401" in response.json()["error"]["message"]
+
+
+@pytest.mark.parametrize("upstream_status", [401, 403, 404, 429, 500])
+async def test_feedback_upstream_failures_do_not_consume_quota(
+    make_app, upstream_status: int
+):
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(upstream_status)
+
+    app, _ = make_app(
+        handler,
+        configured_settings(free_feedback_monthly_quota=5),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        headers = await authenticated_headers(client, f"failure-{upstream_status}@example.com")
+        response = await client.post(
+            "/v1/feedback",
+            headers={**headers, "X-Idempotency-Key": f"failure-{upstream_status}"},
+            json=FEEDBACK_PAYLOAD,
+        )
+        me = await client.get("/v1/me", headers=headers)
+
+    assert response.status_code == 502
+    expected_code = {
+        401: "upstream-auth",
+        403: "upstream-auth",
+        404: "upstream-not-found",
+    }.get(upstream_status)
+    if expected_code is not None:
+        assert response.json()["error"]["code"] == expected_code
+    assert me.json()["capabilities"]["feedback"]["quotaUsed"] == 0
+    assert calls == (1 if upstream_status in {401, 403, 404} else 2)
+
+
+async def test_feedback_transient_failure_retries_once_then_settles_once(make_app):
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(503)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{
+                    "finish_reason": "stop",
+                    "message": {"content": json.dumps(TEXT_FEEDBACK)},
+                }],
+            },
+        )
+
+    app, _ = make_app(
+        handler,
+        configured_settings(free_feedback_monthly_quota=1),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        headers = await authenticated_headers(client, "transient@example.com")
+        response = await client.post(
+            "/v1/feedback",
+            headers={**headers, "X-Idempotency-Key": "transient-feedback"},
+            json=FEEDBACK_PAYLOAD,
+        )
+        me = await client.get("/v1/me", headers=headers)
+
+    assert response.status_code == 200
+    assert calls == 2
+    assert me.json()["capabilities"]["feedback"]["quotaUsed"] == 1
 
 
 async def test_organize_happy_path(make_app):

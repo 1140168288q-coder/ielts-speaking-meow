@@ -58,6 +58,7 @@ FastAPI Backend(密钥在环境变量,日志脱敏)
 `not-configured`(503) / `provider-error`(502) / `upstream-timeout`(504) /
 `invalid-request`(400) / `invalid-account-token`(400) / `rate-limited`(429) /
 `quota-exceeded`(429) / `email-not-verified`(403) / `account-inactive`(403) /
+`upstream-auth`(502) / `upstream-not-found`(502) /
 `email-already-registered`(409) / `invalid-credentials`(401) / `invalid-session`(401)。
 
 注册和登录返回：
@@ -83,14 +84,28 @@ FastAPI Backend(密钥在环境变量,日志脱敏)
 每次登录创建独立会话，普通退出只撤销当前会话；`logout-all` 可撤销该账号全部
 会话。当前没有滑动续期或 refresh token。
 
+## DeepSeek 超时与重试
+
+反馈和二答分析使用分层预算：连接 10 秒、单次读取最多 75 秒、整个 Backend
+请求最多 90 秒，最多两次上游尝试并带 0.25 秒量级的抖动退避。Android/Web
+客户端给该请求 105 秒总预算，原生请求的连接超时仍限制在 10 秒；因此客户端
+不会在 Backend 已完成上游重试后再叠加一次 90 秒请求。客户端只对带稳定
+`X-Idempotency-Key` 的网络级瞬时失败自动重试，401/403/404、额度不足和
+服务端已经分类的上游错误交由用户按提示处理。
+
+反馈额度在 DeepSeek 返回、结构校验和内容策略校验全部成功后才结算；超时、
+限流、非法 JSON、字段缺失或策略违规不会扣费。日志只保留 request id、延迟、
+失败阶段和安全的长度/用量摘要，不保存答案正文、AI 返回、Authorization 或密钥。
+
 ## 账号能力、额度与生命周期
 
 `GET /v1/me` 是客户端展示身份和商业能力的唯一真实来源。当前默认 free plan，
 并为 feedback、organize、TTS 字符数、provider verify 配置独立周期 quota。
 邮箱未验证或账号非 active 时 capability 会返回明确原因，受保护能力不会执行。
 
-同一个 `Idempotency-Key` 的成功请求重试不会重复计费；复用该 key 提交不同内容
-会被拒绝。用量由服务端事务写入，不信任客户端计数。pro、entitlement override、
+同一个 `Idempotency-Key` 的成功请求重试不会重复计费。为避免在 Backend 保存私人
+答案或 AI 响应，重试会再次调用上游但只产生一条 `UsageEvent`；客户端必须只在同一
+逻辑请求中复用 key。用量由服务端事务写入，不信任客户端计数。pro、entitlement override、
 subscription 状态和 webhook 去重/审计表已预留，但本版没有支付入口。
 
 删除账号必须再次校验密码。服务端会撤销全部会话、清除该用户的同步实体、变更日志

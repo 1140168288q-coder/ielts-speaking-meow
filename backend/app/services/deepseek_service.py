@@ -4,13 +4,15 @@ V1.7 起 DeepSeek 只接收 Part、题目、用户答案文本与可选作答时
 只分析语法、词汇、连贯性、表达自然度、是否切题与内容展开。
 绝不评价发音、语速、停顿、语调,也绝不给出 IELTS Band 分数或水平评分。
 """
+import asyncio
 import json
 import logging
+import random
 import time
 from typing import Literal
 
 import httpx
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ..config import Settings
 from ..errors import BackendError, not_configured, provider_error
@@ -104,31 +106,37 @@ class DeepSeekFailure(Exception):
         self.backend_error = backend_error
 
 
-class ReferenceAnswer(BaseModel):
+class StrictResponseModel(BaseModel):
+    """AI JSON schema 的未知字段必须显式失败，不能被 Pydantic 静默丢弃。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReferenceAnswer(StrictResponseModel):
     """一个自然口语化的参考回答版本。"""
 
     label: str = Field(min_length=1, max_length=40)
     text: str = Field(min_length=1, max_length=1_500)
 
 
-class NaturalUpgradeSuggestion(BaseModel):
+class NaturalUpgradeSuggestion(StrictResponseModel):
     content: str = Field(min_length=1, max_length=500)
     source: Literal["memory", "personal_material", "rag", "ai_example"]
     sourcePart: Literal[1, 2, 3, "unclassified"] | None
     replaceable: bool
 
 
-class NaturalUpgradeSuggestions(BaseModel):
+class NaturalUpgradeSuggestions(StrictResponseModel):
     addableContent: list[NaturalUpgradeSuggestion] = Field(max_length=4)
     advancedChanges: list[str] = Field(max_length=3)
 
 
-class AnswerFrameworkItem(BaseModel):
+class AnswerFrameworkItem(StrictResponseModel):
     label: str = Field(min_length=1, max_length=120)
     template: str = Field(min_length=1, max_length=320)
 
 
-class TextFeedback(BaseModel):
+class TextFeedback(StrictResponseModel):
     """客户端与服务端共同约定的结构化反馈,不包含任何评分字段。"""
 
     summary: str = Field(min_length=1, max_length=500)
@@ -141,13 +149,13 @@ class TextFeedback(BaseModel):
     answerFramework: list[AnswerFrameworkItem] = Field(max_length=6)
 
 
-class CorrectedSentence(BaseModel):
+class CorrectedSentence(StrictResponseModel):
     original: str = Field(min_length=1, max_length=1_000)
     corrected: str = Field(min_length=1, max_length=1_000)
     reason: str = Field(min_length=1, max_length=320)
 
 
-class MemoryCandidate(BaseModel):
+class MemoryCandidate(StrictResponseModel):
     content: str = Field(min_length=1, max_length=320)
     kind: Literal["person", "place", "experience", "preference", "opinion", "other"]
     topicTags: list[str] = Field(max_length=12)
@@ -155,12 +163,12 @@ class MemoryCandidate(BaseModel):
     sourcePart: Literal[1, 2, 3]
 
 
-class SecondAttemptFeedback(BaseModel):
+class SecondAttemptFeedback(StrictResponseModel):
     correctedSentences: list[CorrectedSentence] = Field(max_length=10)
     memoryCandidates: list[MemoryCandidate] = Field(max_length=10)
 
 
-class ImportQuestion(BaseModel):
+class ImportQuestion(StrictResponseModel):
     part: Literal[1, 2, 3]
     topic: str = Field(min_length=1, max_length=80)
     prompt: str = Field(min_length=1, max_length=500)
@@ -168,11 +176,11 @@ class ImportQuestion(BaseModel):
     sourcePage: int | None = None
 
 
-class ImportQuestionList(BaseModel):
+class ImportQuestionList(StrictResponseModel):
     questions: list[ImportQuestion] = Field(min_length=1, max_length=50)
 
 
-class MaterialSuggestionItem(BaseModel):
+class MaterialSuggestionItem(StrictResponseModel):
     """一条候选个人素材;客户端确认后才写入素材库。"""
 
     title: str = Field(min_length=1, max_length=160)
@@ -182,7 +190,7 @@ class MaterialSuggestionItem(BaseModel):
     sourcePart: Literal[1, 2, 3] | None = None
 
 
-class MaterialSuggestionList(BaseModel):
+class MaterialSuggestionList(StrictResponseModel):
     suggestions: list[MaterialSuggestionItem] = Field(min_length=1, max_length=6)
 
 
@@ -310,7 +318,7 @@ class DeepSeekService:
                             "kind": "person | place | experience | preference | opinion | other",
                             "topicTags": ["简短标签"],
                             "sourceSentence": "对应英文原句",
-                            "sourcePart": "当前 Part",
+                            "sourcePart": "当前 Part 的数字 1、2 或 3",
                         }
                     ],
                 },
@@ -320,6 +328,7 @@ class DeepSeekService:
                     "如果没有明确错误,correctedSentences 返回空数组",
                     "不得使用 RAG、第一次回答、参考答案、已有 Memory 或个人素材",
                     "memoryCandidates 只能提取答案中明确出现的真实个人信息",
+                    "sourcePart 必须填写当前题目的数字 Part(1、2 或 3),不要写字符串或 0",
                     "不得推测或虚构事实,不得把模板内容当作 Memory",
                     "所有 Memory 候选必须由用户确认后才能保存",
                     "不得评价发音、语速、停顿、语调或给出任何分数",
@@ -407,30 +416,34 @@ class DeepSeekService:
         try:
             base = self._settings.deepseek_base_url.rstrip("/")
             run = timeout_guard("DeepSeek")
-            response = await run(
-                lambda: self._client.post(
-                    f"{base}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self._settings.deepseek_api_key}",
-                    },
-                    json={
-                        "model": self._settings.deepseek_model,
-                        "thinking": {"type": "disabled"},
-                        "response_format": {"type": "json_object"},
-                        "max_tokens": DEEPSEEK_MAX_TOKENS,
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "Return JSON only.",
-                            },
-                            {
-                                "role": "user",
-                                "content": '{"task":"health-check","requiredShape":{"ok":true}}',
-                            },
-                        ],
-                    },
+            async with asyncio.timeout(self._settings.deepseek_total_timeout_seconds):
+                response = await run(
+                    lambda: self._client.post(
+                        f"{base}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self._settings.deepseek_api_key}",
+                        },
+                        json={
+                            "model": self._settings.deepseek_model,
+                            "thinking": {"type": "disabled"},
+                            "response_format": {"type": "json_object"},
+                            "max_tokens": DEEPSEEK_MAX_TOKENS,
+                            "messages": [
+                                {
+                                    "role": "system",
+                                    "content": "Return JSON only.",
+                                },
+                                {
+                                    "role": "user",
+                                    "content": '{"task":"health-check","requiredShape":{"ok":true}}',
+                                },
+                            ],
+                        },
+                        timeout=self._request_timeout(
+                            self._settings.deepseek_total_timeout_seconds
+                        ),
+                    )
                 )
-            )
             try:
                 await raise_for_upstream(response, "DeepSeek")
             except BackendError as exc:
@@ -451,6 +464,17 @@ class DeepSeekService:
             )
         except DeepSeekFailure as exc:
             self._record_failure(self.calls.verification, started, exc)
+        except TimeoutError:
+            failure = DeepSeekFailure(
+                "upstream-http",
+                "DeepSeek 验证请求超时。",
+                backend_error=BackendError(
+                    504,
+                    "upstream-timeout",
+                    "DeepSeek 验证请求超时,请稍后重试。",
+                ),
+            )
+            self._record_failure(self.calls.verification, started, failure)
         except BackendError as exc:
             failure = DeepSeekFailure("upstream-http", exc.message, backend_error=exc)
             self._record_failure(self.calls.verification, started, failure)
@@ -472,35 +496,90 @@ class DeepSeekService:
         if not self.is_configured:
             raise not_configured("DeepSeek(Text AI)")
         started = time.perf_counter()
+        final_failure: DeepSeekFailure | None = None
         try:
-            return await self._complete_checked(system, user, schema)
-        except DeepSeekFailure as exc:
-            self._record_failure(self.calls.request, started, exc)
-            if exc.backend_error is not None:
-                raise exc.backend_error from exc
-            raise provider_error(exc.public_message) from exc
-        except BackendError as exc:
-            failure = DeepSeekFailure("upstream-http", exc.message, backend_error=exc)
-            self._record_failure(self.calls.request, started, failure)
-            raise
-        except Exception as exc:  # noqa: BLE001 - 记录最近失败后按安全摘要抛出
-            failure = DeepSeekFailure(
+            async with asyncio.timeout(self._settings.deepseek_total_timeout_seconds):
+                for attempt in range(self._settings.deepseek_max_attempts):
+                    remaining = self._settings.deepseek_total_timeout_seconds - (
+                        time.perf_counter() - started
+                    )
+                    if remaining <= 0:
+                        raise TimeoutError
+                    try:
+                        return await self._complete_checked(
+                            system,
+                            user,
+                            schema,
+                            timeout_seconds=remaining,
+                        )
+                    except DeepSeekFailure as exc:
+                        final_failure = exc
+                    except BackendError as exc:
+                        final_failure = DeepSeekFailure(
+                            "upstream-http",
+                            exc.message,
+                            backend_error=exc,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - 上游瞬时故障转安全摘要
+                        final_failure = DeepSeekFailure(
+                            "upstream-http",
+                            "DeepSeek 请求暂时失败,已保留本地结果。",
+                            field_path=type(exc).__name__,
+                            backend_error=BackendError(
+                                502,
+                                "provider-error",
+                                "DeepSeek 网络请求失败,请稍后重试。",
+                            ),
+                        )
+                    if final_failure is None or attempt + 1 >= self._settings.deepseek_max_attempts:
+                        break
+                    if not self._is_retryable_failure(final_failure):
+                        break
+                    remaining = self._settings.deepseek_total_timeout_seconds - (
+                        time.perf_counter() - started
+                    )
+                    delay = min(
+                        self._settings.deepseek_retry_backoff_seconds
+                        * random.uniform(0.8, 1.2),
+                        max(0.0, remaining),
+                    )
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+        except TimeoutError:
+            final_failure = DeepSeekFailure(
+                "upstream-http",
+                "DeepSeek 请求超时,已保留本地结果。",
+                backend_error=BackendError(
+                    504,
+                    "upstream-timeout",
+                    "DeepSeek 请求超时,请稍后重试。",
+                ),
+            )
+
+        if final_failure is None:
+            final_failure = DeepSeekFailure(
                 "response-envelope",
                 "DeepSeek 请求处理失败,已保留本地结果。",
-                field_path=type(exc).__name__,
             )
-            self._record_failure(self.calls.request, started, failure)
-            raise provider_error(failure.public_message) from exc
+        self._record_failure(self.calls.request, started, final_failure)
+        if final_failure.backend_error is not None:
+            raise final_failure.backend_error from final_failure
+        raise provider_error(final_failure.public_message) from final_failure
 
     async def _complete_checked(
         self,
         system: str,
         user: str,
         schema: type[BaseModel],
+        *,
+        timeout_seconds: float | None = None,
     ) -> dict:
         base = self._settings.deepseek_base_url.rstrip("/")
         started = time.perf_counter()
         run = timeout_guard("DeepSeek")
+        request_timeout = self._request_timeout(
+            timeout_seconds or self._settings.deepseek_read_timeout_seconds
+        )
         response = await run(
             lambda: self._client.post(
                 f"{base}/chat/completions",
@@ -517,6 +596,7 @@ class DeepSeekService:
                         {"role": "user", "content": user},
                     ],
                 },
+                timeout=request_timeout,
             )
         )
         try:
@@ -576,6 +656,35 @@ class DeepSeekService:
             usage=usage,
         )
         return result
+
+    def _request_timeout(self, remaining_seconds: float) -> httpx.Timeout:
+        budget = max(0.1, remaining_seconds)
+        return httpx.Timeout(
+            connect=min(self._settings.deepseek_connect_timeout_seconds, budget),
+            read=min(self._settings.deepseek_read_timeout_seconds, budget),
+            write=min(self._settings.deepseek_write_timeout_seconds, budget),
+            pool=min(self._settings.deepseek_pool_timeout_seconds, budget),
+        )
+
+    @staticmethod
+    def _is_retryable_failure(failure: DeepSeekFailure) -> bool:
+        if failure.http_status in {401, 403, 404}:
+            return False
+        if failure.http_status == 429 or (
+            failure.http_status is not None and failure.http_status >= 500
+        ):
+            return True
+        if failure.backend_error is not None:
+            return failure.backend_error.code == "upstream-timeout" or (
+                failure.backend_error.code == "provider-error"
+                and failure.http_status is None
+            )
+        return failure.stage in {
+            "response-envelope",
+            "json-parse",
+            "pydantic-fields",
+            "content-policy",
+        }
 
     @staticmethod
     def _read_completion(

@@ -2,6 +2,7 @@
 
 这里只持久化能力键、请求标识和计量单位，不接收也不保存答案正文。
 """
+import asyncio
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,7 @@ from uuid import uuid4
 from fastapi import Request
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from ..commercial_models import (
     AccountBillingState,
@@ -57,6 +59,10 @@ class FeatureCapability:
 
 class FeatureAuthorizationService:
     def __init__(self, settings: Settings) -> None:
+        # 测试 SQLite 与单进程开发栈没有 PostgreSQL 的行锁语义；结算本身很短，
+        # 用进程内互斥锁补上同一 Backend 实例内的原子边界。生产多 worker 仍由
+        # PostgreSQL 的用户行锁和唯一约束兜底。
+        self._settle_lock = asyncio.Lock()
         self._policies = {
             FeatureKey.SYNC: FeaturePolicy(None, "month", "request"),
             FeatureKey.FEEDBACK: FeaturePolicy(
@@ -105,6 +111,156 @@ class FeatureAuthorizationService:
         capability = await self._resolve_capability(db, user, feature)
         self._raise_if_unavailable(capability, required_units=1)
         return capability
+
+    async def authorize(
+        self,
+        db: AsyncSession,
+        user: User,
+        feature: FeatureKey,
+        *,
+        units: int,
+        idempotency_key: str | None = None,
+    ) -> FeatureCapability:
+        """检查本次调用是否有资格使用额度，但不提前扣费。"""
+        if units <= 0:
+            raise invalid_request("用量单位必须大于 0。")
+        capability = await self._resolve_capability(db, user, feature)
+        if idempotency_key is not None:
+            replay = await db.scalar(
+                select(UsageEvent.id).where(
+                    UsageEvent.user_id == user.id,
+                    UsageEvent.feature_key == feature.value,
+                    UsageEvent.idempotency_key == idempotency_key,
+                )
+            )
+            if replay is not None:
+                # 允许同一逻辑请求在额度用尽后安全重放；settle 会再次确认
+                # 幂等事件，不会重复计费。
+                return capability
+        self._raise_if_unavailable(capability, required_units=units)
+        return capability
+
+    async def settle(
+        self,
+        db: AsyncSession,
+        user: User,
+        feature: FeatureKey,
+        *,
+        units: int,
+        request_id: str,
+        idempotency_key: str | None,
+    ) -> FeatureCapability:
+        async with self._settle_lock:
+            return await self._settle_unlocked(
+                db,
+                user,
+                feature,
+                units=units,
+                request_id=request_id,
+                idempotency_key=idempotency_key,
+            )
+
+    async def _settle_unlocked(
+        self,
+        db: AsyncSession,
+        user: User,
+        feature: FeatureKey,
+        *,
+        units: int,
+        request_id: str,
+        idempotency_key: str | None,
+    ) -> FeatureCapability:
+        """在合法结果已经准备返回后原子结算一次额度。
+
+        这里不保存请求正文或 AI 返回；幂等键只关联一条计量事件。
+        """
+        if units <= 0:
+            raise invalid_request("用量单位必须大于 0。")
+
+        # PostgreSQL 上按用户串行化 settle，避免并发请求越过同一周期上限。
+        await db.scalar(select(User.id).where(User.id == user.id).with_for_update())
+
+        if idempotency_key is not None:
+            replay = await db.scalar(
+                select(UsageEvent.id).where(
+                    UsageEvent.user_id == user.id,
+                    UsageEvent.feature_key == feature.value,
+                    UsageEvent.idempotency_key == idempotency_key,
+                )
+            )
+            if replay is not None:
+                return await self._resolve_capability(db, user, feature)
+
+        capability = await self._resolve_capability(db, user, feature)
+        self._raise_if_unavailable(capability, required_units=units)
+        now = datetime.now(timezone.utc)
+        period_start, period_end = self._period_bounds(now, capability.period)
+        counter = await db.scalar(
+            select(UsageCounter)
+            .where(
+                UsageCounter.user_id == user.id,
+                UsageCounter.feature_key == feature.value,
+                UsageCounter.period_start == period_start,
+            )
+            .with_for_update()
+        )
+        if counter is None:
+            counter = UsageCounter(
+                user_id=user.id,
+                feature_key=feature.value,
+                period_start=period_start,
+                period_end=period_end,
+                used_units=0,
+                updated_at=now,
+            )
+            db.add(counter)
+
+        limit = capability.quota_limit
+        if limit is not None and counter.used_units + units > limit:
+            raise quota_exceeded()
+
+        counter.used_units += units
+        counter.updated_at = now
+        db.add(
+            UsageEvent(
+                user_id=user.id,
+                feature_key=feature.value,
+                request_id=request_id,
+                idempotency_key=idempotency_key,
+                units=units,
+                period_start=period_start,
+                occurred_at=now,
+            )
+        )
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            if idempotency_key is not None:
+                replay = await db.scalar(
+                    select(UsageEvent.id).where(
+                        UsageEvent.user_id == user.id,
+                        UsageEvent.feature_key == feature.value,
+                        UsageEvent.idempotency_key == idempotency_key,
+                    )
+                )
+                if replay is not None:
+                    return await self._resolve_capability(db, user, feature)
+            raise
+
+        remaining = None if limit is None else max(0, limit - counter.used_units)
+        return FeatureCapability(
+            feature=capability.feature,
+            enabled=capability.enabled,
+            source=capability.source,
+            reason=capability.reason,
+            quota_limit=limit,
+            quota_used=counter.used_units,
+            quota_remaining=remaining,
+            period=capability.period,
+            unit=capability.unit,
+            resets_at=period_end,
+        )
 
     async def consume(
         self,

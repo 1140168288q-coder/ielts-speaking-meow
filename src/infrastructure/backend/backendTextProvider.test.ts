@@ -147,6 +147,18 @@ describe('BackendTextProvider', () => {
     })
   })
 
+  it('forwards a stable idempotency key for feedback retries', async () => {
+    const { provider, fetch } = createProvider(VALID_FEEDBACK)
+    await provider.getFeedback({
+      ...feedbackRequest(),
+      idempotencyKey: 'feedback:session-1:1:attempt-1',
+    })
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    expect(new Headers(init.headers).get('X-Idempotency-Key')).toBe(
+      'feedback:session-1:1:attempt-1',
+    )
+  })
+
   it('allows a null optional answer duration', async () => {
     const { provider, fetch } = createProvider(VALID_FEEDBACK)
     await provider.getFeedback({

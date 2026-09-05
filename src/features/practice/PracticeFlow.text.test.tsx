@@ -7,11 +7,16 @@ import type {
   AiFeedback,
   PracticeAttempt,
   Question,
+  SecondAttemptAnalysis,
   TrainingSession,
 } from '../../domain'
 import type { LLMProvider } from '../../ports/ai'
 import type { AudioFocus, TTSRequest } from '../../ports/speech'
+import type { BackendClient } from '../../infrastructure/backend/backendClient'
+import { ApiProviderError } from '../../infrastructure/ai/providerErrors'
+import { BackendTextProvider } from '../../infrastructure/backend/backendTextProvider'
 import { PracticeFlow } from './PracticeFlow'
+import { SubmitCorpusStage } from './stages/SubmitCorpusStage'
 
 const question: Question = {
   id: 'p1-hobbies',
@@ -46,6 +51,30 @@ const attempt: PracticeAttempt = {
   },
   createdAt: timestamp,
   updatedAt: timestamp,
+}
+
+const secondAttempt: PracticeAttempt = {
+  ...attempt,
+  id: 'attempt-2',
+  attemptNumber: 2,
+  transcript: {
+    ...attempt.transcript,
+    text: 'I went to Beijing last year.',
+    updatedAt: '2026-08-09T08:01:00.000Z',
+  },
+  createdAt: '2026-08-09T08:01:00.000Z',
+  updatedAt: '2026-08-09T08:01:00.000Z',
+}
+
+const secondAttemptAnalysis: SecondAttemptAnalysis = {
+  correctedSentences: [
+    {
+      original: 'I go there last year.',
+      corrected: 'I went there last year.',
+      reason: '过去时间要使用过去式。',
+    },
+  ],
+  memoryCandidates: [],
 }
 
 const feedback: AiFeedback = {
@@ -116,6 +145,16 @@ function createTextAi(): LLMProvider {
     isConfigured: () => true,
     getFeedback: vi.fn(),
   }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }
 
 describe('PracticeFlow V1.7 text answer flow', () => {
@@ -343,5 +382,327 @@ describe('PracticeFlow V1.7 text answer flow', () => {
       expect(applyAiFeedbackIfAnswerCurrent).toHaveBeenCalledTimes(1)
       expect(screen.getByRole('button', { name: '进入第二次回答' })).toBeEnabled()
     })
+  })
+
+  it('calls the real second-attempt provider through the PracticeFlow retry path', async () => {
+    const user = userEvent.setup()
+    const postJson = vi.fn().mockResolvedValue(secondAttemptAnalysis)
+    const client = { postJson } as unknown as BackendClient
+    const textAi = new BackendTextProvider(client)
+    const saveTextAttempt = vi.fn().mockResolvedValue(
+      makeSession({
+        status: 'comparison-ready',
+        attempts: [attempt, secondAttempt],
+      }),
+    )
+
+    render(
+      <PracticeFlow
+        question={question}
+        session={makeSession({ status: 'second-ready', attempts: [attempt] })}
+        service={createService({ saveTextAttempt })}
+        audioFocus={createAudioFocus()}
+        textAi={textAi}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={() => undefined}
+        onBack={() => undefined}
+      />,
+    )
+
+    await user.type(screen.getByRole('textbox', { name: '你的答案文本' }), secondAttempt.transcript.text)
+    await user.click(screen.getByRole('button', { name: '提交第 2 次回答' }))
+
+    await waitFor(() => {
+      expect(postJson).toHaveBeenCalled()
+      const call = postJson.mock.calls[0] as unknown as [
+        string,
+        { answer: string },
+        number,
+        { idempotencyKey: string; retry: boolean },
+      ]
+      expect(call[0]).toBe('/v1/feedback/second-attempt')
+      expect(call[1].answer).toBe(secondAttempt.transcript.text)
+      expect(call[2]).toBeGreaterThan(0)
+      expect(call[3].retry).toBe(true)
+      expect(call[3].idempotencyKey).toEqual(expect.any(String))
+    })
+  })
+
+  it('defaults AI corrections selected and keeps edited correction text', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+
+    render(
+      <SubmitCorpusStage
+        attempt={secondAttempt}
+        analysis={secondAttemptAnalysis}
+        aiBusy={false}
+        aiNote={null}
+        busy={false}
+        onRetryAnalysis={() => undefined}
+        onSubmit={onSubmit}
+        onComplete={() => undefined}
+      />,
+    )
+
+    const correction = screen.getByRole('checkbox')
+    expect(correction).toBeChecked()
+    const textarea = screen.getByRole('textbox')
+    await user.clear(textarea)
+    await user.type(textarea, 'I went there with my friends last year.')
+    await user.click(screen.getByRole('button', { name: '保存选择并完成' }))
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      ['I went there with my friends last year.'],
+      [],
+    )
+  })
+
+  it('keeps edited correction text across an unrelated rerender', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <SubmitCorpusStage
+        attempt={secondAttempt}
+        analysis={secondAttemptAnalysis}
+        aiBusy={false}
+        aiNote={null}
+        busy={false}
+        onRetryAnalysis={() => undefined}
+        onSubmit={() => undefined}
+        onComplete={() => undefined}
+      />,
+    )
+
+    const textarea = screen.getByRole('textbox')
+    await user.clear(textarea)
+    await user.type(textarea, 'I went there with my friends last year.')
+    rerender(
+      <SubmitCorpusStage
+        attempt={secondAttempt}
+        analysis={{ ...secondAttemptAnalysis, correctedSentences: [...secondAttemptAnalysis.correctedSentences] }}
+        aiBusy={false}
+        aiNote={null}
+        busy={false}
+        onRetryAnalysis={() => undefined}
+        onSubmit={() => undefined}
+        onComplete={() => undefined}
+      />,
+    )
+
+    expect(screen.getByRole('textbox')).toHaveValue('I went there with my friends last year.')
+  })
+
+  it('queues second-attempt analysis while first feedback is still pending', async () => {
+    const user = userEvent.setup()
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+    const firstFeedback = createDeferred<AiFeedback>()
+    const firstReviewSession = makeSession({
+      status: 'first-review',
+      attempts: [attempt],
+    })
+    const secondReadySession = makeSession({
+      status: 'second-ready',
+      attempts: [attempt],
+      aiFeedback: feedback,
+    })
+    const secondSubmitSession = makeSession({
+      status: 'comparison-ready',
+      attempts: [attempt, secondAttempt],
+      aiFeedback: feedback,
+    })
+    const finalSession = makeSession({
+      status: 'comparison-ready',
+      attempts: [attempt, secondAttempt],
+      aiFeedback: feedback,
+      secondAttemptAnalysis,
+    })
+    const saveTextAttempt = vi.fn().mockImplementation(
+      (_sessionId: string, attemptNumber: 1 | 2) =>
+        Promise.resolve(attemptNumber === 1 ? firstReviewSession : secondSubmitSession),
+    )
+    const prepareSecondAttempt = vi.fn().mockResolvedValue(secondReadySession)
+    const applyAiFeedbackIfAnswerCurrent = vi.fn().mockResolvedValue(firstReviewSession)
+    const applySecondAttemptAnalysisIfAnswerCurrent = vi.fn().mockResolvedValue(finalSession)
+    const getFeedback = vi.fn().mockReturnValue(firstFeedback.promise)
+    const getSecondAttemptAnalysis = vi.fn().mockResolvedValue(secondAttemptAnalysis)
+    const textAi: LLMProvider = {
+      id: 'backend-text',
+      isConfigured: () => true,
+      getFeedback,
+      getSecondAttemptAnalysis,
+    }
+    const service = createService({
+      saveTextAttempt,
+      prepareSecondAttempt,
+      applyAiFeedbackIfAnswerCurrent,
+      applySecondAttemptAnalysisIfAnswerCurrent,
+    })
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <PracticeFlow
+        question={question}
+        session={makeSession()}
+        service={service}
+        audioFocus={createAudioFocus()}
+        textAi={textAi}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={onChange}
+        onBack={() => undefined}
+      />,
+    )
+
+    const firstAnswer = screen.getByRole('textbox', { name: '你的答案文本' })
+    await user.type(firstAnswer, attempt.transcript.text)
+    await user.click(screen.getByRole('button', { name: '保存第 1 次回答' }))
+    await waitFor(() => expect(saveTextAttempt).toHaveBeenCalledWith(
+      'session-1',
+      1,
+      expect.any(String),
+      null,
+    ))
+    rerender(
+      <PracticeFlow
+        question={question}
+        session={firstReviewSession}
+        service={service}
+        audioFocus={createAudioFocus()}
+        textAi={textAi}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={onChange}
+        onBack={() => undefined}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '进入第二次回答' }))
+    await waitFor(() => expect(prepareSecondAttempt).toHaveBeenCalledWith('session-1'))
+    rerender(
+      <PracticeFlow
+        question={question}
+        session={secondReadySession}
+        service={service}
+        audioFocus={createAudioFocus()}
+        textAi={textAi}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={onChange}
+        onBack={() => undefined}
+      />,
+    )
+
+    const secondAnswer = screen.getByRole('textbox', { name: '你的答案文本' })
+    await user.type(secondAnswer, secondAttempt.transcript.text)
+    await user.click(screen.getByRole('button', { name: '提交第 2 次回答' }))
+    await waitFor(() => expect(saveTextAttempt).toHaveBeenCalledWith(
+      'session-1',
+      2,
+      expect.any(String),
+      null,
+    ))
+    rerender(
+      <PracticeFlow
+        question={question}
+        session={secondSubmitSession}
+        service={service}
+        audioFocus={createAudioFocus()}
+        textAi={textAi}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={onChange}
+        onBack={() => undefined}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText(/第一次 AI 分析仍在处理中/)).toBeInTheDocument())
+    expect(getSecondAttemptAnalysis).not.toHaveBeenCalled()
+
+    firstFeedback.resolve(feedback)
+    await waitFor(() => expect(getSecondAttemptAnalysis).toHaveBeenCalledTimes(1))
+    expect(applyAiFeedbackIfAnswerCurrent).toHaveBeenCalledTimes(1)
+    expect(applySecondAttemptAnalysisIfAnswerCurrent).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenLastCalledWith(finalSession)
+    expect(finalSession.aiFeedback).toEqual(feedback)
+    expect(finalSession.secondAttemptAnalysis).toEqual(secondAttemptAnalysis)
+    scrollTo.mockRestore()
+  })
+
+  it('does not offer a useless retry after a non-retryable AI error', async () => {
+    const user = userEvent.setup()
+    const getFeedback = vi.fn().mockRejectedValue(
+      new ApiProviderError('request-failed', '邮箱尚未验证。', false),
+    )
+    const textAi: LLMProvider = {
+      id: 'backend-text',
+      isConfigured: () => true,
+      getFeedback,
+    }
+    render(
+      <PracticeFlow
+        question={question}
+        session={makeSession({ status: 'first-review', attempts: [attempt] })}
+        service={createService()}
+        audioFocus={createAudioFocus()}
+        textAi={textAi}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={() => undefined}
+        onBack={() => undefined}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '重试 AI 分析' }))
+    await waitFor(() => expect(screen.getByText(/邮箱尚未验证/)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: '重试 AI 分析' })).toBeNull()
+  })
+
+  it('enters local manual mode immediately when Text AI is not configured', async () => {
+    const user = userEvent.setup()
+    const secondSubmitSession = makeSession({
+      status: 'comparison-ready',
+      attempts: [attempt, secondAttempt],
+    })
+    const saveTextAttempt = vi.fn().mockResolvedValue(secondSubmitSession)
+    const { rerender } = render(
+      <PracticeFlow
+        question={question}
+        session={makeSession({ status: 'second-ready', attempts: [attempt] })}
+        service={createService({ saveTextAttempt })}
+        audioFocus={createAudioFocus()}
+        textAi={{
+          id: 'backend-text',
+          isConfigured: () => false,
+          getFeedback: vi.fn(),
+        }}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={() => undefined}
+        onBack={() => undefined}
+      />,
+    )
+
+    await user.type(screen.getByRole('textbox', { name: '你的答案文本' }), secondAttempt.transcript.text)
+    await user.click(screen.getByRole('button', { name: '提交第 2 次回答' }))
+    await waitFor(() => expect(saveTextAttempt).toHaveBeenCalled())
+    rerender(
+      <PracticeFlow
+        question={question}
+        session={secondSubmitSession}
+        service={createService({ saveTextAttempt })}
+        audioFocus={createAudioFocus()}
+        textAi={{
+          id: 'backend-text',
+          isConfigured: () => false,
+          getFeedback: vi.fn(),
+        }}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={() => undefined}
+        onBack={() => undefined}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText(/Text AI 未配置/)).toBeInTheDocument())
+    expect(screen.getByText(/本地挑出的手动候选/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试二答分析' })).toBeNull()
   })
 })

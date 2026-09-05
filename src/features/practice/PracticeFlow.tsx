@@ -19,6 +19,7 @@ import {
 } from '../../domain'
 import type { LLMProvider } from '../../ports/ai'
 import type { AudioFocus } from '../../ports/speech'
+import { ApiProviderError } from '../../infrastructure/ai/providerErrors'
 import { buildQuestionSpeechText } from './questionSpeech'
 import { TtsPlaybackBar } from './TtsPlaybackBar'
 import { useTtsToggle } from './useTtsToggle'
@@ -97,12 +98,15 @@ export function PracticeFlow({
   const [busy, setBusy] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiNote, setAiNote] = useState<string | null>(null)
+  const [aiRetryable, setAiRetryable] = useState(true)
   const [insertSeed, setInsertSeed] = useState<{ nonce: number; text: string } | null>(null)
   const mountedRef = useRef(true)
   const sessionRef = useRef(session)
   const onChangeRef = useRef(onChange)
   const aiRequestGenerationRef = useRef(0)
   const aiRequestInFlightRef = useRef(false)
+  const aiRequestPromiseRef = useRef<Promise<void> | null>(null)
+  const secondAiRequestInFlightRef = useRef(false)
   const autoPlayedRef = useRef(false)
   const {
     speakingKey,
@@ -136,6 +140,7 @@ export function PracticeFlow({
       mountedRef.current = false
       aiRequestGenerationRef.current += 1
       aiRequestInFlightRef.current = false
+      secondAiRequestInFlightRef.current = false
     }
   }, [])
 
@@ -154,70 +159,98 @@ export function PracticeFlow({
     setMessage(error instanceof Error ? error.message : fallback)
   }
 
+  const canRetryAiError = (error: unknown): boolean =>
+    error instanceof ApiProviderError ? error.retryable : true
+
   const requestAiFeedback = useCallback(
     async (targetSession: TrainingSession) => {
       const attempt = targetSession.attempts.find(
         (item) => item.attemptNumber === 1,
       )
+      if (!textAi.isConfigured()) {
+        setAiRetryable(false)
+        setAiNote('Text AI 未配置；已保留本地规则提示，可以继续完成第二次回答。')
+        return
+      }
       if (
-        !textAi.isConfigured() ||
         attempt?.transcript.status !== 'ready' ||
         attempt.transcript.text.trim().length === 0
       ) {
+        setAiRetryable(false)
+        setAiNote('第一次回答文本为空；已保留本地规则提示。')
         return
       }
 
-      if (aiRequestInFlightRef.current) {
+      if (aiRequestPromiseRef.current !== null) {
         setAiNote('Text AI 反馈仍在处理中，请等待本次请求完成。')
         return
       }
 
       const generation = ++aiRequestGenerationRef.current
-      aiRequestInFlightRef.current = true
-      setAiBusy(true)
-      setAiNote('正在获取 AI 文本分析和 2 个参考回答…')
-      try {
-        const feedback = await textAi.getFeedback({
-          question,
-          answer: attempt.transcript.text,
-          answerDurationSeconds:
-            attempt.metrics.durationMs > 0
-              ? Math.max(1, Math.round(attempt.metrics.durationMs / 1_000))
-              : null,
-          tutorContext,
-          ...(learnerContext.trim().length > 0
-            ? { learnerContext: learnerContext.trim() }
-            : {}),
-        })
+      const operation = (async () => {
+        aiRequestInFlightRef.current = true
+        setAiBusy(true)
+        setAiRetryable(true)
+        setAiNote('正在获取 AI 文本分析和 2 个参考回答…')
+        try {
+          const feedback = await textAi.getFeedback({
+            question,
+            answer: attempt.transcript.text,
+            idempotencyKey: buildAnalysisIdempotencyKey(
+              targetSession.id,
+              attempt.id,
+              attempt.transcript.updatedAt,
+              1,
+            ),
+            answerDurationSeconds:
+              attempt.metrics.durationMs > 0
+                ? Math.max(1, Math.round(attempt.metrics.durationMs / 1_000))
+                : null,
+            tutorContext,
+            ...(learnerContext.trim().length > 0
+              ? { learnerContext: learnerContext.trim() }
+              : {}),
+          })
 
-      if (generation !== aiRequestGenerationRef.current) return
-        const updated = await service.applyAiFeedbackIfAnswerCurrent(
-          targetSession.id,
-          {
-            attemptId: attempt.id,
-            text: attempt.transcript.text,
-            updatedAt: attempt.transcript.updatedAt,
-          },
-          feedback,
-        )
-        if (generation !== aiRequestGenerationRef.current) return
-        if (updated === null) {
-          setAiNote('答案文本已发生变化，本次旧 AI 结果未保存；可重新分析。')
-          return
+          if (generation !== aiRequestGenerationRef.current) return
+          const updated = await service.applyAiFeedbackIfAnswerCurrent(
+            targetSession.id,
+            {
+              attemptId: attempt.id,
+              text: attempt.transcript.text,
+              updatedAt: attempt.transcript.updatedAt,
+            },
+            feedback,
+          )
+          if (generation !== aiRequestGenerationRef.current) return
+          if (updated === null) {
+            setAiRetryable(true)
+            setAiNote('答案文本已发生变化，本次旧 AI 结果未保存；可重新分析。')
+            return
+          }
+          onChangeRef.current(updated)
+          setAiNote(null)
+        } catch (error) {
+          if (generation !== aiRequestGenerationRef.current) return
+          setAiRetryable(canRetryAiError(error))
+          setAiNote(
+            error instanceof Error
+              ? `${error.message} 已转用本地规则提示。`
+              : 'Text AI 暂不可用；已转用本地规则提示。',
+          )
+        } finally {
+          if (generation === aiRequestGenerationRef.current) {
+            aiRequestInFlightRef.current = false
+            if (mountedRef.current) setAiBusy(false)
+          }
         }
-        onChangeRef.current(updated)
-        setAiNote(null)
-      } catch (error) {
-        if (generation !== aiRequestGenerationRef.current) return
-        setAiNote(
-          error instanceof Error
-            ? `${error.message} 已转用本地规则提示。`
-            : 'Text AI 暂不可用；已转用本地规则提示。',
-        )
+      })()
+      aiRequestPromiseRef.current = operation
+      try {
+        await operation
       } finally {
-        if (generation === aiRequestGenerationRef.current) {
-          aiRequestInFlightRef.current = false
-          if (mountedRef.current) setAiBusy(false)
+        if (aiRequestPromiseRef.current === operation) {
+          aiRequestPromiseRef.current = null
         }
       }
     },
@@ -226,58 +259,104 @@ export function PracticeFlow({
 
   const requestSecondAnalysis = useCallback(
     async (targetSession: TrainingSession) => {
-      const getSecondAttemptAnalysis = textAi.getSecondAttemptAnalysis
       const attempt = targetSession.attempts.find(
         (item) => item.attemptNumber === 2,
       )
+      if (!textAi.isConfigured()) {
+        setAiRetryable(false)
+        setAiNote('Text AI 未配置；已保留本地手动候选，可以直接确认语料。')
+        return
+      }
+      if (textAi.getSecondAttemptAnalysis === undefined) {
+        setAiRetryable(false)
+        setAiNote('当前 Text AI 不支持二答分析；已保留本地手动候选。')
+        return
+      }
       if (
-        !textAi.isConfigured() ||
-        getSecondAttemptAnalysis === undefined ||
         attempt?.transcript.status !== 'ready' ||
         attempt.transcript.text.trim().length === 0
       ) {
+        setAiRetryable(false)
+        setAiNote('二答文本为空；已保留本地手动候选。')
         return
       }
-      const analyzeSecondAttempt = getSecondAttemptAnalysis
 
-      if (aiRequestInFlightRef.current) return
-      const generation = ++aiRequestGenerationRef.current
-      aiRequestInFlightRef.current = true
-      setAiBusy(true)
-      setAiNote('正在按简单优化标准检查第二次回答…')
-      try {
-        const analysis = await analyzeSecondAttempt({
-          question,
-          answer: attempt.transcript.text,
-        })
-        if (generation !== aiRequestGenerationRef.current) return
-        const updated = await service.applySecondAttemptAnalysisIfAnswerCurrent(
-          targetSession.id,
-          {
-            attemptId: attempt.id,
-            text: attempt.transcript.text,
-            updatedAt: attempt.transcript.updatedAt,
-          },
-          analysis,
-        )
-        if (generation !== aiRequestGenerationRef.current) return
-        if (updated === null) {
-          setAiNote('答案文本已发生变化，本次二答分析未保存；可以重试。')
+      if (secondAiRequestInFlightRef.current) {
+        setAiNote('二答 AI 分析已在处理中，请等待本次请求完成。')
+        return
+      }
+      secondAiRequestInFlightRef.current = true
+      const previousRequest = aiRequestPromiseRef.current
+      if (previousRequest !== null) {
+        setAiBusy(true)
+        setAiNote('第一次 AI 分析仍在处理中，二答分析会在它结束后自动开始…')
+        await previousRequest
+        if (!mountedRef.current) {
+          secondAiRequestInFlightRef.current = false
           return
         }
-        onChangeRef.current(updated)
-        setAiNote(null)
-      } catch (error) {
-        if (generation !== aiRequestGenerationRef.current) return
-        setAiNote(
-          error instanceof Error
-            ? `${error.message}；可以先手动确认语料。`
-            : '二答 AI 分析暂不可用；可以先手动确认语料。',
-        )
+        if (aiRequestPromiseRef.current === previousRequest) {
+          aiRequestPromiseRef.current = null
+        }
+      }
+
+      const generation = ++aiRequestGenerationRef.current
+      const operation = (async () => {
+        aiRequestInFlightRef.current = true
+        setAiBusy(true)
+        setAiRetryable(true)
+        setAiNote('正在按简单优化标准检查第二次回答…')
+        try {
+          const analysis = await textAi.getSecondAttemptAnalysis!({
+            question,
+            answer: attempt.transcript.text,
+            idempotencyKey: buildAnalysisIdempotencyKey(
+              targetSession.id,
+              attempt.id,
+              attempt.transcript.updatedAt,
+              2,
+            ),
+          })
+          if (generation !== aiRequestGenerationRef.current) return
+          const updated = await service.applySecondAttemptAnalysisIfAnswerCurrent(
+            targetSession.id,
+            {
+              attemptId: attempt.id,
+              text: attempt.transcript.text,
+              updatedAt: attempt.transcript.updatedAt,
+            },
+            analysis,
+          )
+          if (generation !== aiRequestGenerationRef.current) return
+          if (updated === null) {
+            setAiRetryable(true)
+            setAiNote('答案文本已发生变化，本次二答分析未保存；可以重试。')
+            return
+          }
+          onChangeRef.current(updated)
+          setAiNote(null)
+        } catch (error) {
+          if (generation !== aiRequestGenerationRef.current) return
+          setAiRetryable(canRetryAiError(error))
+          setAiNote(
+            error instanceof Error
+              ? `${error.message}；可以先手动确认语料。`
+              : '二答 AI 分析暂不可用；可以先手动确认语料。',
+          )
+        } finally {
+          if (generation === aiRequestGenerationRef.current) {
+            aiRequestInFlightRef.current = false
+            if (mountedRef.current) setAiBusy(false)
+          }
+        }
+      })()
+      aiRequestPromiseRef.current = operation
+      try {
+        await operation
       } finally {
-        if (generation === aiRequestGenerationRef.current) {
-          aiRequestInFlightRef.current = false
-          if (mountedRef.current) setAiBusy(false)
+        secondAiRequestInFlightRef.current = false
+        if (aiRequestPromiseRef.current === operation) {
+          aiRequestPromiseRef.current = null
         }
       }
     },
@@ -293,6 +372,7 @@ export function PracticeFlow({
     setBusy(true)
     setMessage(null)
     setAiNote(null)
+    setAiRetryable(true)
     let saved: TrainingSession | null = null
     try {
       saved = await service.saveTextAttempt(
@@ -315,7 +395,11 @@ export function PracticeFlow({
       void requestAiFeedback(saved)
     } else {
       clearPracticeDraft(session, attemptNumber)
-      setMessage('第二次回答已保存，正在整理修正句和可加入 Memory 的信息。')
+      setMessage(
+        aiConfigured
+          ? '第二次回答已保存，正在整理修正句和可加入 Memory 的信息。'
+          : '第二次回答已保存；当前使用本地手动候选，可以直接确认语料。',
+      )
       void requestSecondAnalysis(saved)
     }
   }
@@ -459,6 +543,7 @@ export function PracticeFlow({
           aiConfigured={aiConfigured}
           aiBusy={aiBusy}
           aiNote={aiNote}
+          aiRetryable={aiRetryable}
           busy={busy}
           feedbackDetail={feedbackDetail}
           speakingKey={speakingKey}
@@ -515,6 +600,7 @@ export function PracticeFlow({
           analysis={session.secondAttemptAnalysis ?? null}
           aiBusy={aiBusy}
           aiNote={aiNote}
+          aiRetryable={aiRetryable}
           busy={busy}
           onRetryAnalysis={() => void requestSecondAnalysis(session)}
           onSubmit={(correctedSentences, memoryCandidates) =>
@@ -537,4 +623,14 @@ export function PracticeFlow({
       ) : null}
     </section>
   )
+}
+
+function buildAnalysisIdempotencyKey(
+  sessionId: string,
+  attemptId: string,
+  updatedAt: string,
+  attemptNumber: 1 | 2,
+): string {
+  const raw = `feedback:${sessionId}:${attemptNumber}:${attemptId}:${updatedAt}`
+  return raw.replace(/[^A-Za-z0-9._:-]/g, '-').slice(0, 128)
 }

@@ -145,12 +145,15 @@ async def test_tts_upstream_error_code(make_app):
             "data": "",
         }))
 
-    app, _ = make_app(handler)
+    app, _ = make_app(handler, configured_settings(free_tts_characters_monthly_quota=5))
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await post_tts(client, {"text": "Hello"})
+        headers = await authenticated_headers(client, "tts-failure@example.com")
+        response = await client.post("/v1/tts", headers=headers, json={"text": "Hello"})
+        me = await client.get("/v1/me", headers=headers)
     assert response.status_code == 502
+    assert me.json()["capabilities"]["tts"]["quotaUsed"] == 0
 
 
 async def test_tts_old_console_auth_headers(make_app):

@@ -30,6 +30,15 @@ export interface ListPersonalMaterialsOptions {
  */
 export interface LocalStorage {
   upsertSession(session: TrainingSession): Promise<void>
+  /**
+   * Merge a session while holding the storage transaction. Implementations
+   * that cannot provide a transaction may omit this method; callers fall back
+   * to an in-process per-session queue.
+   */
+  updateSessionAtomically?: (
+    sessionId: string,
+    updater: (session: TrainingSession | null) => TrainingSession | null,
+  ) => Promise<TrainingSession | null>
   getSession(sessionId: string): Promise<TrainingSession | null>
   listSessions(): Promise<TrainingSession[]>
 

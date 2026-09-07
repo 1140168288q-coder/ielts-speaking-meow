@@ -12,6 +12,7 @@ import type {
   TrainingSession,
 } from '../../domain'
 import {
+  buildTrainingPlan,
   buildTutorContext,
   retrieveTutorKnowledge,
   type ReusableExpression,
@@ -30,6 +31,10 @@ import { PersonalMaterialIdeasCard } from './components/PersonalMaterialIdeasCar
 import { PracticeTopBar } from './components/PracticeTopBar'
 import { ReferenceRecap } from './components/feedback/ReferenceAnswers'
 import { AnswerFrameworkCard } from './components/feedback/AnswerFrameworkCard'
+import { AiFeedbackCard } from './components/feedback/AiFeedbackCard'
+import { LocalFeedbackCard } from './components/feedback/LocalFeedbackCard'
+import { AnswerTextCard } from './components/AnswerTextCard'
+import { TrainingPlanCard } from './components/TrainingPlanCard'
 import { AnswerEntryStage } from './stages/AnswerEntryStage'
 import { ReviewFirstStage } from './stages/ReviewFirstStage'
 import { SubmitCorpusStage } from './stages/SubmitCorpusStage'
@@ -124,12 +129,21 @@ export function PracticeFlow({
   const aiFeedback = session.aiFeedback
   const tutorContext = buildTutorContext(question)
   const tutorKnowledge = retrieveTutorKnowledge(question)
+  const planningKnowledge = retrieveTutorKnowledge(question, 2, { need: 'answer-planning' })
   const spokenQuestion = buildQuestionSpeechText(question)
 
   useEffect(() => {
     sessionRef.current = session
     onChangeRef.current = onChange
   }, [onChange, session])
+
+  useEffect(() => {
+    // Keep the practice exit guard active while a durable answer or its AI
+    // result is being written. The answer is already local, but leaving here
+    // would otherwise unmount the flow and discard a late validated result.
+    onExitGuardChange(aiBusy || busy)
+    return () => onExitGuardChange(false)
+  }, [aiBusy, busy, onExitGuardChange])
 
   useEffect(() => {
     // React StrictMode runs one development-only setup/cleanup cycle before the
@@ -498,6 +512,14 @@ export function PracticeFlow({
   const secondAttempt = session.attempts.find(
     (attempt) => attempt.attemptNumber === 2,
   )
+  const trainingPlan = buildTrainingPlan({
+    question,
+    teachingDocs: planningKnowledge,
+    aiFeedback,
+    reusableExpressions,
+    reusablePersonalMaterials,
+    completedSession: stage === 'completed' ? session : null,
+  })
 
   return (
     <section className="practice-page">
@@ -555,7 +577,8 @@ export function PracticeFlow({
 
       {stage === 'second-answer' ? (
         <div className="practice-stack">
-          {aiFeedback ? (
+          <TrainingPlanCard plan={trainingPlan} />
+          {firstAttempt && aiFeedback ? (
             <AnswerFrameworkCard feedback={aiFeedback} />
           ) : (
             <TutorKnowledgeCard docs={tutorKnowledge} />
@@ -611,15 +634,54 @@ export function PracticeFlow({
       ) : null}
 
       {stage === 'completed' ? (
-        <section className="completed-card">
-          <span className="celebration" aria-hidden="true"><CheckCircle2 size={28} /></span>
-          <p className="eyebrow">本次练习完成</p>
-          <h2>你已经完成了两次回答</h2>
-          <p>留下的句子，会在「复盘 · 个人语料」等你回来。</p>
+        <div className="practice-stack completed-review">
+          <section className="completed-card">
+            <span className="celebration" aria-hidden="true"><CheckCircle2 size={28} /></span>
+            <p className="eyebrow">本次练习完成</p>
+            <h2>你已经完成了两次回答</h2>
+            <p>下面保留这次练习的重点，方便你回看两次之间的变化。</p>
+          </section>
+          <TrainingPlanCard plan={trainingPlan} />
+          {firstAttempt ? (
+            <AnswerTextCard attempt={firstAttempt} />
+          ) : null}
+          {aiFeedback ? (
+            <AiFeedbackCard
+              feedback={aiFeedback}
+              playingKey={speakingKey}
+              onToggle={(key, text) => void toggleSpeak(key, text)}
+              detail={feedbackDetail}
+            />
+          ) : firstAttempt ? (
+            <LocalFeedbackCard busy={false} attempt={firstAttempt} />
+          ) : null}
+          {secondAttempt ? (
+            <AnswerTextCard
+              attempt={secondAttempt}
+              eyebrow="已保存的第二次回答"
+              heading="这次比刚才更进一步了吗？"
+            />
+          ) : null}
+          {session.secondAttemptAnalysis ? (
+            <section className="second-review-section">
+              <p className="eyebrow">二答复盘</p>
+              <h2>确认过的修正与个人信息</h2>
+              {session.secondAttemptAnalysis.correctedSentences.length > 0 ? (
+                <ul>
+                  {session.secondAttemptAnalysis.correctedSentences.map((item, index) => (
+                    <li key={`${item.original}-${index}`}><small>原句：{item.original}</small><br />{item.corrected}<br /><small>{item.reason}</small></li>
+                  ))}
+                </ul>
+              ) : <p className="settings-note">这次没有确认需要收录的错误句。</p>}
+              {session.confirmedMemoryFacts && session.confirmedMemoryFacts.length > 0 ? (
+                <p className="settings-note">已确认的个人信息：{session.confirmedMemoryFacts.map((fact) => fact.content).join('；')}</p>
+              ) : null}
+            </section>
+          ) : null}
           <button type="button" className="primary-button" onClick={onBack}>
             {backLabel}
           </button>
-        </section>
+        </div>
       ) : null}
     </section>
   )

@@ -124,6 +124,19 @@ describe('userMemory', () => {
     expect(matches[0]?.reason).toContain('关联')
   })
 
+  it('does not match an unrelated confirmed material just because its Part is equal', () => {
+    const unrelated = {
+      ...material,
+      id: 'material-unrelated',
+      title: 'A stamp collection',
+      content: 'I collect stamps from different countries.',
+      topicTags: ['collecting'],
+      questionIds: [],
+    }
+
+    expect(findReusablePersonalMaterials(question, [unrelated])).toEqual([])
+  })
+
   it('uses the unified Memory brain across Parts only when the topic matches', () => {
     const memorySession: TrainingSession = {
       ...session,

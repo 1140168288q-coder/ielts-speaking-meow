@@ -125,10 +125,10 @@ export function findReusableExpressions(
           }
         }
       }
-      if (expression.sourcePart === question.part || expression.questionId.startsWith(`p${question.part}-`)) {
+      if (score > 0 && (expression.sourcePart === question.part || expression.questionId.startsWith(`p${question.part}-`))) {
         score += 3
       }
-      score += Math.min(10, expression.reuseCount ?? 0)
+      if (score > 0) score += Math.min(10, expression.reuseCount ?? 0)
       return { expression, score, reason }
     })
     .filter((item) => item.score >= 6)
@@ -153,7 +153,7 @@ export function findReusablePersonalMaterials(
   const questionTokens = new Set(tokenize(`${question.topic} ${question.prompt}`))
   return materials
     .filter((material) => material.status === 'confirmed' && material.deletedAt === null)
-    .map((material) => {
+    .flatMap((material) => {
       let score = 0
       let reason = ''
       if (material.questionIds.includes(question.id)) {
@@ -166,13 +166,12 @@ export function findReusablePersonalMaterials(
         score += 12 + overlap * 4
         if (!reason) reason = '主题相近'
       }
-      if (material.sourcePart === question.part) {
+      if (material.sourcePart === question.part && score > 0) {
         score += 4
-        if (!reason) reason = '同 Part 的相关素材'
       }
-      return { material, score, reason }
+      if (score === 0) return []
+      return [{ material, score, reason }]
     })
-    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || b.material.updatedAt.localeCompare(a.material.updatedAt))
     .slice(0, maximum)
     .map((item) => ({ ...item, reason: item.reason || '可用于本题的个人素材' }))
@@ -311,11 +310,17 @@ function normalizeTheme(problem: string): string {
 }
 
 function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
+  const normalized = text.toLowerCase()
+  const english = normalized
     .replace(/[^a-z0-9]+/g, ' ')
     .split(' ')
     .filter((token) => token.length > 1 && !STOP_WORDS.has(token))
+  const chinese = [...normalized.matchAll(/[\u4e00-\u9fff]{2,}/gu)]
+    .flatMap((match) => {
+      const value = match[0]
+      return Array.from({ length: Math.max(0, value.length - 1) }, (_, index) => value.slice(index, index + 2))
+    })
+  return [...english, ...chinese]
 }
 
 export interface MaterialSuggestionContext {

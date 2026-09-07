@@ -20,9 +20,11 @@ export { EmptyState } from '../../app/components/EmptyState'
 export function LearnerMemoryPanel({
   sessions,
   onUpdateFactPart,
+  onDeleteFact,
 }: {
   sessions: TrainingSession[]
   onUpdateFactPart?: (sessionId: string, factId: string, sourcePart: IeltsPart | null) => Promise<void>
+  onDeleteFact?: (sessionId: string, factId: string) => Promise<void>
 }) {
   const [selectedPart, setSelectedPart] = useState<IeltsPart | 'all' | 'unclassified'>(1)
   const [factBusyId, setFactBusyId] = useState<string | null>(null)
@@ -72,6 +74,21 @@ export function LearnerMemoryPanel({
     }
   }
 
+  const deleteFact = async (sessionId: string, factId: string, content: string) => {
+    if (!onDeleteFact || factBusyId !== null) return
+    if (!window.confirm(`确定删除这条 Memory 吗？\n${content}`)) return
+    setFactBusyId(factId)
+    setFactMessage(null)
+    try {
+      await onDeleteFact(sessionId, factId)
+      setFactMessage('Memory 已删除。')
+    } catch (error) {
+      setFactMessage(error instanceof Error ? error.message : 'Memory 删除失败。')
+    } finally {
+      setFactBusyId(null)
+    }
+  }
+
   return (
     <details className="learner-memory-details">
       <summary>你的口语轨迹 · 点开看看这段时间的痕迹</summary>
@@ -94,29 +111,43 @@ export function LearnerMemoryPanel({
               {memoryFacts.map(({ sessionId, fact }) => (
                 <article key={fact.id} className="memory-fact-item">
                   <span>P{fact.sourcePart ?? '未分类'} · {fact.content}</span>
-                  {onUpdateFactPart ? (
-                    <div className="question-filter-chips" role="group" aria-label={`归类 Memory：${fact.content}`}>
-                      {([1, 2, 3] as const).map((part) => (
+                  {onUpdateFactPart || onDeleteFact ? (
+                    <div className="question-filter-chips" role="group" aria-label={`管理 Memory：${fact.content}`}>
+                      {onUpdateFactPart ? (
+                        <>
+                          {([1, 2, 3] as const).map((part) => (
+                            <button
+                              key={part}
+                              type="button"
+                              className={fact.sourcePart === part ? 'active' : ''}
+                              aria-pressed={fact.sourcePart === part}
+                              disabled={factBusyId !== null}
+                              onClick={() => void reclassifyFact(sessionId, fact.id, part)}
+                            >
+                              P{part}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            className={fact.sourcePart === null ? 'active' : ''}
+                            aria-pressed={fact.sourcePart === null}
+                            disabled={factBusyId !== null}
+                            onClick={() => void reclassifyFact(sessionId, fact.id, null)}
+                          >
+                            未分类
+                          </button>
+                        </>
+                      ) : null}
+                      {onDeleteFact ? (
                         <button
-                          key={part}
                           type="button"
-                          className={fact.sourcePart === part ? 'active' : ''}
-                          aria-pressed={fact.sourcePart === part}
+                          className="secondary-button compact"
                           disabled={factBusyId !== null}
-                          onClick={() => void reclassifyFact(sessionId, fact.id, part)}
+                          onClick={() => void deleteFact(sessionId, fact.id, fact.content)}
                         >
-                          P{part}
+                          删除
                         </button>
-                      ))}
-                      <button
-                        type="button"
-                        className={fact.sourcePart === null ? 'active' : ''}
-                        aria-pressed={fact.sourcePart === null}
-                        disabled={factBusyId !== null}
-                        onClick={() => void reclassifyFact(sessionId, fact.id, null)}
-                      >
-                        未分类
-                      </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </article>

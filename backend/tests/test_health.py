@@ -26,7 +26,7 @@ async def test_health_configured(make_app):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["version"] == "2.1.10"
+    assert body["version"] == "2.2.0"
     assert body["providers"]["deepseek"]["configured"] is True
     assert body["providers"]["deepseek"]["model"] == "deepseek-v4-flash"
     assert body["providers"]["volc_tts"]["configured"] is True
@@ -146,6 +146,36 @@ async def test_health_verify_rejects_truncated_deepseek_probe(make_app):
     assert deepseek["status"] == "failed"
     assert "finish_reason=length" in deepseek["lastError"]
     assert deepseek["failureStage"] == "response-envelope"
+
+
+async def test_health_verify_rejects_invalid_deepseek_probe_shape(make_app):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/chat/completions"):
+            return httpx.Response(200, json={
+                "choices": [{
+                    "finish_reason": "stop",
+                    "message": {"content": '{"ok":false}'},
+                }],
+            })
+        import base64 as b64
+        import json as jsonlib
+        return httpx.Response(200, content="\n".join(jsonlib.dumps(c) for c in [
+            {"code": 0, "message": "OK", "data": b64.b64encode(b"hi").decode()},
+            {"code": 20000000, "message": "OK", "data": ""},
+        ]))
+
+    app, _ = make_app(handler)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/health/verify", headers=await authenticated_headers(client)
+        )
+
+    assert response.status_code == 200
+    deepseek = response.json()["providers"]["deepseek"]
+    assert deepseek["status"] == "failed"
+    assert deepseek["failureStage"] == "pydantic-fields"
 
 
 async def test_health_verify_failed_credentials_record_error(make_app):

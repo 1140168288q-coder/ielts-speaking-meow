@@ -1529,6 +1529,79 @@ textarea::placeholder {
 
 
 
+.training-plan-card {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 28%, var(--ds-line));
+  border-radius: var(--ds-radius-lg);
+  background: color-mix(in srgb, var(--ds-accent-soft) 54%, var(--ds-surface-raised));
+}
+
+.training-plan-card h2,
+.training-plan-card p {
+  margin: 0;
+}
+
+.training-plan-goal {
+  display: flex;
+  gap: 8px;
+  color: var(--ds-text);
+}
+
+.training-plan-goal strong {
+  color: var(--ds-primary-strong);
+  white-space: nowrap;
+}
+
+.training-plan-actions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.training-plan-actions li::marker {
+  color: var(--ds-primary-strong);
+  font-weight: 700;
+}
+
+.training-plan-sources {
+  border-top: 1px solid var(--ds-line);
+  padding-top: 10px;
+}
+
+.training-plan-sources summary {
+  cursor: pointer;
+  color: var(--ds-text-soft);
+  font-size: 0.88rem;
+}
+
+.training-plan-sources ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.training-plan-sources li {
+  display: grid;
+  gap: 2px;
+}
+
+.training-plan-sources span,
+.training-plan-outcome {
+  color: var(--ds-text-soft);
+  font-size: 0.88rem;
+}
+
+.plan-status {
+  align-self: start;
+  color: var(--ds-primary-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .practice-stack {
   display: grid;
   gap: 22px;

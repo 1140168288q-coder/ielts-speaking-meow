@@ -178,6 +178,10 @@ export function SubmitCorpusStage({
             )}
           </section>
         </>
+      ) : aiBusy ? (
+        <section className="second-review-section">
+          <p className="settings-note">正在检查第二次回答。AI 返回后会显示可确认的修正句和个人信息；答案已经保存在本机。</p>
+        </section>
       ) : (
         <section className="second-review-section">
           <p className="settings-note">AI 分析暂不可用。下面只是本地挑出的手动候选，请确认它确实是修正后的完整句子后再保存。</p>
@@ -201,13 +205,13 @@ export function SubmitCorpusStage({
         <button
           type="button"
           className="primary-button"
-          disabled={busy || selectedCount === 0}
+          disabled={busy || aiBusy || selectedCount === 0}
           onClick={submit}
         >
           <Sparkles aria-hidden="true" size={17} />
-          {busy ? '正在保存…' : '保存选择并完成'}
+          {busy ? '正在保存…' : aiBusy ? '等待 AI 分析…' : '保存选择并完成'}
         </button>
-        <button type="button" className="secondary-button" disabled={busy} onClick={onComplete}>
+        <button type="button" className="secondary-button" disabled={busy || aiBusy} onClick={onComplete}>
           <Check aria-hidden="true" size={16} /> 仅完成练习
         </button>
       </div>

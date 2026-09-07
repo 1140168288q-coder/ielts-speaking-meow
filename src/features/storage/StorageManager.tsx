@@ -64,7 +64,7 @@ export function StorageManager({
       await onChanged()
       await refresh()
       setMessage(
-        `恢复完成：${result.sessions} 次练习、${result.recordings} 段录音、${result.expressions} 条表达。`,
+        `恢复完成：${result.sessions} 次练习、${result.recordings} 段录音、${result.expressions} 条表达、${result.personalMaterials} 条个人素材、${result.importedQuestions} 道导入题。${result.skippedNewer ? `已保留 ${result.skippedNewer} 条更新的本地记录。` : ''}`,
       )
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '备份恢复失败。')
@@ -92,8 +92,8 @@ export function StorageManager({
       <h2 className="section-heading">本地数据与备份</h2>
       <p className="settings-note">
         你的每一份回答都先住在这台手机里。导出备份，像给这段练习之旅拍一张快照——
-        里面可能包含早期版本练习留下的录音，请像日记一样保管。恢复时会与现有记录合并，
-        同一条目的旧版本会被新版本取代。
+        里面包含本机全部账号、个人素材、导入题和早期版本留下的录音，请像日记一样保管。
+        恢复时会与现有记录合并，较新的本地记录会被保留。
       </p>
       {summary ? (
         <div className="storage-summary" aria-label="本地存储概览">

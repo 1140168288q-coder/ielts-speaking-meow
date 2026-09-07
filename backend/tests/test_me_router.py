@@ -288,9 +288,8 @@ async def test_feedback_quota_is_counted_and_idempotent_retry_is_not_recharged(m
     assert replay.status_code == 200
     assert exhausted.status_code == 429
     assert exhausted.json()["error"]["code"] == "quota-exceeded"
-    # 隐私边界不缓存答案/AI 响应，所以同 key 重试仍可再次访问上游；
-    # settle 阶段只会生成一条计费事件。
-    assert upstream_calls == 2
+    # 同 key 重试直接返回短期缓存，不重复访问上游或计费。
+    assert upstream_calls == 1
     capability = me.json()["capabilities"]["feedback"]
     assert capability["quotaUsed"] == 1
     assert capability["quotaRemaining"] == 0
@@ -334,7 +333,44 @@ async def test_concurrent_same_idempotency_key_is_settled_once(make_app):
         )
 
     assert [response.status_code for response in responses] == [200, 200]
-    # 隐私边界不缓存响应，两个并发请求仍可能各调用一次上游；但只结算一次。
-    assert upstream_calls == 2
+    # 同 key 并发请求合并为一次上游调用，并只结算一次。
+    assert upstream_calls == 1
     async with app.state.database.session_factory() as db:
         assert await db.scalar(select(func.count()).select_from(UsageEvent)) == 1
+
+
+async def test_idempotency_key_cannot_be_reused_for_different_payload(make_app):
+    upstream_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal upstream_calls
+        upstream_calls += 1
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{
+                    "finish_reason": "stop",
+                    "message": {"content": json.dumps(FEEDBACK_RESULT)},
+                }],
+            },
+        )
+
+    app, _ = make_app(handler, configured_settings(free_feedback_monthly_quota=1))
+    email = "idempotency-payload@example.com"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        registered = await register(client, email)
+        await mark_email_verified(client, email)
+        headers = {
+            **bearer(registered["accessToken"]),
+            "X-Idempotency-Key": "feedback-payload-1",
+        }
+        first = await client.post("/v1/feedback", headers=headers, json=FEEDBACK_REQUEST)
+        changed = {**FEEDBACK_REQUEST, "answer": "I cook dinner after work."}
+        replay = await client.post("/v1/feedback", headers=headers, json=changed)
+
+    assert first.status_code == 200
+    assert replay.status_code == 409
+    assert replay.json()["error"]["code"] == "idempotency-key-reused"
+    assert upstream_calls == 1

@@ -275,7 +275,7 @@ describe('PracticeService V1.7 text-answer flow', () => {
     const created = await service.createSession('p1-hobbies', 1)
     const first = await service.saveTextAttempt(created.id, 1, 'I like reading.', null)
     const ready = await service.prepareSecondAttempt(first.id)
-    const second = await service.saveTextAttempt(ready.id, 2, 'I go there last year.', null)
+    const second = await service.saveTextAttempt(ready.id, 2, 'I go to Beijing last year.', null)
     const analysis: SecondAttemptAnalysis = {
       correctedSentences: [{
         original: 'I go there last year.',
@@ -286,7 +286,7 @@ describe('PracticeService V1.7 text-answer flow', () => {
         content: '我去年去了北京。',
         kind: 'experience',
         topicTags: ['travel'],
-        sourceSentence: 'I went to Beijing last year.',
+        sourceSentence: 'I go to Beijing last year.',
         sourcePart: 1,
       }],
     }
@@ -295,7 +295,7 @@ describe('PracticeService V1.7 text-answer flow', () => {
       second.id,
       {
         attemptId: second.attempts.find((item) => item.attemptNumber === 2)!.id,
-        text: 'I go there last year.',
+        text: 'I go to Beijing last year.',
         updatedAt: second.attempts.find((item) => item.attemptNumber === 2)!.transcript.updatedAt,
       },
       analysis,
@@ -318,6 +318,37 @@ describe('PracticeService V1.7 text-answer flow', () => {
       sourcePart: 1,
       sourceAttempt: 2,
     })
+
+    const retried = await service.finalizeSecondAttempt(second.id, {
+      correctedSentences: ['I went there last year.'],
+      memoryCandidates: analysis.memoryCandidates,
+      topic: 'Travel',
+    })
+    expect(retried.expressions).toHaveLength(1)
+    expect(storage.expressions.size).toBe(1)
+    expect(retried.session.confirmedMemoryFacts).toHaveLength(1)
+  })
+
+  it('rejects a Memory candidate whose source adds facts absent from the second answer', async () => {
+    const service = createService()
+    const created = await service.createSession('p1-hobbies', 1)
+    const first = await service.saveTextAttempt(created.id, 1, 'I like reading.', null)
+    const ready = await service.prepareSecondAttempt(first.id)
+    const second = await service.saveTextAttempt(ready.id, 2, 'I go there last year.', null)
+
+    const result = await service.finalizeSecondAttempt(second.id, {
+      correctedSentences: [],
+      memoryCandidates: [{
+        content: '我去年去了北京。',
+        kind: 'experience',
+        topicTags: ['travel'],
+        sourceSentence: 'I went to Beijing last year.',
+        sourcePart: 1,
+      }],
+      topic: 'Travel',
+    })
+
+    expect(result.session.confirmedMemoryFacts).toEqual([])
   })
 
   it('lets the learner reclassify a unified Memory fact without duplicating it', async () => {
@@ -346,6 +377,12 @@ describe('PracticeService V1.7 text-answer flow', () => {
     )
     expect(reclassified.confirmedMemoryFacts).toHaveLength(1)
     expect(reclassified.confirmedMemoryFacts[0]?.sourcePart).toBe(2)
+
+    const deleted = await service.deleteMemoryFact(
+      result.session.id,
+      result.session.confirmedMemoryFacts[0]!.id,
+    )
+    expect(deleted.confirmedMemoryFacts).toEqual([])
   })
 
   it('saves the full second answer but only submits a confirmed snippet to the personal corpus', async () => {

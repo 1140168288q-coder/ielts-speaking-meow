@@ -126,6 +126,10 @@ class UsageEvent(Base):
     feature_key: Mapped[str] = mapped_column(String(64))
     request_id: Mapped[str] = mapped_column(String(64))
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # SHA-256 of the canonical request envelope; the answer/body itself is
+    # never persisted. It prevents a client from reusing one key for another
+    # billable operation while keeping usage records privacy-safe.
+    request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     units: Mapped[int] = mapped_column(Integer)
     period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     occurred_at: Mapped[datetime] = mapped_column(

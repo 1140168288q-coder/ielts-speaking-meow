@@ -3,7 +3,11 @@
 这里只持久化能力键、请求标识和计量单位，不接收也不保存答案正文。
 """
 import asyncio
+import hashlib
+import json
 import re
+import time
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -63,6 +67,10 @@ class FeatureAuthorizationService:
         # 用进程内互斥锁补上同一 Backend 实例内的原子边界。生产多 worker 仍由
         # PostgreSQL 的用户行锁和唯一约束兜底。
         self._settle_lock = asyncio.Lock()
+        self._idempotency_locks: dict[str, asyncio.Lock] = {}
+        self._idempotency_lock_refs: dict[str, int] = {}
+        self._result_cache: dict[str, tuple[str, object, float]] = {}
+        self._result_cache_ttl_seconds = 24 * 60 * 60
         self._policies = {
             FeatureKey.SYNC: FeaturePolicy(None, "month", "request"),
             FeatureKey.FEEDBACK: FeaturePolicy(
@@ -120,22 +128,39 @@ class FeatureAuthorizationService:
         *,
         units: int,
         idempotency_key: str | None = None,
+        request_hash: str | None = None,
     ) -> FeatureCapability:
         """检查本次调用是否有资格使用额度，但不提前扣费。"""
         if units <= 0:
             raise invalid_request("用量单位必须大于 0。")
+        if idempotency_key is not None:
+            # Keep the transaction open across the provider call. On
+            # PostgreSQL this serializes the same user's in-flight keyed
+            # requests across workers; the second request then sees the
+            # committed UsageEvent and can use the short-lived result cache
+            # without calling or charging the provider again.
+            await db.scalar(
+                select(User.id).where(User.id == user.id).with_for_update()
+            )
         capability = await self._resolve_capability(db, user, feature)
         if idempotency_key is not None:
             replay = await db.scalar(
-                select(UsageEvent.id).where(
+                select(UsageEvent).where(
                     UsageEvent.user_id == user.id,
                     UsageEvent.feature_key == feature.value,
                     UsageEvent.idempotency_key == idempotency_key,
                 )
             )
             if replay is not None:
-                # 允许同一逻辑请求在额度用尽后安全重放；settle 会再次确认
-                # 幂等事件，不会重复计费。
+                if replay.request_hash != request_hash:
+                    raise conflict(
+                        "idempotency-key-reused",
+                        "此请求标识已绑定其他内容，请为新操作生成新的请求标识。",
+                    )
+                if not capability.enabled:
+                    self._raise_if_unavailable(capability, required_units=units)
+                # 同一个请求可以在额度用尽后安全重放；路由必须从短期
+                # 结果缓存返回，不能再次调用上游。
                 return capability
         self._raise_if_unavailable(capability, required_units=units)
         return capability
@@ -149,6 +174,7 @@ class FeatureAuthorizationService:
         units: int,
         request_id: str,
         idempotency_key: str | None,
+        request_hash: str | None = None,
     ) -> FeatureCapability:
         async with self._settle_lock:
             return await self._settle_unlocked(
@@ -158,6 +184,7 @@ class FeatureAuthorizationService:
                 units=units,
                 request_id=request_id,
                 idempotency_key=idempotency_key,
+                request_hash=request_hash,
             )
 
     async def _settle_unlocked(
@@ -169,6 +196,7 @@ class FeatureAuthorizationService:
         units: int,
         request_id: str,
         idempotency_key: str | None,
+        request_hash: str | None,
     ) -> FeatureCapability:
         """在合法结果已经准备返回后原子结算一次额度。
 
@@ -182,13 +210,18 @@ class FeatureAuthorizationService:
 
         if idempotency_key is not None:
             replay = await db.scalar(
-                select(UsageEvent.id).where(
+                select(UsageEvent).where(
                     UsageEvent.user_id == user.id,
                     UsageEvent.feature_key == feature.value,
                     UsageEvent.idempotency_key == idempotency_key,
                 )
             )
             if replay is not None:
+                if replay.request_hash != request_hash:
+                    raise conflict(
+                        "idempotency-key-reused",
+                        "此请求标识已绑定其他内容，请为新操作生成新的请求标识。",
+                    )
                 return await self._resolve_capability(db, user, feature)
 
         capability = await self._resolve_capability(db, user, feature)
@@ -227,6 +260,7 @@ class FeatureAuthorizationService:
                 feature_key=feature.value,
                 request_id=request_id,
                 idempotency_key=idempotency_key,
+                request_hash=request_hash,
                 units=units,
                 period_start=period_start,
                 occurred_at=now,
@@ -238,13 +272,13 @@ class FeatureAuthorizationService:
             await db.rollback()
             if idempotency_key is not None:
                 replay = await db.scalar(
-                    select(UsageEvent.id).where(
+                    select(UsageEvent).where(
                         UsageEvent.user_id == user.id,
                         UsageEvent.feature_key == feature.value,
                         UsageEvent.idempotency_key == idempotency_key,
                     )
                 )
-                if replay is not None:
+                if replay is not None and replay.request_hash == request_hash:
                     return await self._resolve_capability(db, user, feature)
             raise
 
@@ -271,6 +305,7 @@ class FeatureAuthorizationService:
         units: int,
         request_id: str,
         idempotency_key: str | None,
+        request_hash: str | None = None,
     ) -> FeatureCapability:
         if units <= 0:
             raise invalid_request("用量单位必须大于 0。")
@@ -280,16 +315,21 @@ class FeatureAuthorizationService:
 
         if idempotency_key is not None:
             replay = await db.scalar(
-                select(UsageEvent.id).where(
+                select(UsageEvent).where(
                     UsageEvent.user_id == user.id,
                     UsageEvent.feature_key == feature.value,
                     UsageEvent.idempotency_key == idempotency_key,
                 )
             )
             if replay is not None:
+                if replay.request_hash != request_hash:
+                    raise conflict(
+                        "idempotency-key-reused",
+                        "此请求标识已绑定其他内容，请为新操作生成新的请求标识。",
+                    )
                 raise conflict(
                     "idempotency-key-replayed",
-                    "此请求标识已经使用，请为新操作生成新的请求标识。",
+                    "此请求标识已经使用，请重试原操作或生成新的请求标识。",
                 )
 
         capability = await self._resolve_capability(db, user, feature)
@@ -330,6 +370,7 @@ class FeatureAuthorizationService:
                 feature_key=feature.value,
                 request_id=request_id,
                 idempotency_key=idempotency_key,
+                request_hash=request_hash,
                 units=units,
                 period_start=period_start,
                 occurred_at=now,
@@ -445,6 +486,102 @@ class FeatureAuthorizationService:
             end = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
         return start, end
 
+    @asynccontextmanager
+    async def idempotency_lock(
+        self,
+        user_id: str,
+        feature: FeatureKey,
+        idempotency_key: str | None,
+    ):
+        if idempotency_key is None:
+            yield
+            return
+        key = f"{user_id}:{feature.value}:{idempotency_key}"
+        lock = self._idempotency_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._idempotency_locks[key] = lock
+        self._idempotency_lock_refs[key] = self._idempotency_lock_refs.get(key, 0) + 1
+        try:
+            async with lock:
+                yield
+        finally:
+            remaining = self._idempotency_lock_refs.get(key, 1) - 1
+            if remaining <= 0:
+                self._idempotency_lock_refs.pop(key, None)
+                if self._idempotency_locks.get(key) is lock and not lock.locked():
+                    self._idempotency_locks.pop(key, None)
+            else:
+                self._idempotency_lock_refs[key] = remaining
+
+    def get_cached_result(
+        self,
+        user_id: str,
+        feature: FeatureKey,
+        idempotency_key: str | None,
+        request_hash: str | None,
+    ) -> object | None:
+        if idempotency_key is None or request_hash is None:
+            return None
+        key = f"{user_id}:{feature.value}:{idempotency_key}"
+        cached = self._result_cache.get(key)
+        if cached is None:
+            return None
+        cached_hash, result, expires_at = cached
+        if expires_at <= time.monotonic():
+            self._result_cache.pop(key, None)
+            return None
+        if cached_hash != request_hash:
+            raise conflict(
+                "idempotency-key-reused",
+                "此请求标识已绑定其他内容，请为新操作生成新的请求标识。",
+            )
+        return result
+
+    def cache_result(
+        self,
+        user_id: str,
+        feature: FeatureKey,
+        idempotency_key: str | None,
+        request_hash: str | None,
+        result: object,
+    ) -> None:
+        if idempotency_key is None or request_hash is None:
+            return
+        key = f"{user_id}:{feature.value}:{idempotency_key}"
+        self._result_cache[key] = (
+            request_hash,
+            result,
+            time.monotonic() + self._result_cache_ttl_seconds,
+        )
+        if len(self._result_cache) > 256:
+            oldest = min(self._result_cache, key=lambda item: self._result_cache[item][2])
+            self._result_cache.pop(oldest, None)
+
+    async def has_idempotency_event(
+        self,
+        db: AsyncSession,
+        user: User,
+        feature: FeatureKey,
+        idempotency_key: str,
+        request_hash: str,
+    ) -> bool:
+        replay = await db.scalar(
+            select(UsageEvent).where(
+                UsageEvent.user_id == user.id,
+                UsageEvent.feature_key == feature.value,
+                UsageEvent.idempotency_key == idempotency_key,
+            )
+        )
+        if replay is None:
+            return False
+        if replay.request_hash != request_hash:
+            raise conflict(
+                "idempotency-key-reused",
+                "此请求标识已绑定其他内容，请为新操作生成新的请求标识。",
+            )
+        return True
+
 
 def usage_identifiers(request: Request) -> tuple[str, str | None]:
     request_id = str(getattr(request.state, "request_id", "") or uuid4().hex)
@@ -458,3 +595,14 @@ def usage_identifiers(request: Request) -> tuple[str, str | None]:
             "且长度不得超过 128。"
         )
     return request_id, idempotency_key
+
+
+def request_fingerprint(route: str, payload: object) -> str:
+    """Hash a route plus canonical payload without retaining private content."""
+    canonical = json.dumps(
+        {"route": route, "payload": payload},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()

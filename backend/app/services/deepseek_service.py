@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 import time
 from typing import Literal
 
@@ -110,6 +111,10 @@ class StrictResponseModel(BaseModel):
     """AI JSON schema 的未知字段必须显式失败，不能被 Pydantic 静默丢弃。"""
 
     model_config = ConfigDict(extra="forbid")
+
+
+class HealthProbe(StrictResponseModel):
+    ok: Literal[True]
 
 
 class ReferenceAnswer(StrictResponseModel):
@@ -339,9 +344,17 @@ class DeepSeekService:
             },
             ensure_ascii=False,
         )
-        return await self._complete_validated(
+        result = await self._complete_validated(
             SECOND_ATTEMPT_SYSTEM, user, SecondAttemptFeedback
         )
+        result["memoryCandidates"] = [
+            candidate
+            for candidate in result["memoryCandidates"]
+            if _source_sentence_is_grounded(
+                candidate["sourceSentence"], payload.get("answer") or ""
+            )
+        ]
+        return result
 
     async def organize_questions(self, fileName: str, extractedText: str) -> list[dict]:
         user = json.dumps(
@@ -454,10 +467,21 @@ class DeepSeekService:
                     backend_error=exc,
                 ) from exc
             content, finish_reason, usage = self._read_completion(response)
+            try:
+                HealthProbe.model_validate(self._parse_json_content(content))
+            except (TypeError, ValueError, ValidationError) as exc:
+                raise DeepSeekFailure(
+                    "pydantic-fields",
+                    "DeepSeek 验证响应结构无效。",
+                    finish_reason=finish_reason,
+                    content_length=len(content),
+                    usage=usage,
+                    field_path="probe.ok",
+                ) from exc
             self.calls.verification.record(
                 ok=True,
                 latency_ms=round((time.perf_counter() - started) * 1000),
-                result="content received",
+                result="validated content",
                 finish_reason=finish_reason,
                 content_length=len(content),
                 usage=usage,
@@ -817,6 +841,16 @@ def _summarize_usage(value: object) -> dict[str, int] | None:
         if isinstance(item := value.get(key), int) and not isinstance(item, bool)
     }
     return summary or None
+
+
+def _source_sentence_is_grounded(source_sentence: str, answer: str) -> bool:
+    source_tokens = re.findall(r"[a-z0-9']+", source_sentence.lower())
+    answer_tokens = set(re.findall(r"[a-z0-9']+", answer.lower()))
+    meaningful = [token for token in source_tokens if len(token) >= 3]
+    if not meaningful:
+        return source_sentence.strip().lower() in answer.lower()
+    overlap = sum(token in answer_tokens for token in meaningful)
+    return overlap / len(meaningful) >= 0.75
 
 
 def _validation_field_path(error: ValidationError) -> str:

@@ -305,7 +305,7 @@ export function App() {
 
   const startQuestion = async (question: Question) => {
     try {
-      const nextSession = await runtime.practiceService.createSession(question.id, question.part)
+      const nextSession = await runtime.practiceService.createSession(question.id, question.part, question)
       setSessions((current) => [nextSession, ...current])
       openSession(nextSession)
     } catch (error) {
@@ -371,6 +371,15 @@ export function App() {
     ])
   }
 
+  const deleteMemoryFact = async (sessionId: string, factId: string) => {
+    const updated = await runtime.practiceService.deleteMemoryFact(sessionId, factId)
+    setSession((current) => current?.id === sessionId ? updated : current)
+    setSessions((current) => [
+      updated,
+      ...current.filter((item) => item.id !== sessionId),
+    ])
+  }
+
   const deleteExpression = async (expressionId: string) => {
     await runtime.practiceService.deleteExpression(expressionId)
     await refreshLibrary()
@@ -415,7 +424,7 @@ export function App() {
             return
           }
           setNavigationNotice(
-            '正在保存回答，请稍候片刻再离开练习。',
+            '正在保存回答或等待 AI 分析，请稍候片刻再离开练习。',
           )
           window.scrollTo({ top: 0, behavior: 'smooth' })
         })
@@ -517,11 +526,16 @@ export function App() {
   ]
   /** 历史记录允许引用 V1.8 之前的旧内置题;这些题不进入浏览/随机抽题。 */
   const questionsForHistory = [
+    ...sessions.flatMap((item) => item.questionSnapshot ?? []),
     ...allQuestions,
     ...(questionData === null ? [] : questionData.legacyQuestionsById.values()),
   ]
+  const questionsWithSnapshots = [
+    ...sessions.flatMap((item) => item.questionSnapshot ?? []),
+    ...allQuestions,
+  ]
   const activeQuestion = session
-    ? allQuestions.find((question) => question.id === session.questionId) ??
+    ? questionsWithSnapshots.find((question) => question.id === session.questionId) ??
       questionData?.legacyQuestionsById.get(session.questionId) ??
       null
     : null
@@ -534,18 +548,22 @@ export function App() {
           3,
           )
           : [],
-        learnerContext: buildLearnerContext(
+        learnerContext: preferences.memoryEnabled
+          ? buildLearnerContext(
           activeQuestion,
-          preferences.memoryEnabled ? sessions : [],
-          preferences.memoryEnabled ? expressions : [],
+          sessions,
+          expressions,
           preferences.autoMatchPersonalMaterialsWithAi ? personalMaterials : [],
           allQuestions,
-        ),
-        personalMaterials: findReusablePersonalMaterials(
-          activeQuestion,
-          personalMaterials,
-          2,
-        ),
+        )
+          : '',
+        personalMaterials: preferences.memoryEnabled
+          ? findReusablePersonalMaterials(
+            activeQuestion,
+            personalMaterials,
+            2,
+          )
+          : [],
       }
     : { reusableExpressions: [], learnerContext: '', personalMaterials: [] }
 
@@ -634,7 +652,11 @@ export function App() {
           />
         ) : view === 'history' ? (
           <ReviewCenter active="history" onChange={navigateSafely}>
-            <LearnerMemoryPanel sessions={sessions} onUpdateFactPart={updateMemoryFactPart} />
+            <LearnerMemoryPanel
+              sessions={sessions}
+              onUpdateFactPart={updateMemoryFactPart}
+              onDeleteFact={deleteMemoryFact}
+            />
             <HistoryView
               questions={questionsForHistory}
               sessions={sessions}

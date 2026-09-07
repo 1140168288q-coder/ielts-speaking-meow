@@ -52,9 +52,10 @@ export function MemoryPrivacyCard({
         <input
           type="checkbox"
           checked={preferences.autoMatchPersonalMaterialsWithAi}
+          disabled={!preferences.memoryEnabled}
           onChange={(event) => void savePreference({ autoMatchPersonalMaterialsWithAi: event.target.checked })}
         />
-        <span><strong>AI 分析时自动匹配可用素材</strong><small>默认开启；仅发送与本题相关的短片段，不发送完整素材库。</small></span>
+        <span><strong>AI 分析时自动匹配可用素材</strong><small>{preferences.memoryEnabled ? '默认开启；仅发送与本题相关的短片段，不发送完整素材库。' : '开启长期 Memory 后可使用；关闭时不会向 AI 发送任何学习者上下文。'}</small></span>
       </label>
       {preferenceFeedback ? (
         <span className={`settings-feedback ${preferenceFeedback.tone}`}>{preferenceFeedback.text}</span>

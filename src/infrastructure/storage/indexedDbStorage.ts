@@ -162,6 +162,46 @@ export class IndexedDbStorage
     await this.put(STORES.sessions, session)
   }
 
+  async updateSessionAtomically(
+    sessionId: string,
+    updater: (session: TrainingSession | null) => TrainingSession | null,
+  ): Promise<TrainingSession | null> {
+    assertStorageKey(sessionId, 'Session')
+    const database = await this.getDatabase()
+
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(STORES.sessions, 'readwrite')
+      const store = transaction.objectStore(STORES.sessions)
+      const request = store.get(sessionId)
+      let updated: TrainingSession | null = null
+
+      request.onsuccess = () => {
+        try {
+          const current = request.result === undefined
+            ? null
+            : normalizeStoredTrainingSession(request.result)
+          updated = updater(current)
+          if (updated !== null) {
+            store.put(updated)
+          }
+        } catch (error) {
+          transaction.abort()
+          reject(toError(error))
+        }
+      }
+      request.onerror = () => {
+        reject(request.error ?? new Error('Unable to read the session.'))
+      }
+      transaction.oncomplete = () => resolve(updated)
+      transaction.onabort = () => {
+        reject(transaction.error ?? new Error('Session update aborted.'))
+      }
+      transaction.onerror = () => {
+        reject(transaction.error ?? new Error('Session update failed.'))
+      }
+    })
+  }
+
   async getSession(sessionId: string): Promise<TrainingSession | null> {
     assertStorageKey(sessionId, 'Session')
     const value = await this.get<unknown>(STORES.sessions, sessionId)

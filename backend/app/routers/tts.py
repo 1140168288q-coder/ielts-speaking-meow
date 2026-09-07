@@ -1,14 +1,18 @@
 """POST /v1/tts：文本 → 火山语音合成 2.0 → mp3 字节。"""
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..dependencies import get_db_session
-from ..errors import not_configured
+from ..errors import conflict, not_configured
 from ..services.auth_service import AuthContext
-from ..services.feature_authorization import FeatureKey, usage_identifiers
+from ..services.feature_authorization import (
+    FeatureKey,
+    request_fingerprint,
+    usage_identifiers,
+)
 from .auth import require_verified_user
 
 router = APIRouter()
@@ -35,23 +39,54 @@ async def tts(
     if not service.is_configured:
         raise not_configured("火山引擎 TTS")
     request_id, idempotency_key = usage_identifiers(request)
-    await request.app.state.feature_authorization_service.consume(
-        db,
-        auth.user,
-        FeatureKey.TTS,
-        units=len(payload.text),
-        request_id=request_id,
-        idempotency_key=idempotency_key,
-    )
-    audio = await service.synthesize(
-        payload.text,
-        language=payload.language,
-        voice=payload.voice,
-        rate=payload.rate,
-        pitch=payload.pitch,
-    )
-    return Response(
-        content=audio,
-        media_type="audio/mpeg",
-        headers={"Cache-Control": "private, max-age=86400"},
-    )
+    request_hash = request_fingerprint(request.url.path, payload.model_dump(mode="json"))
+    authorization = request.app.state.feature_authorization_service
+    async with authorization.idempotency_lock(auth.user.id, FeatureKey.TTS, idempotency_key):
+        await authorization.authorize(
+            db,
+            auth.user,
+            FeatureKey.TTS,
+            units=len(payload.text),
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+        )
+        cached = authorization.get_cached_result(
+            auth.user.id, FeatureKey.TTS, idempotency_key, request_hash
+        )
+        if cached is not None:
+            return Response(
+                content=cast(bytes, cached),
+                media_type="audio/mpeg",
+                headers={"Cache-Control": "private, max-age=86400"},
+            )
+        if idempotency_key is not None and await authorization.has_idempotency_event(
+            db, auth.user, FeatureKey.TTS, idempotency_key, request_hash
+        ):
+            raise conflict(
+                "idempotency-result-unavailable",
+                "此请求结果已过期，请重新提交并生成新的请求标识。",
+            )
+        audio = await service.synthesize(
+            payload.text,
+            language=payload.language,
+            voice=payload.voice,
+            rate=payload.rate,
+            pitch=payload.pitch,
+        )
+        await authorization.settle(
+            db,
+            auth.user,
+            FeatureKey.TTS,
+            units=len(payload.text),
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+        )
+        authorization.cache_result(
+            auth.user.id, FeatureKey.TTS, idempotency_key, request_hash, audio
+        )
+        return Response(
+            content=audio,
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "private, max-age=86400"},
+        )

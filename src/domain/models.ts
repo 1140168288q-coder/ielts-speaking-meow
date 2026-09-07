@@ -419,6 +419,8 @@ export const trainingSessionSchema = z
     /** 本地账号 userId;V1.8 起写入。旧记录缺省时归“本机用户”。 */
     ownerId: nonEmptyText(120).optional(),
     questionId: nonEmptyText(120),
+    /** 最小题目快照，供导入题或换设备恢复历史记录时只读展示。 */
+    questionSnapshot: questionSchema.nullable().optional(),
     part: z.union([ieltsPartSchema, z.null()]).default(null),
     status: trainingSessionStatusSchema,
     attempts: z.array(practiceAttemptSchema).max(2),

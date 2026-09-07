@@ -271,6 +271,33 @@ describe('PracticeFlow V1.7 text answer flow', () => {
     )
   })
 
+  it('keeps completed practice reviewable with both answers and confirmed feedback', () => {
+    render(
+      <PracticeFlow
+        question={question}
+        session={makeSession({
+          status: 'completed',
+          attempts: [attempt, secondAttempt],
+          aiFeedback: feedback,
+          secondAttemptAnalysis,
+        })}
+        service={createService()}
+        audioFocus={createAudioFocus()}
+        textAi={createTextAi()}
+        autoPlayQuestion={false}
+        onExitGuardChange={() => undefined}
+        onChange={() => undefined}
+        onBack={() => undefined}
+      />,
+    )
+
+    expect(screen.getByText('你已经完成了两次回答')).toBeInTheDocument()
+    expect(screen.getByText(attempt.transcript.text)).toBeInTheDocument()
+    expect(screen.getByText(feedback.summary)).toBeInTheDocument()
+    expect(screen.getByText(secondAttempt.transcript.text)).toBeInTheDocument()
+    expect(screen.getByText('I went there last year.')).toBeInTheDocument()
+  })
+
   it('keeps the question replayable in the second-answer stage', async () => {
     const user = userEvent.setup()
     const audioFocus = createAudioFocus()

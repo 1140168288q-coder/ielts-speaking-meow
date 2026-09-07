@@ -8,6 +8,7 @@ import {
   type ConfirmedMemoryFact,
   type IeltsPart,
   type MemoryCandidate,
+  type Question,
   type SecondAttemptAnalysis,
   savedExpressionSchema,
   trainingSessionSchema,
@@ -23,6 +24,10 @@ import {
 } from '../domain/questionPracticeState'
 import { analyzeSpeech } from '../domain/speechAnalysis'
 import type { LocalDataMaintenance, LocalStorage } from '../ports/storage'
+
+type SessionUpdater = (session: TrainingSession | null) => TrainingSession | null
+
+const sessionWriteQueues = new WeakMap<object, Map<string, Promise<void>>>()
 
 export interface PracticeServiceDependencies {
   localStorage: LocalStorage & Pick<LocalDataMaintenance, 'deleteSessionWithAudio'>
@@ -67,13 +72,18 @@ export class PracticeService {
       dependencies.getCurrentUserId ?? (() => LOCAL_DEFAULT_USER_ID)
   }
 
-  async createSession(questionId: string, part: 1 | 2 | 3 | null = null): Promise<TrainingSession> {
+  async createSession(
+    questionId: string,
+    part: 1 | 2 | 3 | null = null,
+    questionSnapshot?: Question,
+  ): Promise<TrainingSession> {
     const timestamp = this.now().toISOString()
     const session = trainingSessionSchema.parse({
       id: this.createId(),
       ownerId: this.getCurrentUserId(),
       questionId,
       part,
+      ...(questionSnapshot === undefined ? {} : { questionSnapshot }),
       status: 'first-ready',
       attempts: [],
       localFeedback: [],
@@ -101,49 +111,46 @@ export class PracticeService {
       throw new Error('请先输入答案文本，再提交。')
     }
 
-    const session = await this.requireSession(sessionId)
-    const timestamp = this.now().toISOString()
-    const attemptId = this.createId()
-    const durationMs = answerDurationMs ?? 0
-    const attempt: PracticeAttempt = {
-      id: attemptId,
-      attemptNumber,
-      audio: null,
-      transcript: {
-        status: 'ready',
-        text: cleanText,
-        originalText: null,
-        source: 'manual',
-        errorCode: null,
+    const updated = await this.updateSessionAtomically(sessionId, (session) => {
+      if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      const timestamp = this.now().toISOString()
+      const attempt: PracticeAttempt = {
+        id: this.createId(),
+        attemptNumber,
+        audio: null,
+        transcript: {
+          status: 'ready',
+          text: cleanText,
+          originalText: null,
+          source: 'manual',
+          errorCode: null,
+          updatedAt: timestamp,
+        },
+        metrics: analyzeSpeech({
+          transcript: cleanText,
+          durationMs: answerDurationMs ?? 0,
+        }),
+        createdAt: timestamp,
         updatedAt: timestamp,
-      },
-      metrics: analyzeSpeech({
-        transcript: cleanText,
-        durationMs,
-      }),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }
-
-    const attempts = [
-      ...session.attempts.filter(
-        (existing) => existing.attemptNumber !== attemptNumber,
-      ),
-      attempt,
-    ].sort((a, b) => a.attemptNumber - b.attemptNumber)
-
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      attempts,
-      status: attemptNumber === 1 ? 'first-review' : 'comparison-ready',
-      localFeedback: [],
-      comparison: null,
-      aiComparison: null,
-      ...(attemptNumber === 2 ? { secondAttemptAnalysis: null } : {}),
-      updatedAt: timestamp,
+      }
+      const attempts = [
+        ...session.attempts.filter((existing) => existing.attemptNumber !== attemptNumber),
+        attempt,
+      ].sort((a, b) => a.attemptNumber - b.attemptNumber)
+      return trainingSessionSchema.parse({
+        ...session,
+        attempts,
+        status: attemptNumber === 1 ? 'first-review' : 'comparison-ready',
+        localFeedback: [],
+        comparison: null,
+        aiComparison: null,
+        ...(attemptNumber === 2 ? { secondAttemptAnalysis: null } : {}),
+        updatedAt: timestamp,
+      })
     })
-
-    await this.localStorage.upsertSession(updated)
+    if (updated === null) throw new Error('The practice session could not be found.')
     return updated
   }
 
@@ -151,8 +158,15 @@ export class PracticeService {
     sessionId: string,
     feedback: AiFeedback,
   ): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    return this.persistAiFeedback(session, feedback)
+    const parsedFeedback = aiFeedbackSchema.parse(feedback)
+    const updated = await this.updateSessionAtomically(sessionId, (session) => {
+      if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      return this.buildAiFeedbackSession(session, parsedFeedback)
+    })
+    if (updated === null) throw new Error('The practice session could not be found.')
+    return updated
   }
 
   async applyAiFeedbackIfAnswerCurrent(
@@ -161,21 +175,19 @@ export class PracticeService {
     feedback: AiFeedback,
   ): Promise<TrainingSession | null> {
     const parsedFeedback = aiFeedbackSchema.parse(feedback)
-    const session = await this.requireSession(sessionId)
-    const firstAttempt = session.attempts.find(
-      (attempt) => attempt.attemptNumber === 1,
-    )
-
-    if (
-      firstAttempt?.id !== snapshot.attemptId ||
-      firstAttempt.transcript.status !== 'ready' ||
-      firstAttempt.transcript.text !== snapshot.text ||
-      firstAttempt.transcript.updatedAt !== snapshot.updatedAt
-    ) {
-      return null
-    }
-
-    return this.persistAiFeedback(session, parsedFeedback)
+    return this.updateSessionAtomically(sessionId, (session) => {
+      if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      const firstAttempt = session.attempts.find((attempt) => attempt.attemptNumber === 1)
+      if (
+        firstAttempt?.id !== snapshot.attemptId ||
+        firstAttempt.transcript.status !== 'ready' ||
+        firstAttempt.transcript.text !== snapshot.text ||
+        firstAttempt.transcript.updatedAt !== snapshot.updatedAt
+      ) return null
+      return this.buildAiFeedbackSession(session, parsedFeedback)
+    })
   }
 
   async applySecondAttemptAnalysisIfAnswerCurrent(
@@ -184,71 +196,59 @@ export class PracticeService {
     analysis: SecondAttemptAnalysis,
   ): Promise<TrainingSession | null> {
     const parsedAnalysis = secondAttemptAnalysisSchema.parse(analysis)
-    const session = await this.requireSession(sessionId)
-    const secondAttempt = session.attempts.find(
-      (attempt) => attempt.attemptNumber === 2,
-    )
-    if (
-      secondAttempt?.id !== snapshot.attemptId ||
-      secondAttempt.transcript.status !== 'ready' ||
-      secondAttempt.transcript.text !== snapshot.text ||
-      secondAttempt.transcript.updatedAt !== snapshot.updatedAt
-    ) {
-      return null
-    }
-
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      secondAttemptAnalysis: parsedAnalysis,
-      updatedAt: this.now().toISOString(),
+    return this.updateSessionAtomically(sessionId, (session) => {
+      if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      const secondAttempt = session.attempts.find((attempt) => attempt.attemptNumber === 2)
+      if (
+        secondAttempt?.id !== snapshot.attemptId ||
+        secondAttempt.transcript.status !== 'ready' ||
+        secondAttempt.transcript.text !== snapshot.text ||
+        secondAttempt.transcript.updatedAt !== snapshot.updatedAt
+      ) return null
+      return trainingSessionSchema.parse({
+        ...session,
+        secondAttemptAnalysis: parsedAnalysis,
+        updatedAt: this.now().toISOString(),
+      })
     })
-    await this.localStorage.upsertSession(updated)
-    return updated
-  }
-
-  private async persistAiFeedback(
-    session: TrainingSession,
-    feedback: AiFeedback,
-  ): Promise<TrainingSession> {
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      aiFeedback: aiFeedbackSchema.parse(feedback),
-      status:
-        session.status === 'first-review' ? 'feedback-ready' : session.status,
-      updatedAt: this.now().toISOString(),
-    })
-    await this.localStorage.upsertSession(updated)
-    return updated
   }
 
   async prepareSecondAttempt(sessionId: string): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    if (!session.attempts.some((attempt) => attempt.attemptNumber === 1)) {
-      throw new Error('请先完成第一次回答，再进入第二次。')
-    }
-
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      status: 'second-ready',
-      updatedAt: this.now().toISOString(),
+    const updated = await this.updateSessionAtomically(sessionId, (session) => {
+      if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      if (!session.attempts.some((attempt) => attempt.attemptNumber === 1)) {
+        throw new Error('请先完成第一次回答，再进入第二次。')
+      }
+      return trainingSessionSchema.parse({
+        ...session,
+        status: 'second-ready',
+        updatedAt: this.now().toISOString(),
+      })
     })
-    await this.localStorage.upsertSession(updated)
+    if (updated === null) throw new Error('The practice session could not be found.')
     return updated
   }
 
   async completeSession(sessionId: string): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    if (!session.attempts.some((attempt) => attempt.attemptNumber === 2)) {
-      throw new Error('请先完成第二次回答，再结束练习。')
-    }
-
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      status: 'completed',
-      updatedAt: this.now().toISOString(),
+    const updated = await this.updateSessionAtomically(sessionId, (session) => {
+      if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      if (!session.attempts.some((attempt) => attempt.attemptNumber === 2)) {
+        throw new Error('请先完成第二次回答，再结束练习。')
+      }
+      return trainingSessionSchema.parse({
+        ...session,
+        status: 'completed',
+        updatedAt: this.now().toISOString(),
+      })
     })
-    await this.localStorage.upsertSession(updated)
-    await this.setQuestionDone(session.questionId, true)
+    if (updated === null) throw new Error('The practice session could not be found.')
+    await this.setQuestionDone(updated.questionId, true)
     return updated
   }
 
@@ -308,29 +308,41 @@ export class PracticeService {
         .map((text) => text.trim())
         .filter((text) => text.length > 0),
     )]
-    const expressions = expressionTexts.map((text) => savedExpressionSchema.parse({
-      id: this.createId(),
-      ownerId: this.getCurrentUserId(),
-      text,
-      topic: input.topic.trim() || '未分类',
-      sourcePart,
-      questionId: session.questionId,
-      sessionId,
-      sourceAttempt: 2,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      reviewCount: 0,
-      lastReviewedAt: null,
-      reuseCount: 0,
-    }))
+    const existingExpressions = (await this.localStorage.listExpressions())
+      .filter((expression) =>
+        recordBelongsToAccount(expression.ownerId, this.getCurrentUserId()) &&
+        expression.sessionId === sessionId &&
+        expression.sourceAttempt === 2,
+      )
+    const expressions = expressionTexts.map((text) => {
+      const existing = existingExpressions.find((item) => item.text === text)
+      return existing ?? savedExpressionSchema.parse({
+        id: this.createId(),
+        ownerId: this.getCurrentUserId(),
+        text,
+        topic: input.topic.trim() || '未分类',
+        sourcePart,
+        questionId: session.questionId,
+        sessionId,
+        sourceAttempt: 2,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        reviewCount: 0,
+        lastReviewedAt: null,
+        reuseCount: 0,
+      })
+    })
     for (const expression of expressions) {
-      await this.localStorage.upsertExpression(expression)
+      if (!existingExpressions.some((item) => item.id === expression.id)) {
+        await this.localStorage.upsertExpression(expression)
+      }
     }
 
     const existingFacts = session.confirmedMemoryFacts ?? []
     const existingFactKeys = new Set(existingFacts.map((fact) => fact.content))
     const memoryFacts: ConfirmedMemoryFact[] = input.memoryCandidates
       .filter((candidate) => sourcePart !== null && candidate.sourcePart === sourcePart)
+      .filter((candidate) => isMemoryCandidateGrounded(candidate.sourceSentence, secondAttempt.transcript.text))
       .filter((candidate) => {
         if (existingFactKeys.has(candidate.content)) return false
         existingFactKeys.add(candidate.content)
@@ -347,14 +359,33 @@ export class PracticeService {
         createdAt: timestamp,
       }))
 
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      confirmedMemoryFacts: [...existingFacts, ...memoryFacts],
-      status: 'completed',
-      updatedAt: timestamp,
+    const updated = await this.updateSessionAtomically(sessionId, (current) => {
+      if (current === null || !recordBelongsToAccount(current.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      const currentSecondAttempt = current.attempts.find((attempt) => attempt.attemptNumber === 2)
+      if (currentSecondAttempt?.id !== secondAttempt.id || currentSecondAttempt.transcript.text !== secondAttempt.transcript.text) {
+        throw new Error('第二次回答已经变化，请重新确认收录内容。')
+      }
+      const currentFacts = current.confirmedMemoryFacts ?? []
+      const currentFactKeys = new Set(currentFacts.map((fact) => fact.content))
+      const mergedFacts = [
+        ...currentFacts,
+        ...memoryFacts.filter((fact) => {
+          if (currentFactKeys.has(fact.content)) return false
+          currentFactKeys.add(fact.content)
+          return true
+        }),
+      ]
+      return trainingSessionSchema.parse({
+        ...current,
+        confirmedMemoryFacts: mergedFacts,
+        status: 'completed',
+        updatedAt: timestamp,
+      })
     })
-    await this.localStorage.upsertSession(updated)
-    await this.setQuestionDone(session.questionId, true)
+    if (updated === null) throw new Error('The practice session could not be found.')
+    await this.setQuestionDone(updated.questionId, true)
     return { session: updated, expressions }
   }
 
@@ -363,19 +394,45 @@ export class PracticeService {
     factId: string,
     sourcePart: IeltsPart | null,
   ): Promise<TrainingSession> {
-    const session = await this.requireSession(sessionId)
-    const facts = session.confirmedMemoryFacts ?? []
-    if (!facts.some((fact) => fact.id === factId)) {
-      throw new Error('这条 Memory 不存在，或不属于当前账号。')
-    }
-    const updated = trainingSessionSchema.parse({
-      ...session,
-      confirmedMemoryFacts: facts.map((fact) =>
-        fact.id === factId ? { ...fact, sourcePart } : fact,
-      ),
-      updatedAt: this.now().toISOString(),
+    const updated = await this.updateSessionAtomically(sessionId, (session) => {
+      if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      const facts = session.confirmedMemoryFacts ?? []
+      if (!facts.some((fact) => fact.id === factId)) {
+        throw new Error('这条 Memory 不存在，或不属于当前账号。')
+      }
+      return trainingSessionSchema.parse({
+        ...session,
+        confirmedMemoryFacts: facts.map((fact) =>
+          fact.id === factId ? { ...fact, sourcePart } : fact,
+        ),
+        updatedAt: this.now().toISOString(),
+      })
     })
-    await this.localStorage.upsertSession(updated)
+    if (updated === null) throw new Error('The practice session could not be found.')
+    return updated
+  }
+
+  async deleteMemoryFact(
+    sessionId: string,
+    factId: string,
+  ): Promise<TrainingSession> {
+    const updated = await this.updateSessionAtomically(sessionId, (session) => {
+      if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
+        throw new Error('The practice session could not be found.')
+      }
+      const facts = session.confirmedMemoryFacts ?? []
+      if (!facts.some((fact) => fact.id === factId)) {
+        throw new Error('这条 Memory 不存在，或不属于当前账号。')
+      }
+      return trainingSessionSchema.parse({
+        ...session,
+        confirmedMemoryFacts: facts.filter((fact) => fact.id !== factId),
+        updatedAt: this.now().toISOString(),
+      })
+    })
+    if (updated === null) throw new Error('The practice session could not be found.')
     return updated
   }
 
@@ -489,6 +546,51 @@ export class PracticeService {
       : null
   }
 
+  private async updateSessionAtomically(
+    sessionId: string,
+    updater: SessionUpdater,
+  ): Promise<TrainingSession | null> {
+    const atomicUpdater = this.localStorage.updateSessionAtomically
+    if (atomicUpdater !== undefined) {
+      return atomicUpdater.call(this.localStorage, sessionId, updater)
+    }
+
+    let queues = sessionWriteQueues.get(this.localStorage)
+    if (queues === undefined) {
+      queues = new Map()
+      sessionWriteQueues.set(this.localStorage, queues)
+    }
+    const previous = queues.get(sessionId) ?? Promise.resolve()
+    let release!: () => void
+    const current = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    queues.set(sessionId, current)
+    await previous
+    try {
+      const existing = await this.localStorage.getSession(sessionId)
+      const updated = updater(existing)
+      if (updated !== null) await this.localStorage.upsertSession(updated)
+      return updated
+    } finally {
+      release()
+      if (queues.get(sessionId) === current) queues.delete(sessionId)
+    }
+  }
+
+  private buildAiFeedbackSession(
+    session: TrainingSession,
+    feedback: AiFeedback,
+  ): TrainingSession {
+    return trainingSessionSchema.parse({
+      ...session,
+      aiFeedback: aiFeedbackSchema.parse(feedback),
+      status:
+        session.status === 'first-review' ? 'feedback-ready' : session.status,
+      updatedAt: this.now().toISOString(),
+    })
+  }
+
   private async requireExpression(expressionId: string): Promise<SavedExpression> {
     const expression = await this.localStorage.getExpression(expressionId)
     if (!expression || !recordBelongsToAccount(
@@ -515,4 +617,19 @@ export class PracticeService {
 function inferPartFromQuestionId(questionId: string): 1 | 2 | 3 | null {
   const match = /^p([123])-/u.exec(questionId)
   return match === null ? null : Number(match[1]) as 1 | 2 | 3
+}
+
+function isMemoryCandidateGrounded(sourceSentence: string, answer: string): boolean {
+  const sourceTokens = sourceSentence.toLocaleLowerCase().match(/[a-z0-9']+/gu) ?? []
+  const answerTokens = new Set(answer.toLocaleLowerCase().match(/[a-z0-9']+/gu) ?? [])
+  if (sourceTokens.length === 0) {
+    return answer.toLocaleLowerCase().includes(sourceSentence.trim().toLocaleLowerCase())
+  }
+  const meaningful = sourceTokens.filter((token) => token.length >= 3)
+  if (meaningful.length === 0) return false
+  const overlap = meaningful.filter((token) => answerTokens.has(token)).length
+  // A source sentence must largely describe words the learner actually used;
+  // matching only a generic time phrase such as "last year" is not enough to
+  // turn a model-generated fact into durable Memory.
+  return overlap / meaningful.length >= 0.75
 }

@@ -1,5 +1,5 @@
 import { LOCAL_DEFAULT_USER_ID } from '../../domain/accounts'
-import type { SavedExpression, TrainingSession } from '../../domain/models'
+import type { AiFeedback, SavedExpression, TrainingSession } from '../../domain/models'
 import type { QuestionPracticeState } from '../../domain/questionPracticeState'
 import { IndexedDbStorage } from './indexedDbStorage'
 
@@ -30,6 +30,20 @@ const expressionFixture: SavedExpression = {
   sourceAttempt: 2,
   sourcePart: 1,
   createdAt: CREATED_AT,
+}
+
+const feedbackFixture: AiFeedback = {
+  summary: '回答切题。',
+  strengths: ['有一个具体想法。'],
+  problems: ['可以再补一个细节。'],
+  grammarSuggestions: [],
+  vocabularySuggestions: [],
+  referenceAnswers: [
+    { label: '简单优化版', text: 'I like reading at home.' },
+    { label: '自然提升版', text: 'I often unwind by reading at home.' },
+  ],
+  naturalUpgradeSuggestions: { addableContent: [], advancedChanges: [] },
+  answerFramework: [],
 }
 
 let databaseSequence = 0
@@ -141,6 +155,32 @@ describe('IndexedDbStorage', () => {
       UPDATED_AT,
     )
     expect(await reopenedStorage.getExpression(expressionFixture.id)).toBeNull()
+  })
+
+  it('merges concurrent session updates in one IndexedDB transaction', async () => {
+    const storage = createAdapter()
+    await storage.upsertSession(sessionFixture)
+
+    await Promise.all([
+      storage.updateSessionAtomically(sessionFixture.id, (current) => ({
+        ...current!,
+        aiFeedback: feedbackFixture,
+      })),
+      storage.updateSessionAtomically(sessionFixture.id, (current) => ({
+        ...current!,
+        secondAttemptAnalysis: {
+          correctedSentences: [],
+          memoryCandidates: [],
+        },
+      })),
+    ])
+
+    const merged = await storage.getSession(sessionFixture.id)
+    expect(merged?.aiFeedback).toEqual(feedbackFixture)
+    expect(merged?.secondAttemptAnalysis).toEqual({
+      correctedSentences: [],
+      memoryCandidates: [],
+    })
   })
 
   it('persists original audio blobs until an explicit delete', async () => {

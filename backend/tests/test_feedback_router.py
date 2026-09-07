@@ -176,6 +176,23 @@ async def test_second_attempt_feedback_returns_only_corrections_and_memory_candi
     assert "memoryCandidates" in user_prompt["requiredShape"]
 
 
+async def test_second_attempt_feedback_drops_ungrounded_memory_source(make_app):
+    invalid = json.loads(json.dumps(SECOND_ATTEMPT_FEEDBACK))
+    invalid["memoryCandidates"][0]["sourceSentence"] = (
+        "I moved to Shanghai yesterday."
+    )
+    app, _ = make_app(deepseek_ok_handler(invalid))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(
+            client, "/v1/feedback/second-attempt", SECOND_ATTEMPT_PAYLOAD
+        )
+
+    assert response.status_code == 200
+    assert response.json()["memoryCandidates"] == []
+
+
 async def test_feedback_rejects_empty_answer(make_app):
     app, _ = make_app(deepseek_ok_handler(TEXT_FEEDBACK))
     async with httpx.AsyncClient(
@@ -436,6 +453,42 @@ async def test_organize_happy_path(make_app):
         )
     assert response.status_code == 200
     assert response.json()["questions"][0]["part"] == 2
+
+
+@pytest.mark.parametrize(
+    ("path", "payload", "feature", "quota_field"),
+    [
+        (
+            "/v1/organize",
+            {"fileName": "notes.txt", "extractedText": "A trip to Beijing."},
+            "organize",
+            "free_organize_monthly_quota",
+        ),
+        (
+            "/v1/materials/suggest",
+            {"memoryDigest": "topic: travel", "existingTitles": []},
+            "material_suggest",
+            "free_material_suggest_monthly_quota",
+        ),
+    ],
+)
+async def test_non_feedback_upstream_failure_does_not_consume_quota(
+    make_app, path, payload, feature, quota_field
+):
+    app, _ = make_app(
+        lambda request: httpx.Response(503),
+        configured_settings(**{quota_field: 1}),
+    )
+    email = f"{feature}-failure@example.com"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        headers = await authenticated_headers(client, email)
+        response = await client.post(path, headers=headers, json=payload)
+        me = await client.get("/v1/me", headers=headers)
+
+    assert response.status_code == 502
+    assert me.json()["capabilities"][feature]["quotaUsed"] == 0
 
 
 MATERIAL_SUGGESTIONS = {

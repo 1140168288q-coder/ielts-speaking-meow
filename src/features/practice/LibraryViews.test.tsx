@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { SavedExpression } from '../../domain'
+import type { SavedExpression, TrainingSession } from '../../domain'
 import type { AudioFocus } from '../../ports/speech'
-import { ExpressionLibrary } from './LibraryViews'
+import { ExpressionLibrary, LearnerMemoryPanel } from './LibraryViews'
 
 const expression: SavedExpression = {
   id: 'expression-1',
@@ -73,6 +73,44 @@ describe('ExpressionLibrary', () => {
 
     await user.click(screen.getByRole('button', { name: '删除' }))
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith(expression.id))
+    expect(confirm).toHaveBeenCalledOnce()
+  })
+})
+
+describe('LearnerMemoryPanel', () => {
+  it('lets the learner explicitly delete one confirmed fact', async () => {
+    const user = userEvent.setup()
+    const onDeleteFact = vi.fn(() => Promise.resolve())
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const session: TrainingSession = {
+      id: 'memory-session',
+      questionId: 'p1-home-001',
+      part: 1,
+      status: 'completed',
+      attempts: [],
+      localFeedback: [],
+      aiFeedback: null,
+      secondAttemptAnalysis: null,
+      confirmedMemoryFacts: [{
+        id: 'fact-1',
+        content: 'I live in Hangzhou.',
+        kind: 'place',
+        topicTags: ['hometown'],
+        sourceSentence: 'I live in Hangzhou.',
+        sourcePart: 1,
+        sourceAttempt: 2,
+        createdAt: '2026-08-01T08:00:00.000Z',
+      }],
+      comparison: null,
+      createdAt: '2026-08-01T08:00:00.000Z',
+      updatedAt: '2026-08-01T08:00:00.000Z',
+    }
+
+    render(<LearnerMemoryPanel sessions={[session]} onDeleteFact={onDeleteFact} />)
+    await user.click(screen.getByText('你的口语轨迹 · 点开看看这段时间的痕迹'))
+    await user.click(screen.getByRole('button', { name: '删除' }))
+
+    await waitFor(() => expect(onDeleteFact).toHaveBeenCalledWith('memory-session', 'fact-1'))
     expect(confirm).toHaveBeenCalledOnce()
   })
 })

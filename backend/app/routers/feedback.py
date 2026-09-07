@@ -1,5 +1,5 @@
 """Text AI：答案反馈与私有材料题目整理。"""
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
@@ -10,6 +10,7 @@ from ..errors import invalid_request, not_configured
 from ..services.auth_service import AuthContext
 from ..services.feature_authorization import (
     FeatureKey,
+    request_fingerprint,
     usage_identifiers,
 )
 from .auth import require_verified_user
@@ -51,6 +52,7 @@ async def consume_feature(
     feature: FeatureKey,
     *,
     units: int,
+    request_hash: str | None = None,
 ) -> None:
     request_id, idempotency_key = usage_identifiers(request)
     await request.app.state.feature_authorization_service.consume(
@@ -60,6 +62,7 @@ async def consume_feature(
         units=units,
         request_id=request_id,
         idempotency_key=idempotency_key,
+        request_hash=request_hash,
     )
 
 
@@ -70,6 +73,7 @@ async def authorize_feature(
     feature: FeatureKey,
     *,
     units: int,
+    request_hash: str | None = None,
 ) -> None:
     """只检查额度，避免上游失败也产生计量事件。"""
     _, idempotency_key = usage_identifiers(request)
@@ -79,6 +83,7 @@ async def authorize_feature(
         feature,
         units=units,
         idempotency_key=idempotency_key,
+        request_hash=request_hash,
     )
 
 
@@ -89,6 +94,7 @@ async def settle_feature(
     feature: FeatureKey,
     *,
     units: int,
+    request_hash: str | None = None,
 ) -> None:
     request_id, idempotency_key = usage_identifiers(request)
     await request.app.state.feature_authorization_service.settle(
@@ -98,6 +104,7 @@ async def settle_feature(
         units=units,
         request_id=request_id,
         idempotency_key=idempotency_key,
+        request_hash=request_hash,
     )
 
 
@@ -113,10 +120,30 @@ async def feedback(
     service = request.app.state.services["deepseek"]
     if not service.is_configured:
         raise not_configured("DeepSeek(Text AI)")
-    await authorize_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
-    result = await service.get_feedback(payload.model_dump())
-    await settle_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
-    return result
+    _, idempotency_key = usage_identifiers(request)
+    request_hash = request_fingerprint(request.url.path, payload.model_dump(mode="json"))
+    authorization = request.app.state.feature_authorization_service
+    async with authorization.idempotency_lock(auth.user.id, FeatureKey.FEEDBACK, idempotency_key):
+        await authorize_feature(
+            request, db, auth, FeatureKey.FEEDBACK, units=1, request_hash=request_hash
+        )
+        cached = authorization.get_cached_result(
+            auth.user.id, FeatureKey.FEEDBACK, idempotency_key, request_hash
+        )
+        if cached is not None:
+            return cast(dict, cached)
+        if idempotency_key is not None and await authorization.has_idempotency_event(
+            db, auth.user, FeatureKey.FEEDBACK, idempotency_key, request_hash
+        ):
+            raise invalid_request("此请求结果已过期，请重新提交并生成新的请求标识。")
+        result = await service.get_feedback(payload.model_dump())
+        await settle_feature(
+            request, db, auth, FeatureKey.FEEDBACK, units=1, request_hash=request_hash
+        )
+        authorization.cache_result(
+            auth.user.id, FeatureKey.FEEDBACK, idempotency_key, request_hash, result
+        )
+        return result
 
 
 @router.post("/v1/feedback/second-attempt")
@@ -131,10 +158,30 @@ async def second_attempt_feedback(
     service = request.app.state.services["deepseek"]
     if not service.is_configured:
         raise not_configured("DeepSeek(Text AI)")
-    await authorize_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
-    result = await service.get_second_attempt_feedback(payload.model_dump())
-    await settle_feature(request, db, auth, FeatureKey.FEEDBACK, units=1)
-    return result
+    _, idempotency_key = usage_identifiers(request)
+    request_hash = request_fingerprint(request.url.path, payload.model_dump(mode="json"))
+    authorization = request.app.state.feature_authorization_service
+    async with authorization.idempotency_lock(auth.user.id, FeatureKey.FEEDBACK, idempotency_key):
+        await authorize_feature(
+            request, db, auth, FeatureKey.FEEDBACK, units=1, request_hash=request_hash
+        )
+        cached = authorization.get_cached_result(
+            auth.user.id, FeatureKey.FEEDBACK, idempotency_key, request_hash
+        )
+        if cached is not None:
+            return cast(dict, cached)
+        if idempotency_key is not None and await authorization.has_idempotency_event(
+            db, auth.user, FeatureKey.FEEDBACK, idempotency_key, request_hash
+        ):
+            raise invalid_request("此请求结果已过期，请重新提交并生成新的请求标识。")
+        result = await service.get_second_attempt_feedback(payload.model_dump())
+        await settle_feature(
+            request, db, auth, FeatureKey.FEEDBACK, units=1, request_hash=request_hash
+        )
+        authorization.cache_result(
+            auth.user.id, FeatureKey.FEEDBACK, idempotency_key, request_hash, result
+        )
+        return result
 
 
 @router.post("/v1/organize")
@@ -149,11 +196,33 @@ async def organize(
     service = request.app.state.services["deepseek"]
     if not service.is_configured:
         raise not_configured("DeepSeek(Text AI)")
-    await consume_feature(request, db, auth, FeatureKey.ORGANIZE, units=1)
-    questions = await service.organize_questions(
-        payload.fileName, payload.extractedText
-    )
-    return {"questions": questions}
+    _, idempotency_key = usage_identifiers(request)
+    request_hash = request_fingerprint(request.url.path, payload.model_dump(mode="json"))
+    authorization = request.app.state.feature_authorization_service
+    async with authorization.idempotency_lock(auth.user.id, FeatureKey.ORGANIZE, idempotency_key):
+        await authorize_feature(
+            request, db, auth, FeatureKey.ORGANIZE, units=1, request_hash=request_hash
+        )
+        cached = authorization.get_cached_result(
+            auth.user.id, FeatureKey.ORGANIZE, idempotency_key, request_hash
+        )
+        if cached is not None:
+            return cast(dict, cached)
+        if idempotency_key is not None and await authorization.has_idempotency_event(
+            db, auth.user, FeatureKey.ORGANIZE, idempotency_key, request_hash
+        ):
+            raise invalid_request("此请求结果已过期，请重新提交并生成新的请求标识。")
+        questions = await service.organize_questions(
+            payload.fileName, payload.extractedText
+        )
+        result = {"questions": questions}
+        await settle_feature(
+            request, db, auth, FeatureKey.ORGANIZE, units=1, request_hash=request_hash
+        )
+        authorization.cache_result(
+            auth.user.id, FeatureKey.ORGANIZE, idempotency_key, request_hash, result
+        )
+        return result
 
 
 @router.post("/v1/materials/suggest")
@@ -168,11 +237,33 @@ async def suggest_materials(
     service = request.app.state.services["deepseek"]
     if not service.is_configured:
         raise not_configured("DeepSeek(Text AI)")
-    await consume_feature(request, db, auth, FeatureKey.MATERIAL_SUGGEST, units=1)
-    suggestions = await service.suggest_materials(
-        payload.memoryDigest,
-        [title for title in payload.existingTitles if title.strip()],
-        payload.maxCount,
-        payload.targetPart,
-    )
-    return {"suggestions": suggestions}
+    _, idempotency_key = usage_identifiers(request)
+    request_hash = request_fingerprint(request.url.path, payload.model_dump(mode="json"))
+    authorization = request.app.state.feature_authorization_service
+    async with authorization.idempotency_lock(auth.user.id, FeatureKey.MATERIAL_SUGGEST, idempotency_key):
+        await authorize_feature(
+            request, db, auth, FeatureKey.MATERIAL_SUGGEST, units=1, request_hash=request_hash
+        )
+        cached = authorization.get_cached_result(
+            auth.user.id, FeatureKey.MATERIAL_SUGGEST, idempotency_key, request_hash
+        )
+        if cached is not None:
+            return cast(dict, cached)
+        if idempotency_key is not None and await authorization.has_idempotency_event(
+            db, auth.user, FeatureKey.MATERIAL_SUGGEST, idempotency_key, request_hash
+        ):
+            raise invalid_request("此请求结果已过期，请重新提交并生成新的请求标识。")
+        suggestions = await service.suggest_materials(
+            payload.memoryDigest,
+            [title for title in payload.existingTitles if title.strip()],
+            payload.maxCount,
+            payload.targetPart,
+        )
+        result = {"suggestions": suggestions}
+        await settle_feature(
+            request, db, auth, FeatureKey.MATERIAL_SUGGEST, units=1, request_hash=request_hash
+        )
+        authorization.cache_result(
+            auth.user.id, FeatureKey.MATERIAL_SUGGEST, idempotency_key, request_hash, result
+        )
+        return result

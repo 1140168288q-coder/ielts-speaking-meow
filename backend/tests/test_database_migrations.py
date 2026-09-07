@@ -68,7 +68,7 @@ def test_migration_upgrades_legacy_database_without_losing_users(tmp_path):
         "deleted_at",
     }.issubset(user_columns)
     assert user == ("legacy-user", "legacy@example.com")
-    assert revision == ("0003_v2_account_foundation",)
+    assert revision == ("0004_usage_request_hash",)
 
 
 @pytest.mark.asyncio
@@ -99,4 +99,4 @@ async def test_persistent_database_initialization_runs_migrations(tmp_path):
         "usage_counters",
         "webhook_events",
     }.issubset(tables)
-    assert revision == ("0003_v2_account_foundation",)
+    assert revision == ("0004_usage_request_hash",)

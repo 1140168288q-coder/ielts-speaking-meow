@@ -146,7 +146,9 @@ function Test-PublicHealth {
 
 function Register-PublicStackTask {
     $powershell = Join-Path $PSHOME 'powershell.exe'
-    $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$WatchScript`" -Mode Watch"
+    # 计划任务必须脱离创建它的交互式控制台，否则调用方退出时
+    # Windows 可能向监控进程发送 Ctrl+C（0xC000013A），导致监控立即停止。
+    $arguments = "-NoProfile -NoLogo -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$WatchScript`" -Mode Watch"
     $action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
     $settings = New-ScheduledTaskSettingsSet `

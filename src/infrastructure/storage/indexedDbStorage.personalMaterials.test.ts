@@ -22,7 +22,6 @@ const aliceMaterial: PersonalMaterial = {
   version: 1,
   deletedAt: null,
 }
-
 const bobMaterial: PersonalMaterial = {
   ...aliceMaterial,
   id: 'material-bob-city-park',
@@ -34,7 +33,6 @@ const bobMaterial: PersonalMaterial = {
   questionIds: ['p2-place-to-relax'],
   sourceSessionId: null,
 }
-
 const legacyExpression: SavedExpression = {
   id: 'legacy-expression-v5',
   ownerId: 'user-alice',
@@ -166,7 +164,7 @@ describe('IndexedDbStorage personal materials', () => {
     await storage.close()
 
     const database = await openDatabase(databaseName)
-    expect(database.version).toBe(8)
+    expect(database.version).toBe(9)
     expect(database.objectStoreNames.contains('personalMaterials')).toBe(true)
     const transaction = database.transaction('personalMaterials', 'readonly')
     const store = transaction.objectStore('personalMaterials')

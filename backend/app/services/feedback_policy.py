@@ -71,6 +71,16 @@ def validate_feedback_policy(feedback: dict) -> None:
     if _VOICE_PATTERN.search(coaching_text):
         raise ValueError("反馈包含被禁止的语音表现评价")
 
+    suggestions = feedback.get("naturalUpgradeSuggestions", {}).get("addableContent", [])
+    if isinstance(suggestions, list):
+        for suggestion in suggestions:
+            if (
+                isinstance(suggestion, dict)
+                and suggestion.get("source") == "ai_example"
+                and suggestion.get("replaceable") is not True
+            ):
+                raise ValueError("AI 示例必须标记为可替换内容")
+
 
 def validate_second_attempt_policy(feedback: dict) -> None:
     all_text = "\n".join(_strings(feedback))

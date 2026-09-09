@@ -8,9 +8,12 @@ import { CheckCircle2 } from 'lucide-react'
 import type { PracticeService } from '../../application/practiceService'
 import type {
   MemoryCandidate,
+  NaturalUpgradeLevel,
   Question,
+  SpokenEnglishStyle,
   TrainingSession,
 } from '../../domain'
+import { feedbackLengthBudget } from '../../domain/feedbackGeneration'
 import {
   buildTrainingPlan,
   buildTutorContext,
@@ -75,6 +78,9 @@ export function PracticeFlow({
   reusableExpressions = [],
   reusablePersonalMaterials = [],
   learnerContext = '',
+  userKnowledgeContext = '',
+  naturalUpgradeLevel = 'medium',
+  spokenEnglishStyle = 'british',
   autoPlayQuestion = true,
   feedbackDetail = 'focused',
   onExpressionReused = () => undefined,
@@ -91,6 +97,9 @@ export function PracticeFlow({
   reusableExpressions?: ReusableExpression[]
   reusablePersonalMaterials?: ReusablePersonalMaterial[]
   learnerContext?: string
+  userKnowledgeContext?: string
+  naturalUpgradeLevel?: NaturalUpgradeLevel
+  spokenEnglishStyle?: SpokenEnglishStyle
   autoPlayQuestion?: boolean
   feedbackDetail?: 'focused' | 'expanded'
   onExpressionReused?: (expressionId: string) => void | Promise<void>
@@ -105,6 +114,12 @@ export function PracticeFlow({
   const [aiNote, setAiNote] = useState<string | null>(null)
   const [aiRetryable, setAiRetryable] = useState(true)
   const [insertSeed, setInsertSeed] = useState<{ nonce: number; text: string } | null>(null)
+  const [activeUpgradeLevel, setActiveUpgradeLevel] = useState<NaturalUpgradeLevel>(
+    session.feedbackGenerationProfile?.level ?? naturalUpgradeLevel,
+  )
+  const [activeSpokenStyle, setActiveSpokenStyle] = useState<SpokenEnglishStyle>(
+    session.feedbackGenerationProfile?.style ?? spokenEnglishStyle,
+  )
   const mountedRef = useRef(true)
   const sessionRef = useRef(session)
   const onChangeRef = useRef(onChange)
@@ -224,6 +239,11 @@ export function PracticeFlow({
             ...(learnerContext.trim().length > 0
               ? { learnerContext: learnerContext.trim() }
               : {}),
+            ...(userKnowledgeContext.trim().length > 0
+              ? { userKnowledgeContext: userKnowledgeContext.trim() }
+              : {}),
+            naturalUpgradeLevel: activeUpgradeLevel,
+            spokenEnglishStyle: activeSpokenStyle,
           })
 
           if (generation !== aiRequestGenerationRef.current) return
@@ -235,6 +255,11 @@ export function PracticeFlow({
               updatedAt: attempt.transcript.updatedAt,
             },
             feedback,
+            {
+              level: activeUpgradeLevel,
+              style: activeSpokenStyle,
+              profileVersion: 1,
+            },
           )
           if (generation !== aiRequestGenerationRef.current) return
           if (updated === null) {
@@ -268,7 +293,7 @@ export function PracticeFlow({
         }
       }
     },
-    [learnerContext, question, service, textAi, tutorContext],
+    [activeSpokenStyle, activeUpgradeLevel, learnerContext, question, service, textAi, tutorContext, userKnowledgeContext],
   )
 
   const requestSecondAnalysis = useCallback(
@@ -559,20 +584,29 @@ export function PracticeFlow({
       ) : null}
 
       {stage === 'review-first' && firstAttempt ? (
-        <ReviewFirstStage
-          firstAttempt={firstAttempt}
-          aiFeedback={aiFeedback}
-          aiConfigured={aiConfigured}
-          aiBusy={aiBusy}
-          aiNote={aiNote}
-          aiRetryable={aiRetryable}
-          busy={busy}
-          feedbackDetail={feedbackDetail}
-          speakingKey={speakingKey}
-          onToggleSpeak={(key, text) => void toggleSpeak(key, text)}
-          onRequestAiFeedback={() => void requestAiFeedback(session)}
-          onPrepareSecond={() => void prepareSecond()}
-        />
+        <>
+          <FeedbackGenerationControls
+            part={question.part}
+            level={activeUpgradeLevel}
+            style={activeSpokenStyle}
+            onLevelChange={setActiveUpgradeLevel}
+            onStyleChange={setActiveSpokenStyle}
+          />
+          <ReviewFirstStage
+            firstAttempt={firstAttempt}
+            aiFeedback={aiFeedback}
+            aiConfigured={aiConfigured}
+            aiBusy={aiBusy}
+            aiNote={aiNote}
+            aiRetryable={aiRetryable}
+            busy={busy}
+            feedbackDetail={feedbackDetail}
+            speakingKey={speakingKey}
+            onToggleSpeak={(key, text) => void toggleSpeak(key, text)}
+            onRequestAiFeedback={() => void requestAiFeedback(session)}
+            onPrepareSecond={() => void prepareSecond()}
+          />
+        </>
       ) : null}
 
       {stage === 'second-answer' ? (
@@ -695,4 +729,42 @@ function buildAnalysisIdempotencyKey(
 ): string {
   const raw = `feedback:${sessionId}:${attemptNumber}:${attemptId}:${updatedAt}`
   return raw.replace(/[^A-Za-z0-9._:-]/g, '-').slice(0, 128)
+}
+
+function FeedbackGenerationControls({
+  part,
+  level,
+  style,
+  onLevelChange,
+  onStyleChange,
+}: {
+  part: 1 | 2 | 3
+  level: NaturalUpgradeLevel
+  style: SpokenEnglishStyle
+  onLevelChange: (level: NaturalUpgradeLevel) => void
+  onStyleChange: (style: SpokenEnglishStyle) => void
+}) {
+  return (
+    <section className="feedback-generation-controls" aria-label="本题自然提升设置">
+      <p className="eyebrow">本题自然提升</p>
+      <div className="inline-fields">
+        <label>
+          <span>难度</span>
+          <select value={level} onChange={(event) => onLevelChange(event.target.value as NaturalUpgradeLevel)}>
+            <option value="simple">简单 · 约 {feedbackLengthBudget(part, 'simple').targetSeconds} 秒</option>
+            <option value="medium">中等 · 约 {feedbackLengthBudget(part, 'medium').targetSeconds} 秒</option>
+            <option value="challenging">较难 · 约 {feedbackLengthBudget(part, 'challenging').targetSeconds} 秒</option>
+          </select>
+        </label>
+        <label>
+          <span>风格</span>
+          <select value={style} onChange={(event) => onStyleChange(event.target.value as SpokenEnglishStyle)}>
+            <option value="british">英式自然口语</option>
+            <option value="american">美式自然口语</option>
+          </select>
+        </label>
+      </div>
+      <small>只影响自然提升版；简单优化版始终只修正你的原回答。Part 2 会按独立的 1–2 分钟口语长度生成。</small>
+    </section>
+  )
 }

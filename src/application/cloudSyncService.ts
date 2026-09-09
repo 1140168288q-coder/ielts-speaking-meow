@@ -107,7 +107,12 @@ export class CloudSyncService {
             result.entityId,
             {
               version: result.version,
-              syncedUpdatedAt: readPayloadUpdatedAt(operation.payload),
+              syncedUpdatedAt: readPayloadSyncTimestamp(
+                operation.entityType,
+                operation.payload,
+                operation.createdAt,
+                operation.deletedAt,
+              ),
             },
           )
         }
@@ -144,7 +149,12 @@ export class CloudSyncService {
           change,
           {
             version: change.version,
-            syncedUpdatedAt: readPayloadUpdatedAt(change.payload) ?? change.updatedAt,
+            syncedUpdatedAt: readPayloadSyncTimestamp(
+              change.entityType,
+              change.payload,
+              change.updatedAt,
+              change.deletedAt,
+            ),
           },
         )
         cursor = change.cursor
@@ -158,8 +168,33 @@ export class CloudSyncService {
   }
 }
 
-function readPayloadUpdatedAt(payload: SyncPayload): string | null {
-  return typeof payload.updatedAt === 'string' ? payload.updatedAt : null
+function readPayloadSyncTimestamp(
+  entityType: CloudSyncEntityType,
+  payload: SyncPayload,
+  fallback: string,
+  deletedAt: string | null,
+): string {
+  let timestamp = fallback
+  for (const key of ['updatedAt', 'createdAt', 'importedAt'] as const) {
+    if (typeof payload[key] === 'string') {
+      timestamp = payload[key]
+      break
+    }
+  }
+  // Exclusion records use createdAt as their schema-compatible base timestamp.
+  // Their deletedAt value is the actual mutable state, so include it only when
+  // a deletion is active. Restoring an exclusion returns to the original base
+  // stamp and therefore queues a distinct operation after a prior deletion.
+  if (
+    deletedAt === null &&
+    (entityType === 'question_exclusion' || entityType === 'question_bank_exclusion')
+  ) {
+    const payloadDeletedAt = payload.deletedAt
+    if (typeof payloadDeletedAt === 'string' && payloadDeletedAt.length > 0) {
+      return `${timestamp}|deleted:${payloadDeletedAt}`
+    }
+  }
+  return timestamp
 }
 
 function toPushItem(operation: SyncOutboxOperation) {

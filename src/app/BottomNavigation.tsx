@@ -30,7 +30,7 @@ export function BottomNavigation({
       {items.map((item) => {
         const Icon = item.icon
         const active = view === item.view ||
-          (item.view === 'history' && (view === 'expressions' || view === 'materials')) ||
+          (item.view === 'history' && (view === 'expressions' || view === 'materials' || view === 'knowledge')) ||
           (item.view === 'accounts' && view === 'settings')
         return (
           <button

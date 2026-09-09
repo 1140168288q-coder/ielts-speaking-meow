@@ -4,15 +4,19 @@ import {
   backendConfigSchema,
   importedQuestionRecordSchema,
   importSourceSchema,
+  isoDateTimeSchema,
   normalizeStoredTrainingSession,
   personalMaterialSchema,
   practiceTextsSchema,
   questionPracticeStateId,
   questionPracticeStateSchema,
+  questionExclusionSchema,
+  questionBankExclusionSchema,
   recordBelongsToAccount,
   savedExpressionSchema,
   ttsCacheEntrySchema,
   userPreferencesSchema,
+  USER_PREFERENCES_VERSION,
   type AccountProfile,
   type BackendConfig,
   type ImportedQuestionRecord,
@@ -24,6 +28,8 @@ import {
   type TrainingSession,
   type TtsCacheEntry,
   type UserPreferences,
+  type QuestionExclusion,
+  type QuestionBankExclusion,
 } from '../../domain'
 import {
   localDeletionTombstoneSchema,
@@ -38,9 +44,19 @@ import type { AccountStorage } from '../../ports/accounts'
 import type { BackendConfigStorage } from '../../ports/backend'
 import type {
   ImportBundle,
+  ImportQuestionBankReplacement,
   ImportStorage,
   TtsCacheStorage,
 } from '../../ports/imports'
+import type { UserKnowledgeStorage } from '../../ports/userKnowledge'
+import type { QuestionManagementStorage } from '../../ports/questionManagement'
+import {
+  userKnowledgeEntrySchema,
+  userKnowledgeSourceSchema,
+  type UserKnowledgeDraft,
+  type UserKnowledgeEntry,
+  type UserKnowledgeSource,
+} from '../../domain/userKnowledge'
 import type {
   AudioStorage,
   CloudSyncStorage,
@@ -51,7 +67,7 @@ import type {
   StorageUsageSummary,
 } from '../../ports/storage'
 
-const DATABASE_VERSION = 8
+const DATABASE_VERSION = 9
 const DEFAULT_DATABASE_NAME = 'ielts-speaking-meow'
 const MAX_TTS_CACHE_ENTRIES = 40
 const MAX_TTS_CACHE_BYTES = 25 * 1024 * 1024
@@ -67,6 +83,9 @@ const STORES = {
   importSources: 'importSources',
   importedQuestions: 'importedQuestions',
   importedFiles: 'importedFiles',
+  userKnowledgeSources: 'userKnowledgeSources',
+  userKnowledgeEntries: 'userKnowledgeEntries',
+  userKnowledgeFiles: 'userKnowledgeFiles',
   apiConfigurations: 'apiConfigurations',
   ttsCache: 'ttsCache',
   backendConfig: 'backendConfig',
@@ -140,7 +159,9 @@ export class IndexedDbStorage
     BackendConfigStorage,
     AccountStorage,
     CloudSyncStorage,
-    LocalDataMaintenance
+    LocalDataMaintenance,
+    UserKnowledgeStorage,
+    QuestionManagementStorage
 {
   private readonly databaseName: string
   private readonly indexedDb: IDBFactory
@@ -235,6 +256,138 @@ export class IndexedDbStorage
       ...parsed,
       id: questionPracticeStateId(parsed.ownerId, parsed.questionId),
     })
+  }
+
+  async listQuestionExclusions(
+    ownerId: string,
+    options: { includeDeleted?: boolean } = {},
+  ): Promise<QuestionExclusion[]> {
+    assertStorageKey(ownerId, 'Question exclusion owner')
+    return (await this.getAll<unknown>(STORES.appMeta)).flatMap((value) => {
+      const parsed = questionExclusionSchema.safeParse(value)
+      return parsed.success && parsed.data.ownerId === ownerId &&
+        (options.includeDeleted === true || parsed.data.deletedAt === null)
+        ? [parsed.data]
+        : []
+    })
+  }
+
+  async listQuestionBankExclusions(
+    ownerId: string,
+    options: { includeDeleted?: boolean } = {},
+  ): Promise<QuestionBankExclusion[]> {
+    assertStorageKey(ownerId, 'Question bank exclusion owner')
+    return (await this.getAll<unknown>(STORES.appMeta)).flatMap((value) => {
+      const parsed = questionBankExclusionSchema.safeParse(value)
+      return parsed.success && parsed.data.ownerId === ownerId &&
+        (options.includeDeleted === true || parsed.data.deletedAt === null)
+        ? [parsed.data]
+        : []
+    })
+  }
+
+  async saveQuestionExclusion(exclusion: QuestionExclusion): Promise<void> {
+    const parsed = questionExclusionSchema.parse(exclusion)
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [STORES.appMeta, STORES.deletionTombstones],
+      'readwrite',
+    )
+    const requests = [
+      requestResult(transaction.objectStore(STORES.appMeta).put(parsed)),
+      // Exclusions carry their mutable deletedAt state in the synced entity
+      // itself. Do not create a second generic tombstone operation, which would
+      // lose the strict exclusion payload on another device.
+      requestResult(transaction.objectStore(STORES.deletionTombstones).delete(
+        localDeletionTombstoneId(parsed.ownerId, 'question_exclusion', parsed.questionId),
+      )),
+    ]
+    await Promise.all([...requests, transactionComplete(transaction)])
+  }
+
+  async saveQuestionBankExclusion(exclusion: QuestionBankExclusion): Promise<void> {
+    const parsed = questionBankExclusionSchema.parse(exclusion)
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [STORES.appMeta, STORES.deletionTombstones],
+      'readwrite',
+    )
+    const requests = [
+      requestResult(transaction.objectStore(STORES.appMeta).put(parsed)),
+      requestResult(transaction.objectStore(STORES.deletionTombstones).delete(
+        localDeletionTombstoneId(
+          parsed.ownerId,
+          'question_bank_exclusion',
+          parsed.bankFingerprint,
+        ),
+      )),
+    ]
+    await Promise.all([...requests, transactionComplete(transaction)])
+  }
+
+  async saveQuestionBankState(
+    bankExclusion: QuestionBankExclusion,
+    questionExclusions: QuestionExclusion[],
+  ): Promise<void> {
+    const bank = questionBankExclusionSchema.parse(bankExclusion)
+    const exclusions = questionExclusions.map((exclusion) => questionExclusionSchema.parse(exclusion))
+    if (exclusions.some((exclusion) =>
+      exclusion.ownerId !== bank.ownerId || exclusion.deletedAt !== null,
+    )) {
+      throw new Error('题库批量排除状态无效。')
+    }
+    const uniqueExclusions = Array.from(new Map(exclusions.map((exclusion) => [exclusion.id, exclusion])).values())
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [STORES.appMeta, STORES.deletionTombstones],
+      'readwrite',
+    )
+    const appMetaStore = transaction.objectStore(STORES.appMeta)
+    const tombstoneStore = transaction.objectStore(STORES.deletionTombstones)
+    const requests: Promise<unknown>[] = [
+      requestResult(appMetaStore.put(bank)),
+      requestResult(tombstoneStore.delete(localDeletionTombstoneId(
+        bank.ownerId,
+        'question_bank_exclusion',
+        bank.bankFingerprint,
+      ))),
+    ]
+    for (const exclusion of uniqueExclusions) {
+      requests.push(requestResult(appMetaStore.put(exclusion)))
+      requests.push(requestResult(tombstoneStore.delete(localDeletionTombstoneId(
+        exclusion.ownerId,
+        'question_exclusion',
+        exclusion.questionId,
+      ))))
+    }
+    await Promise.all([...requests, transactionComplete(transaction)])
+  }
+
+  async saveQuestionExclusions(exclusions: QuestionExclusion[]): Promise<void> {
+    const parsed = exclusions.map((exclusion) => questionExclusionSchema.parse(exclusion))
+    if (parsed.length === 0) return
+    const ownerId = parsed[0]!.ownerId
+    if (parsed.some((exclusion) => exclusion.ownerId !== ownerId || exclusion.deletedAt !== null)) {
+      throw new Error('题目批量排除状态无效。')
+    }
+    const uniqueExclusions = Array.from(new Map(parsed.map((exclusion) => [exclusion.id, exclusion])).values())
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [STORES.appMeta, STORES.deletionTombstones],
+      'readwrite',
+    )
+    const appMetaStore = transaction.objectStore(STORES.appMeta)
+    const tombstoneStore = transaction.objectStore(STORES.deletionTombstones)
+    const requests: Promise<unknown>[] = []
+    for (const exclusion of uniqueExclusions) {
+      requests.push(requestResult(appMetaStore.put(exclusion)))
+      requests.push(requestResult(tombstoneStore.delete(localDeletionTombstoneId(
+        exclusion.ownerId,
+        'question_exclusion',
+        exclusion.questionId,
+      ))))
+    }
+    await Promise.all([...requests, transactionComplete(transaction)])
   }
 
   async upsertExpression(expression: SavedExpression): Promise<void> {
@@ -457,7 +610,9 @@ export class IndexedDbStorage
     if (record === null || typeof record !== 'object') return null
     const stored = record as Record<string, unknown>
     const parsed = userPreferencesSchema.safeParse({
-      version: stored.version,
+      // Version is a storage migration marker. Parse legacy records with the
+      // current schema so newly added defaults do not make startup fail.
+      version: USER_PREFERENCES_VERSION,
       ownerId: stored.ownerId,
       theme: stored.theme,
       ttsVoicePreset: stored.ttsVoicePreset ?? 'backend-default',
@@ -472,6 +627,8 @@ export class IndexedDbStorage
         stored.autoMatchPersonalMaterialsWithAi ??
         stored.sharePersonalMaterialsWithAi ??
         true,
+      naturalUpgradeLevel: stored.naturalUpgradeLevel ?? 'medium',
+      spokenEnglishStyle: stored.spokenEnglishStyle ?? 'british',
       reduceMotion: stored.reduceMotion,
       homeTitleOverride: stored.homeTitleOverride ?? null,
       homeSubtitleOverride: stored.homeSubtitleOverride ?? null,
@@ -485,6 +642,38 @@ export class IndexedDbStorage
     await this.put(STORES.appMeta, {
       id: ['userPreferences', parsed.ownerId].join(':'),
       ...parsed,
+    })
+  }
+
+  async listUserPreferences(): Promise<UserPreferences[]> {
+    return (await this.getAll<unknown>(STORES.appMeta)).flatMap((value) => {
+      if (typeof value !== 'object' || value === null) return []
+      const stored = value as Record<string, unknown>
+      if (typeof stored.id !== 'string' || !stored.id.startsWith('userPreferences:')) return []
+      const parsed = userPreferencesSchema.safeParse({
+        version: USER_PREFERENCES_VERSION,
+        ownerId: stored.ownerId,
+        theme: stored.theme,
+        ttsVoicePreset: stored.ttsVoicePreset ?? 'backend-default',
+        ttsVoiceMode: stored.ttsVoiceMode,
+        ttsRate: stored.ttsRate,
+        ttsPitch: stored.ttsPitch ?? 1,
+        autoPlayQuestion: stored.autoPlayQuestion,
+        defaultPart: stored.defaultPart,
+        feedbackDetail: stored.feedbackDetail,
+        memoryEnabled: stored.memoryEnabled,
+        autoMatchPersonalMaterialsWithAi:
+          stored.autoMatchPersonalMaterialsWithAi ??
+          stored.sharePersonalMaterialsWithAi ??
+          true,
+        naturalUpgradeLevel: stored.naturalUpgradeLevel ?? 'medium',
+        spokenEnglishStyle: stored.spokenEnglishStyle ?? 'british',
+        reduceMotion: stored.reduceMotion,
+        homeTitleOverride: stored.homeTitleOverride ?? null,
+        homeSubtitleOverride: stored.homeSubtitleOverride ?? null,
+        updatedAt: stored.updatedAt,
+      })
+      return parsed.success ? [parsed.data] : []
     })
   }
 
@@ -829,6 +1018,77 @@ export class IndexedDbStorage
     await Promise.all([...requests, transactionComplete(transaction)])
   }
 
+  async saveImportBundleAndReplaceQuestionBank(
+    bundle: ImportBundle,
+    replacement: ImportQuestionBankReplacement,
+  ): Promise<void> {
+    const source = importSourceSchema.parse(bundle.source)
+    const questions = bundle.questions.map((question) =>
+      importedQuestionRecordSchema.parse(question),
+    )
+    const bankExclusion = questionBankExclusionSchema.parse(replacement.bankExclusion)
+    const questionExclusions = replacement.questionExclusions.map((exclusion) =>
+      questionExclusionSchema.parse(exclusion),
+    )
+    if (bankExclusion.deletedAt !== null) {
+      throw new Error('换季题库排除状态必须是当前生效状态。')
+    }
+    if (source.fileSize !== bundle.originalFile.size) {
+      throw new Error('Imported file size does not match its metadata.')
+    }
+    if (questions.some((question) => question.sourceId !== source.id)) {
+      throw new Error('Every imported question must reference its source.')
+    }
+    if (questionExclusions.some((exclusion) =>
+      exclusion.ownerId !== bankExclusion.ownerId ||
+      exclusion.questionSource !== 'imported' ||
+      exclusion.reason !== 'clear-all' ||
+      exclusion.deletedAt !== null,
+    )) {
+      throw new Error('换季题库排除状态无效。')
+    }
+
+    const uniqueQuestionExclusions = Array.from(
+      new Map(questionExclusions.map((exclusion) => [exclusion.id, exclusion])).values(),
+    )
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [
+        STORES.importSources,
+        STORES.importedFiles,
+        STORES.importedQuestions,
+        STORES.appMeta,
+        STORES.deletionTombstones,
+      ],
+      'readwrite',
+    )
+    const sourceStore = transaction.objectStore(STORES.importSources)
+    const fileStore = transaction.objectStore(STORES.importedFiles)
+    const questionStore = transaction.objectStore(STORES.importedQuestions)
+    const appMetaStore = transaction.objectStore(STORES.appMeta)
+    const tombstoneStore = transaction.objectStore(STORES.deletionTombstones)
+    const requests: Promise<unknown>[] = [
+      requestResult(sourceStore.put(source)),
+      requestResult(fileStore.put({ id: source.originalFileId, blob: bundle.originalFile } satisfies StoredFile)),
+      ...questions.map((question) => requestResult(questionStore.put(question))),
+      requestResult(appMetaStore.put(bankExclusion)),
+      requestResult(tombstoneStore.delete(localDeletionTombstoneId(
+        bankExclusion.ownerId,
+        'question_bank_exclusion',
+        bankExclusion.bankFingerprint,
+      ))),
+    ]
+    for (const exclusion of uniqueQuestionExclusions) {
+      requests.push(requestResult(appMetaStore.put(exclusion)))
+      requests.push(requestResult(tombstoneStore.delete(localDeletionTombstoneId(
+        exclusion.ownerId,
+        'question_exclusion',
+        exclusion.questionId,
+      ))))
+    }
+    await Promise.all([...requests, transactionComplete(transaction)])
+  }
+
   async getImportSource(sourceId: string): Promise<ImportSource | null> {
     assertStorageKey(sourceId, 'Import source')
     return this.getParsed(STORES.importSources, sourceId, importSourceSchema)
@@ -836,6 +1096,14 @@ export class IndexedDbStorage
 
   async listImportSources(): Promise<ImportSource[]> {
     return this.getAllParsed(STORES.importSources, importSourceSchema)
+  }
+
+  async upsertImportSourceMetadata(source: ImportSource): Promise<void> {
+    await this.put(STORES.importSources, importSourceSchema.parse(source))
+  }
+
+  async upsertImportedQuestion(record: ImportedQuestionRecord): Promise<void> {
+    await this.put(STORES.importedQuestions, importedQuestionRecordSchema.parse(record))
   }
 
   async getImportedFile(fileId: string): Promise<Blob | null> {
@@ -878,6 +1146,167 @@ export class IndexedDbStorage
       await Promise.all([...requests, transactionComplete(transaction)])
     }
     return visible
+  }
+
+  async saveUserKnowledgeBundle(bundle: UserKnowledgeDraft): Promise<void> {
+    const source = userKnowledgeSourceSchema.parse(bundle.source)
+    const entries = bundle.entries.map((entry) => userKnowledgeEntrySchema.parse(entry))
+    if (entries.some((entry) => entry.sourceId !== source.id || entry.ownerId !== source.ownerId)) {
+      throw new Error('Every knowledge entry must reference its source and owner.')
+    }
+    if (source.fileSize !== bundle.originalFile.size) {
+      throw new Error('Knowledge source file size does not match its metadata.')
+    }
+    const previousEntries = await this.getAllParsed(
+      STORES.userKnowledgeEntries,
+      userKnowledgeEntrySchema,
+    )
+    const incomingIds = new Set(entries.map((entry) => entry.id))
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [
+        STORES.userKnowledgeSources,
+        STORES.userKnowledgeEntries,
+        STORES.userKnowledgeFiles,
+        STORES.deletionTombstones,
+      ],
+      'readwrite',
+    )
+    const entryStore = transaction.objectStore(STORES.userKnowledgeEntries)
+    const tombstoneStore = transaction.objectStore(STORES.deletionTombstones)
+    const requests: Promise<unknown>[] = [
+      requestResult(transaction.objectStore(STORES.userKnowledgeSources).put(source)),
+      requestResult(transaction.objectStore(STORES.userKnowledgeFiles).put({
+        id: source.originalFileId,
+        blob: bundle.originalFile,
+      } satisfies StoredFile)),
+      ...entries.map((entry) => requestResult(
+        entryStore.put(entry),
+      )),
+    ]
+    for (const previous of previousEntries) {
+      if (previous.sourceId === source.id && !incomingIds.has(previous.id)) {
+        requests.push(requestResult(entryStore.delete(previous.id)))
+      }
+      if (previous.sourceId === source.id && incomingIds.has(previous.id)) {
+        requests.push(requestResult(tombstoneStore.delete(localDeletionTombstoneId(
+          previous.ownerId,
+          'knowledge_entry',
+          previous.id,
+        ))))
+      }
+    }
+    requests.push(requestResult(tombstoneStore.delete(localDeletionTombstoneId(
+      source.ownerId,
+      'knowledge_source',
+      source.id,
+    ))))
+    await Promise.all([...requests, transactionComplete(transaction)])
+  }
+
+  async listUserKnowledgeSources(
+    ownerId: string,
+    options: { includeDeleted?: boolean } = {},
+  ): Promise<UserKnowledgeSource[]> {
+    assertStorageKey(ownerId, 'Knowledge source owner')
+    const records = await this.getAllParsed(STORES.userKnowledgeSources, userKnowledgeSourceSchema)
+    return records.filter((source) => source.ownerId === ownerId &&
+      (options.includeDeleted === true || source.deletedAt === null))
+  }
+
+  async listUserKnowledgeEntries(
+    ownerId: string,
+    options: { includeDeleted?: boolean } = {},
+  ): Promise<UserKnowledgeEntry[]> {
+    assertStorageKey(ownerId, 'Knowledge entry owner')
+    const records = await this.getAllParsed(STORES.userKnowledgeEntries, userKnowledgeEntrySchema)
+    return records.filter((entry) => entry.ownerId === ownerId &&
+      (options.includeDeleted === true || entry.deletedAt === null))
+  }
+
+  async updateUserKnowledgeSource(source: UserKnowledgeSource): Promise<void> {
+    const parsed = userKnowledgeSourceSchema.parse(source)
+    await this.put(STORES.userKnowledgeSources, parsed)
+  }
+
+  async updateUserKnowledgeEntry(entry: UserKnowledgeEntry): Promise<void> {
+    const parsed = userKnowledgeEntrySchema.parse(entry)
+    await this.put(STORES.userKnowledgeEntries, parsed)
+  }
+
+  async deleteUserKnowledgeSource(sourceId: string, ownerId: string, deletedAt: string): Promise<void> {
+    assertStorageKey(sourceId, 'Knowledge source')
+    assertStorageKey(ownerId, 'Knowledge source owner')
+    const source = await this.getParsed(STORES.userKnowledgeSources, sourceId, userKnowledgeSourceSchema)
+    if (source === null || source.ownerId !== ownerId) throw new Error('Knowledge source not found.')
+    const timestamp = isoDateTimeSchema.parse(deletedAt)
+    const entries = await this.listUserKnowledgeEntries(ownerId, { includeDeleted: true })
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [STORES.userKnowledgeSources, STORES.userKnowledgeEntries, STORES.deletionTombstones],
+      'readwrite',
+    )
+    const sourceStore = transaction.objectStore(STORES.userKnowledgeSources)
+    const entryStore = transaction.objectStore(STORES.userKnowledgeEntries)
+    const tombstoneStore = transaction.objectStore(STORES.deletionTombstones)
+    const requests: Promise<unknown>[] = [
+      requestResult(sourceStore.put({ ...source, status: 'disabled', deletedAt: timestamp, updatedAt: timestamp })),
+      requestResult(tombstoneStore.put(createLocalDeletionTombstone(
+        ownerId,
+        'knowledge_source',
+        sourceId,
+        timestamp,
+      ))),
+    ]
+    for (const entry of entries.filter((item) => item.sourceId === sourceId && item.deletedAt === null)) {
+      requests.push(requestResult(entryStore.put({ ...entry, enabled: false, deletedAt: timestamp, updatedAt: timestamp })))
+      requests.push(requestResult(tombstoneStore.put(createLocalDeletionTombstone(
+        ownerId,
+        'knowledge_entry',
+        entry.id,
+        timestamp,
+      ))))
+    }
+    await Promise.all([...requests, transactionComplete(transaction)])
+  }
+
+  async deleteUserKnowledgeEntry(entryId: string, ownerId: string, deletedAt: string): Promise<void> {
+    const entry = await this.getParsed(STORES.userKnowledgeEntries, entryId, userKnowledgeEntrySchema)
+    if (entry === null || entry.ownerId !== ownerId) throw new Error('Knowledge entry not found.')
+    const timestamp = isoDateTimeSchema.parse(deletedAt)
+    const source = await this.getParsed(STORES.userKnowledgeSources, entry.sourceId, userKnowledgeSourceSchema)
+    const remainingCount = source === null
+      ? undefined
+      : (await this.listUserKnowledgeEntries(ownerId)).filter((item) => item.sourceId === entry.sourceId && item.id !== entry.id).length
+    const database = await this.getDatabase()
+    const transaction = database.transaction(
+      [STORES.userKnowledgeEntries, STORES.userKnowledgeSources, STORES.deletionTombstones],
+      'readwrite',
+    )
+    const requests: Promise<unknown>[] = [
+      requestResult(transaction.objectStore(STORES.userKnowledgeEntries).put({ ...entry, enabled: false, deletedAt: timestamp, updatedAt: timestamp })),
+      requestResult(transaction.objectStore(STORES.deletionTombstones).put(createLocalDeletionTombstone(
+        ownerId,
+        'knowledge_entry',
+        entryId,
+        timestamp,
+      ))),
+    ]
+    if (source !== null && remainingCount !== undefined) {
+      requests.push(requestResult(transaction.objectStore(STORES.userKnowledgeSources).put({
+        ...source,
+        entryCount: remainingCount,
+        status: remainingCount === 0 ? 'disabled' : source.status,
+        updatedAt: timestamp,
+      })))
+    }
+    await Promise.all([...requests, transactionComplete(transaction)])
+  }
+
+  async getUserKnowledgeFile(fileId: string): Promise<Blob | null> {
+    assertStorageKey(fileId, 'Knowledge file')
+    const stored = await this.get<StoredFile>(STORES.userKnowledgeFiles, fileId)
+    return stored?.blob instanceof Blob ? stored.blob : null
   }
 
   async getTtsCacheEntry(cacheId: string): Promise<{
@@ -1235,6 +1664,15 @@ export class IndexedDbStorage
         }
         if (!database.objectStoreNames.contains(STORES.importedFiles)) {
           database.createObjectStore(STORES.importedFiles, { keyPath: 'id' })
+        }
+        if (!database.objectStoreNames.contains(STORES.userKnowledgeSources)) {
+          database.createObjectStore(STORES.userKnowledgeSources, { keyPath: 'id' })
+        }
+        if (!database.objectStoreNames.contains(STORES.userKnowledgeEntries)) {
+          database.createObjectStore(STORES.userKnowledgeEntries, { keyPath: 'id' })
+        }
+        if (!database.objectStoreNames.contains(STORES.userKnowledgeFiles)) {
+          database.createObjectStore(STORES.userKnowledgeFiles, { keyPath: 'id' })
         }
         if (!database.objectStoreNames.contains(STORES.apiConfigurations)) {
           database.createObjectStore(STORES.apiConfigurations, { keyPath: 'id' })

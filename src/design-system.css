@@ -655,7 +655,13 @@ select:focus-visible {
 }
 
 .question-row {
-  grid-template-columns: 45px minmax(0, 1fr) 86px;
+  position: relative;
+  grid-template-columns: 45px minmax(0, 1fr) auto auto;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.question-row.management {
+  grid-template-columns: 36px 45px minmax(0, 1fr) auto auto;
 }
 
 .question-row-done {
@@ -676,6 +682,175 @@ select:focus-visible {
   border-color: color-mix(in srgb, var(--ds-primary) 35%, var(--ds-line)) !important;
   color: var(--ds-primary-strong) !important;
   background: var(--ds-primary-soft) !important;
+}
+
+.question-row-menu {
+  position: absolute;
+  top: 10px;
+  right: 96px;
+  min-height: 28px;
+  padding: 4px 6px !important;
+  border: 0 !important;
+  color: var(--ds-text-soft) !important;
+  background: transparent !important;
+  font-size: 10px;
+  font-weight: 740;
+}
+
+.question-row-menu[aria-expanded="true"] {
+  color: var(--ds-primary-strong) !important;
+}
+
+.question-row.management .question-row-menu {
+  display: none;
+}
+
+.question-row-wrap .question-row.swiped {
+  border-color: color-mix(in srgb, var(--ds-danger) 35%, var(--ds-line));
+}
+
+.question-row-delete {
+  align-self: center;
+  min-height: 34px;
+  margin-right: 10px;
+  padding: 6px 9px !important;
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 48%, var(--ds-line)) !important;
+  border-radius: 9px;
+  color: var(--ds-danger) !important;
+  background: color-mix(in srgb, var(--ds-danger) 8%, var(--ds-surface-raised)) !important;
+  font-size: 10px;
+  font-weight: 760;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(16px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.question-row.swiped .question-row-delete,
+.question-row.management .question-row-delete {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.question-select-checkbox {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+}
+
+.question-management-panel,
+.feedback-generation-controls,
+.knowledge-draft-card,
+.knowledge-source-list {
+  display: grid;
+  gap: 13px;
+}
+
+.question-management-panel,
+.feedback-generation-controls {
+  padding: 16px;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+}
+
+.question-management-toolbar,
+.category-management,
+.knowledge-source-header,
+.knowledge-candidate .inline-fields,
+.knowledge-entry {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.category-management {
+  border: 0;
+  padding: 0;
+}
+
+.category-management label,
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ds-text-soft);
+  font-size: 12px;
+}
+
+.knowledge-candidate,
+.knowledge-source,
+.knowledge-entry {
+  padding: 14px;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-raised);
+}
+
+.knowledge-candidate {
+  display: grid;
+  gap: 10px;
+}
+
+.knowledge-candidate label,
+.knowledge-entry {
+  color: var(--ds-text-soft);
+  font-size: 12px;
+}
+
+.knowledge-candidate label:not(.checkbox-row) {
+  display: grid;
+  gap: 5px;
+}
+
+.knowledge-candidate input,
+.knowledge-candidate textarea,
+.knowledge-candidate select {
+  width: 100%;
+  border: 1px solid var(--ds-line);
+  border-radius: 9px;
+  padding: 8px;
+  color: var(--ds-text);
+  background: var(--ds-surface);
+}
+
+.knowledge-source-header {
+  justify-content: space-between;
+}
+
+.knowledge-source-header .text-button {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
+.knowledge-entry {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.knowledge-entry > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.knowledge-entry p {
+  margin: 5px 0;
+}
+
+.knowledge-entry.disabled {
+  opacity: 0.62;
+}
+
+.privacy-note,
+.muted,
+.knowledge-candidate small,
+.knowledge-entry small {
+  color: var(--ds-text-soft);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .done-tag {

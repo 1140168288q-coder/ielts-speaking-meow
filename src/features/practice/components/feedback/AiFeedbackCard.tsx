@@ -23,7 +23,7 @@ export function AiFeedbackCard({
       <div className="section-heading compact-heading">
         <div>
           <p className="eyebrow">AI 文本分析 · 不评分</p>
-          <h2>先改最值得改的 2-3 点</h2>
+          <h2>先改最值得改的重点</h2>
         </div>
       </div>
 
@@ -134,8 +134,29 @@ export function AiFeedbackCard({
           ) : null}
         </details>
       ) : null}
+
+      {feedback.contextReferences && feedback.contextReferences.length > 0 ? (
+        <details className="feedback-details context-references">
+          <summary>本次参考了什么（{feedback.contextReferences.length}）</summary>
+          <ul>
+            {feedback.contextReferences.map((reference) => (
+              <li key={`${reference.kind}:${reference.id}`}>
+                <strong>{contextKindLabel(reference.kind)}</strong> · {reference.title}
+              </li>
+            ))}
+          </ul>
+          <small>仅显示真正影响自然提升版、且已通过来源校验的条目。</small>
+        </details>
+      ) : null}
     </section>
   )
+}
+
+function contextKindLabel(kind: NonNullable<AiFeedback['contextReferences']>[number]['kind']): string {
+  if (kind === 'built_in_knowledge') return '内置教学知识'
+  if (kind === 'user_knowledge') return '我的知识库'
+  if (kind === 'memory') return '已确认 Memory'
+  return '已确认个人素材'
 }
 
 function pickTopIssues(feedback: AiFeedback): Array<{

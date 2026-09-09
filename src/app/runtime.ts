@@ -6,9 +6,11 @@ import {
 } from '../domain'
 import { AccountService } from '../application/accountService'
 import { ImportMaterialService } from '../application/imports/importMaterialService'
+import { MaterialExtractor } from '../application/imports/materialExtractor'
 import { PracticeService } from '../application/practiceService'
 import { PersonalMaterialService } from '../application/personalMaterialService'
 import { StorageBackupService } from '../application/storageBackupService'
+import { UserKnowledgeService } from '../application/userKnowledgeService'
 import {
   BackendClient,
   BackendConfigStore,
@@ -89,15 +91,11 @@ export const createBrowserRuntime = () => {
   const documentOcr = Capacitor.getPlatform() === 'android'
     ? new CapacitorDocumentOcr()
     : null
+  const materialExtractor = new MaterialExtractor(documentOcr)
   const importService = new ImportMaterialService({
     storage,
     extractor: {
-      async extract(file) {
-        const { MaterialExtractor } = await import(
-          '../application/imports/materialExtractor'
-        )
-        return new MaterialExtractor(documentOcr).extract(file)
-      },
+      extract: (file) => materialExtractor.extract(file),
     },
     getCurrentUserId: () => accountService.getCurrentUserId(),
   })
@@ -107,6 +105,11 @@ export const createBrowserRuntime = () => {
   })
   const personalMaterialService = new PersonalMaterialService({
     localStorage: storage,
+    getCurrentUserId: () => accountService.getCurrentUserId(),
+  })
+  const userKnowledgeService = new UserKnowledgeService({
+    storage,
+    extractor: materialExtractor,
     getCurrentUserId: () => accountService.getCurrentUserId(),
   })
   const backupService = new StorageBackupService(storage, storage)
@@ -153,6 +156,7 @@ export const createBrowserRuntime = () => {
     importService,
     practiceService,
     personalMaterialService,
+    userKnowledgeService,
     backupService,
   }
 }

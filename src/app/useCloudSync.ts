@@ -18,10 +18,12 @@ export function useCloudSync({
   runtime,
   onAccountBound,
   refreshLibrary,
+  onPreferencesChanged,
 }: {
   runtime: BrowserRuntime
   onAccountBound: (account: AccountProfile) => void
   refreshLibrary: () => Promise<void>
+  onPreferencesChanged?: () => Promise<void>
 }) {
   const [cloudSession, setCloudSession] = useState<CloudAccountSession | null>(null)
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('idle')
@@ -55,6 +57,7 @@ export function useCloudSync({
       })
       const summary = await syncService.synchronize()
       await refreshLibrary()
+      await onPreferencesChanged?.()
 
       if (summary.status === 'conflict') {
         setCloudSyncStatus('conflict')

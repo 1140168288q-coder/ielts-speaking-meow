@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { feedbackGenerationProfileSchema } from './feedbackGeneration'
 
 const nonEmptyText = (maximumLength: number) =>
   z.string().trim().min(1).max(maximumLength)
@@ -186,10 +187,10 @@ export const aiFeedbackSchema = z
   .object({
     /** 用中文写的整体小结。 */
     summary: aiAnalysisText(500),
-    strengths: z.array(aiAnalysisText(320)).max(3),
+    strengths: z.array(aiAnalysisText(320)).max(2),
     problems: z.array(aiAnalysisText(320)).max(2),
-    grammarSuggestions: z.array(aiAnalysisText(320)).max(3),
-    vocabularySuggestions: z.array(aiAnalysisText(320)).max(3),
+    grammarSuggestions: z.array(aiAnalysisText(320)).max(2),
+    vocabularySuggestions: z.array(aiAnalysisText(320)).max(2),
     referenceAnswers: z
       .array(referenceAnswerSchema)
       .length(2)
@@ -211,7 +212,7 @@ export const aiFeedbackSchema = z
             z
               .object({
                 content: aiAnalysisText(500),
-                source: z.enum(['memory', 'personal_material', 'rag', 'ai_example']),
+                source: z.enum(['memory', 'personal_material', 'user_knowledge', 'rag', 'ai_example']),
                 sourcePart: z.union([
                   ieltsPartSchema,
                   z.literal('unclassified'),
@@ -233,11 +234,64 @@ export const aiFeedbackSchema = z
         })
         .strict(),
     ).max(6),
+    contextReferences: z.array(
+      z.object({
+        kind: z.enum(['built_in_knowledge', 'user_knowledge', 'memory', 'personal_material']),
+        id: nonEmptyText(160),
+        title: nonEmptyText(160),
+      }).strict(),
+    ).max(6).optional(),
+  })
+  .superRefine((feedback, context) => {
+    feedback.naturalUpgradeSuggestions.addableContent.forEach((item, index) => {
+      if (item.source === 'ai_example' && item.replaceable !== true) {
+        context.addIssue({
+          code: 'custom',
+          message: 'AI example suggestions must be marked replaceable.',
+          path: ['naturalUpgradeSuggestions', 'addableContent', index, 'replaceable'],
+        })
+      }
+    })
   })
   .strict()
 
 export type ReferenceAnswer = z.infer<typeof referenceAnswerSchema>
 export type AiFeedback = z.infer<typeof aiFeedbackSchema>
+
+/**
+ * Validate source citations again on the client so an older or self-hosted
+ * Backend cannot make the UI display a fabricated knowledge/Memory source.
+ */
+export function feedbackContextReferencesAreValid(
+  feedback: AiFeedback,
+  contexts: readonly (string | undefined)[],
+): boolean {
+  const supplied = new Map<string, Set<string>>()
+  const markerPattern = /\[id=([A-Za-z0-9_.:-]{1,160})(?:\s+sourceId=([A-Za-z0-9_.:-]{1,160}))?\s+kind=(built_in_knowledge|user_knowledge|memory|personal_material)[^\]]*\]/g
+  for (const context of contexts) {
+    if (!context) continue
+    for (const match of context.matchAll(markerPattern)) {
+      const identifier = match[1]
+      const sourceId = match[2]
+      const kind = match[3]
+      if (!identifier || !kind) continue
+      const identifiers = [identifier, ...(sourceId ? [sourceId] : [])]
+      for (const id of identifiers) {
+        const kinds = supplied.get(id) ?? new Set<string>()
+        kinds.add(kind)
+        supplied.set(id, kinds)
+      }
+    }
+  }
+  const references = feedback.contextReferences ?? []
+  const seen = new Set<string>()
+  return references.every((reference) => {
+    const key = `${reference.kind}:${reference.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return supplied.get(reference.id)?.has(reference.kind) === true
+  })
+}
 
 export const confirmedMemoryFactSchema = z
   .object({
@@ -426,6 +480,7 @@ export const trainingSessionSchema = z
     attempts: z.array(practiceAttemptSchema).max(2),
     localFeedback: actionableFeedbackListSchema,
     aiFeedback: aiFeedbackSchema.nullable(),
+    feedbackGenerationProfile: feedbackGenerationProfileSchema.nullable().optional(),
     secondAttemptAnalysis: secondAttemptAnalysisSchema.nullable().default(null),
     confirmedMemoryFacts: z.array(confirmedMemoryFactSchema).max(20).default([]),
     // V1.6 历史字段:读取时保留,新流程不再写入。

@@ -4,11 +4,16 @@ import {
   importQuestionCandidateSchema,
   importSourceSchema,
   importedQuestionRecordSchema,
+  questionExclusionId,
+  questionExclusionSchema,
   type ImportQuestionCandidate,
   type ImportSource,
   type ImportedQuestionRecord,
 } from '../../domain'
-import type { ImportStorage } from '../../ports/imports'
+import type {
+  ImportQuestionBankReplacement,
+  ImportStorage,
+} from '../../ports/imports'
 import type { MaterialExtraction } from './materialExtractor'
 import { parseQuestionCandidates } from './questionCandidateParser'
 
@@ -68,6 +73,7 @@ export class ImportMaterialService {
   async commit(
     draft: ImportDraft,
     candidates: ImportQuestionCandidate[],
+    replacement?: ImportQuestionBankReplacement,
   ): Promise<ImportedQuestionRecord[]> {
     const createdAt = this.now().toISOString()
     const sourceToken = draft.source.id
@@ -92,11 +98,29 @@ export class ImportMaterialService {
       })
     })
 
-    await this.options.storage.saveImportBundle({
+    const bundle = {
       source: draft.source,
       originalFile: draft.file,
       questions,
-    })
+    }
+    if (replacement !== undefined) {
+      if (this.options.storage.saveImportBundleAndReplaceQuestionBank === undefined) {
+        throw new Error('当前存储不支持安全换季，请升级 App 后重试。')
+      }
+      const newQuestionIds = new Set(questions.map((question) => question.id))
+      const questionExclusions = replacement.questionExclusions
+        .filter((exclusion) => !newQuestionIds.has(exclusion.questionId))
+        .map((exclusion) => questionExclusionSchema.parse({
+          ...exclusion,
+          id: questionExclusionId(exclusion.ownerId, exclusion.questionId),
+        }))
+      await this.options.storage.saveImportBundleAndReplaceQuestionBank(bundle, {
+        bankExclusion: replacement.bankExclusion,
+        questionExclusions,
+      })
+    } else {
+      await this.options.storage.saveImportBundle(bundle)
+    }
     return questions
   }
 }

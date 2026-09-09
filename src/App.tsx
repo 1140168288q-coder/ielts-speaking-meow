@@ -39,6 +39,14 @@ import {
   type SavedExpression,
   type TrainingSession,
 } from './domain/models'
+import {
+  filterVisibleQuestions,
+  questionBankExclusionId,
+  questionBankFingerprint,
+  questionExclusionId,
+  type QuestionBankExclusion,
+  type QuestionExclusion,
+} from './domain/questionManagement'
 import type { PersonalMaterial } from './domain/personalMaterials'
 import {
   recordBelongsToAccount,
@@ -52,10 +60,14 @@ import {
   findReusablePersonalMaterials,
 } from './domain/userMemory'
 import type { ImportedQuestionRecord } from './domain/imports'
+import type { ImportQuestionBankReplacement } from './ports/imports'
 import type { PersonalMaterialCandidate } from './application/personalMaterialService'
 import { ApiProviderError } from './infrastructure/ai/providerErrors'
 import { AccountView, CloudAccountPanel } from './features/accounts'
 import { CloudSyncCard } from './features/accounts/CloudSyncCard'
+import { KnowledgeLibrary } from './features/knowledge'
+import { buildUserKnowledgeContext } from './domain/userKnowledge'
+import type { UserKnowledgeEntry, UserKnowledgeSource } from './domain/userKnowledge'
 
 const ImportController = lazy(async () => {
   const module = await import('./app/ImportController')
@@ -78,6 +90,7 @@ const BACK_LABELS: Record<AppView, string> = {
   history: '返回复盘',
   expressions: '返回个人语料',
   materials: '返回个人素材',
+  knowledge: '返回我的知识库',
   accounts: '返回「我的」',
   imports: '返回导入工具',
   settings: '返回设置',
@@ -101,12 +114,23 @@ export function App() {
   const [importedQuestions, setImportedQuestions] = useState<
     ImportedQuestionRecord[]
   >([])
+  const [userKnowledgeSources, setUserKnowledgeSources] = useState<UserKnowledgeSource[]>([])
+  const [userKnowledgeEntries, setUserKnowledgeEntries] = useState<UserKnowledgeEntry[]>([])
+  const [questionExclusions, setQuestionExclusions] = useState<QuestionExclusion[]>([])
+  const [questionBankExclusions, setQuestionBankExclusions] = useState<QuestionBankExclusion[]>([])
+  const [replaceQuestionBankOnImport, setReplaceQuestionBankOnImport] = useState(false)
   const [currentAccount, setCurrentAccount] = useState<AccountProfile | null>(
     null,
   )
   const [loading, setLoading] = useState(true)
   const [storageError, setStorageError] = useState<string | null>(null)
   const [navigationNotice, setNavigationNotice] = useState<string | null>(null)
+  const [navigationNoticeAction, setNavigationNoticeAction] = useState<{
+    label: string
+    onClick: () => void
+  } | null>(null)
+  const [questionUndoExclusions, setQuestionUndoExclusions] = useState<QuestionExclusion[] | null>(null)
+  const questionUndoTimer = useRef<number | null>(null)
   const [practiceExitGuardActive, setPracticeExitGuardActive] = useState(false)
   const [apiConnected, setApiConnected] = useState(false)
   /** 记录进入 practice/imports/settings 前的来源视图,供"返回上一级"使用。 */
@@ -124,12 +148,24 @@ export function App() {
 
   const refreshLibrary = useCallback(async () => {
     const ownerId = runtime.accountService.getCurrentUserId()
-    const [nextSessions, nextExpressions, nextPersonalMaterials, nextImportedQuestions, nextQuestionStates] = await Promise.all([
+    const [nextSessions, nextExpressions, nextPersonalMaterials, nextImportedQuestions, nextQuestionStates, nextKnowledgeSources, nextKnowledgeEntries, nextQuestionExclusions, nextQuestionBankExclusions] = await Promise.all([
       runtime.practiceService.listSessions(),
       runtime.practiceService.listExpressions(),
       runtime.personalMaterialService.list({ includeArchived: true }),
       runtime.storage.listImportedQuestions(ownerId),
       runtime.practiceService.listQuestionPracticeStates(),
+      typeof runtime.storage.listUserKnowledgeSources === 'function'
+        ? runtime.storage.listUserKnowledgeSources(ownerId)
+        : Promise.resolve([]),
+      typeof runtime.storage.listUserKnowledgeEntries === 'function'
+        ? runtime.storage.listUserKnowledgeEntries(ownerId)
+        : Promise.resolve([]),
+      typeof runtime.storage.listQuestionExclusions === 'function'
+        ? runtime.storage.listQuestionExclusions(ownerId)
+        : Promise.resolve([]),
+      typeof runtime.storage.listQuestionBankExclusions === 'function'
+        ? runtime.storage.listQuestionBankExclusions(ownerId)
+        : Promise.resolve([]),
     ])
     setSessions(nextSessions)
     const explicitQuestionStates = new Map(
@@ -148,6 +184,10 @@ export function App() {
         recordBelongsToAccount(record.ownerId, ownerId),
       ),
     )
+    setUserKnowledgeSources(nextKnowledgeSources)
+    setUserKnowledgeEntries(nextKnowledgeEntries)
+    setQuestionExclusions(nextQuestionExclusions)
+    setQuestionBankExclusions(nextQuestionBankExclusions)
   }, [runtime.practiceService, runtime.personalMaterialService, runtime.storage, runtime.accountService])
 
   const {
@@ -161,6 +201,7 @@ export function App() {
     runtime,
     onAccountBound: setCurrentAccount,
     refreshLibrary,
+    onPreferencesChanged: () => loadUserPreferences(runtime.accountService.getCurrentUserId()),
   })
 
   useEffect(() => {
@@ -330,6 +371,140 @@ export function App() {
       setQuestionDoneById((current) => ({ ...current, [state.questionId]: state.isDone }))
     } catch (error) {
       setStorageError(error instanceof Error ? error.message : '题目状态保存失败。')
+    }
+  }
+
+  const dismissNavigationNotice = () => {
+    setNavigationNotice(null)
+    setNavigationNoticeAction(null)
+  }
+
+  const clearQuestionUndo = () => {
+    if (questionUndoTimer.current !== null) {
+      window.clearTimeout(questionUndoTimer.current)
+      questionUndoTimer.current = null
+    }
+    setQuestionUndoExclusions(null)
+    setNavigationNoticeAction(null)
+  }
+
+  const undoQuestionDeletion = async (pending = questionUndoExclusions) => {
+    const exclusions = pending
+    if (exclusions === null) return
+    try {
+      const restored = exclusions.map((exclusion) => ({
+        ...exclusion,
+        deletedAt: null,
+      }))
+      if (typeof runtime.storage.saveQuestionExclusions === 'function') {
+        await runtime.storage.saveQuestionExclusions(restored)
+      } else {
+        for (const exclusion of restored) {
+          await runtime.storage.saveQuestionExclusion(exclusion)
+        }
+      }
+      clearQuestionUndo()
+      setNavigationNotice(`已撤销，${restored.length} 道题重新显示。`)
+      await refreshLibrary()
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : '撤销题目删除失败。')
+    }
+  }
+
+  const handleDeleteQuestions = async (
+    questionIds: string[],
+    reason: 'single' | 'multi-select' | 'category',
+  ) => {
+    const uniqueIds = [...new Set(questionIds)]
+    if (uniqueIds.length === 0) return
+    const summary = uniqueIds.reduce((parts, questionId) => {
+      const question = allQuestions.find((item) => item.id === questionId)
+      if (question === undefined) return parts
+      parts.parts.add(`Part ${question.part}`)
+      parts.categories.add(question.category ?? '导入题目')
+      return parts
+    }, { parts: new Set<string>(), categories: new Set<string>() })
+    const detail = [
+      [...summary.parts].join('、'),
+      [...summary.categories].slice(0, 3).join('、'),
+    ].filter(Boolean).join(' · ')
+    if (!window.confirm(`将从当前账号题库隐藏 ${uniqueIds.length} 道题${detail ? `（${detail}）` : ''}？历史练习和答案不会删除。`)) return
+    const ownerId = runtime.accountService.getCurrentUserId()
+    const now = new Date().toISOString()
+    try {
+      const exclusions: QuestionExclusion[] = uniqueIds.flatMap((questionId) => {
+        const question = allQuestions.find((item) => item.id === questionId)
+        if (!question) return []
+        return [{
+          id: questionExclusionId(ownerId, question.id),
+          ownerId,
+          questionId: question.id,
+          questionSource: question.id.includes('-import-') ? 'imported' : 'built-in',
+          reason,
+          createdAt: now,
+          deletedAt: null,
+        }]
+      })
+      if (typeof runtime.storage.saveQuestionExclusions === 'function') {
+        await runtime.storage.saveQuestionExclusions(exclusions)
+      } else {
+        for (const exclusion of exclusions) await runtime.storage.saveQuestionExclusion(exclusion)
+      }
+      if (questionUndoTimer.current !== null) window.clearTimeout(questionUndoTimer.current)
+      setQuestionUndoExclusions(exclusions)
+      questionUndoTimer.current = window.setTimeout(() => {
+        setQuestionUndoExclusions(null)
+        setNavigationNoticeAction(null)
+        questionUndoTimer.current = null
+      }, 8_000)
+      setNavigationNotice(`已隐藏 ${uniqueIds.length} 道题。历史记录仍保留。`)
+      setNavigationNoticeAction({ label: '撤销', onClick: () => void undoQuestionDeletion(exclusions) })
+      await refreshLibrary()
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : '题目删除失败。')
+    }
+  }
+
+  const handleClearQuestionBank = async () => {
+    if (!questionData) return
+    const visibleCount = visibleQuestions.length
+    if (!window.confirm(`清空当前账号可练题库（${visibleCount} 道）？历史练习、答案、反馈和个人语料不会删除。`)) return
+    const ownerId = runtime.accountService.getCurrentUserId()
+    const now = new Date().toISOString()
+    const fingerprint = questionBankFingerprint(questionData.questionBank)
+    const bankExclusion = {
+      id: questionBankExclusionId(ownerId, fingerprint),
+      ownerId,
+      bankFingerprint: fingerprint,
+      seasonLabel: questionData.questionBankMeta.seasonLabel,
+      createdAt: now,
+      deletedAt: null,
+    } as const
+    const importedExclusions = allQuestions
+      .filter((question) => question.id.includes('-import-'))
+      .map((question) => ({
+        id: questionExclusionId(ownerId, question.id),
+        ownerId,
+        questionId: question.id,
+        questionSource: 'imported' as const,
+        reason: 'clear-all' as const,
+        createdAt: now,
+        deletedAt: null,
+      }))
+    try {
+      if (typeof runtime.storage.saveQuestionBankState === 'function') {
+        await runtime.storage.saveQuestionBankState(bankExclusion, importedExclusions)
+      } else {
+        await runtime.storage.saveQuestionBankExclusion(bankExclusion)
+        for (const exclusion of importedExclusions) {
+          await runtime.storage.saveQuestionExclusion(exclusion)
+        }
+      }
+      clearQuestionUndo()
+      setNavigationNotice(`已清空当前题库（${visibleCount} 道）。历史记录仍保留。`)
+      await refreshLibrary()
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : '题库清空失败。')
     }
   }
 
@@ -524,6 +699,25 @@ export function App() {
     ...(questionData?.questionBank ?? []),
     ...importedQuestions.map((record) => record.question),
   ]
+  const activeQuestionBankFingerprint = questionData === null
+    ? ''
+    : questionBankFingerprint(questionData.questionBank)
+  const visibleQuestions = filterVisibleQuestions(
+    allQuestions,
+    questionExclusions,
+    questionBankExclusions,
+    activeQuestionBankFingerprint,
+  )
+  const visibleBankMeta = questionData === null
+    ? { seasonLabel: '', counts: { 1: 0, 2: 0, 3: 0 } }
+    : {
+        seasonLabel: questionData.questionBankMeta.seasonLabel,
+        counts: {
+          1: visibleQuestions.filter((question) => question.part === 1).length,
+          2: visibleQuestions.filter((question) => question.part === 2).length,
+          3: visibleQuestions.filter((question) => question.part === 3).length,
+        },
+      }
   /** 历史记录允许引用 V1.8 之前的旧内置题;这些题不进入浏览/随机抽题。 */
   const questionsForHistory = [
     ...sessions.flatMap((item) => item.questionSnapshot ?? []),
@@ -564,8 +758,46 @@ export function App() {
             2,
           )
           : [],
+        userKnowledgeContext: buildUserKnowledgeContext(
+          activeQuestion,
+          userKnowledgeEntries,
+          userKnowledgeSources,
+          4,
+          preferences.naturalUpgradeLevel === 'simple'
+            ? 'basic'
+            : preferences.naturalUpgradeLevel === 'challenging'
+              ? 'stretch'
+              : 'developing',
+        ),
       }
-    : { reusableExpressions: [], learnerContext: '', personalMaterials: [] }
+    : { reusableExpressions: [], learnerContext: '', personalMaterials: [], userKnowledgeContext: '' }
+  const questionBankReplacement: ImportQuestionBankReplacement | undefined =
+    replaceQuestionBankOnImport && questionData !== null
+      ? (() => {
+          const ownerId = runtime.accountService.getCurrentUserId()
+          const createdAt = new Date().toISOString()
+          const fingerprint = questionBankFingerprint(questionData.questionBank)
+          return {
+            bankExclusion: {
+              id: questionBankExclusionId(ownerId, fingerprint),
+              ownerId,
+              bankFingerprint: fingerprint,
+              seasonLabel: questionData.questionBankMeta.seasonLabel,
+              createdAt,
+              deletedAt: null,
+            },
+            questionExclusions: importedQuestions.map((record) => ({
+              id: questionExclusionId(ownerId, record.question.id),
+              ownerId,
+              questionId: record.question.id,
+              questionSource: 'imported' as const,
+              reason: 'clear-all' as const,
+              createdAt,
+              deletedAt: null,
+            })),
+          }
+        })()
+      : undefined
 
   return (
     <div className="app-shell">
@@ -587,7 +819,12 @@ export function App() {
       ) : null}
 
       {navigationNotice ? (
-        <Notice tone="info" text={navigationNotice} onDismiss={() => setNavigationNotice(null)} />
+        <Notice
+          tone="info"
+          text={navigationNotice}
+          {...(navigationNoticeAction === null ? {} : { action: navigationNoticeAction })}
+          onDismiss={dismissNavigationNotice}
+        />
       ) : null}
 
       <main className="app-main">
@@ -597,7 +834,7 @@ export function App() {
           <StartupFailureView />
         ) : view === 'home' ? (
           <HomeView
-            questions={allQuestions}
+            questions={visibleQuestions}
             sessions={sessions}
             expressionCount={expressions.length}
             accountName={currentAccount?.displayName ?? '本机用户'}
@@ -614,17 +851,20 @@ export function App() {
         ) : view === 'questions' ? (
           <QuestionLibrary
             initialPart={libraryPart}
-            questions={allQuestions}
-            bankMeta={questionData.questionBankMeta}
+            questions={visibleQuestions}
+            bankMeta={visibleBankMeta}
             questionDoneById={questionDoneById}
             onStart={(question) => void startQuestion(question)}
             onQuestionDoneChange={(questionId, isDone) =>
               void handleQuestionDoneChange(questionId, isDone)
             }
-            onImport={() => {
+            onImport={(replaceCurrent = false) => {
+              setReplaceQuestionBankOnImport(replaceCurrent)
               rememberBackOrigin('imports')
               navigateSafely('imports')
             }}
+            onDeleteQuestions={(questionIds, reason) => void handleDeleteQuestions(questionIds, reason)}
+            onClearAll={() => void handleClearQuestionBank()}
           />
         ) : view === 'practice' && session && activeQuestion ? (
           <PracticeFlow
@@ -639,6 +879,9 @@ export function App() {
             autoPlayQuestion={preferences.autoPlayQuestion}
             feedbackDetail={preferences.feedbackDetail}
             learnerContext={activeMemory.learnerContext}
+            userKnowledgeContext={activeMemory.userKnowledgeContext}
+            naturalUpgradeLevel={preferences.naturalUpgradeLevel}
+            spokenEnglishStyle={preferences.spokenEnglishStyle}
             onExpressionReused={(expressionId) =>
               void runtime.practiceService
                 .markExpressionReused(expressionId)
@@ -705,6 +948,18 @@ export function App() {
               onDismissCandidate={handleDismissCandidate}
             />
           </ReviewCenter>
+        ) : view === 'knowledge' ? (
+          <ReviewCenter active="knowledge" onChange={navigateSafely}>
+            <KnowledgeLibrary
+              service={runtime.userKnowledgeService}
+              organizer={runtime.textAi}
+              storage={runtime.storage}
+              sources={userKnowledgeSources}
+              entries={userKnowledgeEntries}
+              ownerId={runtime.accountService.getCurrentUserId()}
+              onChanged={refreshLibrary}
+            />
+          </ReviewCenter>
         ) : view === 'accounts' ? (
           <AccountView
             service={runtime.accountService}
@@ -742,6 +997,9 @@ export function App() {
               service={runtime.importService}
               organizer={runtime.textAi}
               existingQuestions={allQuestions}
+              {...(questionBankReplacement === undefined
+                ? {}
+                : { replacement: questionBankReplacement })}
               onImported={(records) => {
                 setImportedQuestions((current) => [
                   ...current.filter(
@@ -750,6 +1008,12 @@ export function App() {
                   ),
                   ...records,
                 ])
+                setNavigationNotice(
+                  questionBankReplacement === undefined
+                    ? `已导入 ${records.length} 道题，原题库仍保留。`
+                    : `换季完成：已导入 ${records.length} 道新题，历史记录仍保留。`,
+                )
+                setReplaceQuestionBankOnImport(false)
               }}
               onStartQuestion={(question) => void startQuestion(question)}
               onBack={() => navigateSafely(backTarget())}

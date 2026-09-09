@@ -131,6 +131,35 @@ describe('BackendTextProvider', () => {
     })
   })
 
+  it('forwards the selected natural-upgrade profile and private knowledge context', async () => {
+    const { provider, fetch } = createProvider({
+      ...VALID_FEEDBACK,
+      contextReferences: [{ kind: 'user_knowledge', id: 'entry-home', title: 'Home notes' }],
+      naturalUpgradeSuggestions: {
+        addableContent: [{
+          content: 'Add one concrete detail from the notes.',
+          source: 'user_knowledge',
+          sourcePart: 1,
+          replaceable: false,
+        }],
+        advancedChanges: [],
+      },
+    })
+    const feedback = await provider.getFeedback({
+      ...feedbackRequest(),
+      naturalUpgradeLevel: 'challenging',
+      spokenEnglishStyle: 'american',
+      userKnowledgeContext: '[id=entry-home sourceId=source-home kind=user_knowledge title=Home notes] Home answers',
+    })
+
+    expect(feedback.contextReferences?.[0]?.kind).toBe('user_knowledge')
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.naturalUpgradeLevel).toBe('challenging')
+    expect(body.spokenEnglishStyle).toBe('american')
+    expect(body.userKnowledgeContext).toEqual(expect.stringContaining('entry-home'))
+  })
+
   it('sends the second answer to the dedicated simple-correction endpoint', async () => {
     const { provider, fetch } = createProvider(VALID_SECOND_ATTEMPT)
     const analysis = await provider.getSecondAttemptAnalysis({
@@ -175,6 +204,17 @@ describe('BackendTextProvider', () => {
     const { provider } = createProvider({ summary: 'missing everything' })
     await expect(provider.getFeedback(feedbackRequest()))
       .rejects.toMatchObject({ code: 'invalid-response' })
+  })
+
+  it('rejects a context citation that is absent from the client context', async () => {
+    const { provider } = createProvider({
+      ...VALID_FEEDBACK,
+      contextReferences: [{ kind: 'user_knowledge', id: 'missing-entry', title: 'Injected' }],
+    })
+    await expect(provider.getFeedback({
+      ...feedbackRequest(),
+      userKnowledgeContext: '[id=provided-entry kind=user_knowledge title=Notes] text',
+    })).rejects.toMatchObject({ code: 'invalid-response' })
   })
 
   it('maps organized questions into import candidates', async () => {

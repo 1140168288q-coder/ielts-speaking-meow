@@ -44,14 +44,14 @@ export function ReviewFirstStage({
         <LocalFeedbackCard busy={aiBusy} attempt={firstAttempt} />
       )}
       {aiNote ? <div className="inline-note">{aiNote}</div> : null}
-      {aiConfigured && !aiFeedback && aiRetryable ? (
+      {aiConfigured && aiRetryable ? (
         <button
           type="button"
           className="secondary-button"
           disabled={busy || aiBusy}
           onClick={onRequestAiFeedback}
         >
-          {aiBusy ? '正在获取 AI 分析…' : '重试 AI 分析'}
+          {aiBusy ? '正在获取 AI 分析…' : aiFeedback ? '按当前难度重新生成' : '重试 AI 分析'}
         </button>
       ) : null}
       <section className="next-attempt-card">

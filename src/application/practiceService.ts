@@ -17,6 +17,7 @@ import {
   type SavedExpression,
   type TrainingSession,
 } from '../domain/models'
+import type { FeedbackGenerationProfile } from '../domain/feedbackGeneration'
 import {
   questionPracticeStateId,
   questionPracticeStateSchema,
@@ -157,13 +158,14 @@ export class PracticeService {
   async applyAiFeedback(
     sessionId: string,
     feedback: AiFeedback,
+    profile?: FeedbackGenerationProfile,
   ): Promise<TrainingSession> {
     const parsedFeedback = aiFeedbackSchema.parse(feedback)
     const updated = await this.updateSessionAtomically(sessionId, (session) => {
       if (session === null || !recordBelongsToAccount(session.ownerId, this.getCurrentUserId())) {
         throw new Error('The practice session could not be found.')
       }
-      return this.buildAiFeedbackSession(session, parsedFeedback)
+      return this.buildAiFeedbackSession(session, parsedFeedback, profile)
     })
     if (updated === null) throw new Error('The practice session could not be found.')
     return updated
@@ -173,6 +175,7 @@ export class PracticeService {
     sessionId: string,
     snapshot: AnswerTextSnapshot,
     feedback: AiFeedback,
+    profile?: FeedbackGenerationProfile,
   ): Promise<TrainingSession | null> {
     const parsedFeedback = aiFeedbackSchema.parse(feedback)
     return this.updateSessionAtomically(sessionId, (session) => {
@@ -186,7 +189,7 @@ export class PracticeService {
         firstAttempt.transcript.text !== snapshot.text ||
         firstAttempt.transcript.updatedAt !== snapshot.updatedAt
       ) return null
-      return this.buildAiFeedbackSession(session, parsedFeedback)
+      return this.buildAiFeedbackSession(session, parsedFeedback, profile)
     })
   }
 
@@ -581,10 +584,12 @@ export class PracticeService {
   private buildAiFeedbackSession(
     session: TrainingSession,
     feedback: AiFeedback,
+    profile?: FeedbackGenerationProfile,
   ): TrainingSession {
     return trainingSessionSchema.parse({
       ...session,
       aiFeedback: aiFeedbackSchema.parse(feedback),
+      ...(profile === undefined ? {} : { feedbackGenerationProfile: profile }),
       status:
         session.status === 'first-review' ? 'feedback-ready' : session.status,
       updatedAt: this.now().toISOString(),

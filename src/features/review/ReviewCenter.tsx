@@ -3,6 +3,7 @@ import {
   BookOpenText,
   ChartNoAxesColumnIncreasing,
   Lightbulb,
+  LibraryBig,
 } from 'lucide-react'
 import type { AppView } from '../../app/navigation'
 
@@ -11,7 +12,7 @@ export function ReviewCenter({
   onChange,
   children,
 }: {
-  active: 'history' | 'expressions' | 'materials'
+  active: 'history' | 'expressions' | 'materials' | 'knowledge'
   onChange: (view: Exclude<AppView, 'practice'>) => void
   children: ReactNode
 }) {
@@ -51,13 +52,24 @@ export function ReviewCenter({
           <Lightbulb aria-hidden="true" size={17} />
           个人素材
         </button>
+        <button
+          type="button"
+          className={active === 'knowledge' ? 'active' : ''}
+          aria-current={active === 'knowledge' ? 'page' : undefined}
+          onClick={() => onChange('knowledge')}
+        >
+          <LibraryBig aria-hidden="true" size={17} />
+          我的知识库
+        </button>
       </nav>
       <p className="review-tab-definition">
         {active === 'history'
           ? '每一次回答，都是下一题的地基。'
           : active === 'expressions'
             ? '下次紧张时，伸手就能拿到的句子。'
-            : '你的故事库：人、地方、和你站在哪一边。'}
+            : active === 'materials'
+              ? '你的故事库：人、地方、和你站在哪一边。'
+              : '教学资料与表达资料，确认后才会进入本地 RAG。'}
       </p>
       {children}
     </section>

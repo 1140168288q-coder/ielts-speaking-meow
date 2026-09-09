@@ -13,7 +13,6 @@ const operation: SyncOutboxOperation = {
   deletedAt: null,
   createdAt: CREATED_AT,
 }
-
 const legacyExpression: SavedExpression = {
   id: 'legacy-expression-v6',
   ownerId: 'local-user',
@@ -25,7 +24,6 @@ const legacyExpression: SavedExpression = {
   sourcePart: 1,
   createdAt: CREATED_AT,
 }
-
 let sequence = 0
 let databaseName = ''
 let adapters: IndexedDbStorage[] = []
@@ -127,7 +125,7 @@ describe('IndexedDbStorage cloud sync', () => {
     await storage.close()
 
     const database = await openDatabase(databaseName)
-    expect(database.version).toBe(8)
+    expect(database.version).toBe(9)
     expect(database.objectStoreNames.contains('syncOutbox')).toBe(true)
     expect(database.objectStoreNames.contains('syncState')).toBe(true)
     expect(database.objectStoreNames.contains('deletionTombstones')).toBe(true)

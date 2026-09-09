@@ -1,8 +1,12 @@
 import { z } from 'zod'
 import { isoDateTimeSchema } from './models'
 import { TTS_VOICE_PRESET_IDS } from './ttsPresets'
+import {
+  naturalUpgradeLevelSchema,
+  spokenEnglishStyleSchema,
+} from './feedbackGeneration'
 
-export const USER_PREFERENCES_VERSION = 1
+export const USER_PREFERENCES_VERSION = 2
 
 export const userPreferencesSchema = z
   .object({
@@ -18,6 +22,8 @@ export const userPreferencesSchema = z
     feedbackDetail: z.enum(['focused', 'expanded']),
     memoryEnabled: z.boolean(),
     autoMatchPersonalMaterialsWithAi: z.boolean(),
+    naturalUpgradeLevel: naturalUpgradeLevelSchema,
+    spokenEnglishStyle: spokenEnglishStyleSchema,
     reduceMotion: z.boolean(),
     /** 首页问候主标题;null 表示使用内置默认文案。 */
     homeTitleOverride: z.string().max(40).nullable().default(null),
@@ -50,6 +56,8 @@ export function createDefaultUserPreferences(
     feedbackDetail: 'focused',
     memoryEnabled: true,
     autoMatchPersonalMaterialsWithAi: true,
+    naturalUpgradeLevel: 'medium',
+    spokenEnglishStyle: 'british',
     reduceMotion: false,
     homeTitleOverride: null,
     homeSubtitleOverride: null,

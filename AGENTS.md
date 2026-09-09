@@ -2,7 +2,7 @@
 
 ## Project
 
-**Name:** 雅思口语喵<br>**Version:** V2.0<br>**Platform:** Android<br>**Primary mode:** IELTS Speaking single-question practice
+**Name:** 雅思口语喵<br>**Version:** V2.2.1<br>**Platform:** Android<br>**Primary mode:** IELTS Speaking single-question practice
 
 雅思口语喵是一款 IELTS Speaking 单题练习软件。V1.7 起答案以文本提交：
 用户使用手机系统键盘语音输入或手动输入，应用内不再录音、不再调用 STT。
@@ -20,6 +20,10 @@ V2.0 在保持 local-first 和离线训练能力的同时，加入正式云端�
 同步、按用户隔离的云端数据、plan / entitlement / quota 商业化基础，以及可迁移的
 家庭 Linux Backend 部署。下文的 V1.x 说明用于历史兼容；若与 V2.0 当前范围冲突，
 以 V2.0 为准。仍禁止恢复 STT、Band Score、发音评分，也不在本版接入真实支付。
+
+V2.2.1 在上述边界内增加自然提升版的简单/中等/较难与英式/美式风格、个人知识库导入整理和
+来源检索、题库单题/批量/分类删除与安全换季、删除状态和结构化内容的备份/同步。所有新内容
+仍按账号隔离和 local-first 原则处理；知识库或 AI 示例中的第一人称经历不能自动成为用户事实。
 
 
 ---

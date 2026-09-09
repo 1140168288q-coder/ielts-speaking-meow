@@ -1,4 +1,4 @@
-# 雅思口语喵 V2.0
+# 雅思口语喵 V2.2.1
 
 Android-first、local-first 的 IELTS Speaking 单题训练 App。它围绕“两次回答、
 长期 Memory、个人素材复用”形成持续学习闭环：
@@ -30,6 +30,12 @@ Android-first、local-first 的 IELTS Speaking 单题训练 App。它围绕“�
 - “AI 分析时自动匹配个人素材”默认开启，关闭后仍可在本地查看和手动插入素材；
 - Memory 是跨 Part 的统一个性化大脑，检索优先当前 Part，只有确认适用时才使用其他 Part，
   UI 仍按 Part 独立展示和管理。
+- 自然提升版支持“简单 / 中等 / 较难”三档及英式 / 美式自然口语风格；档位只影响自然提升版，
+  每次分析保存当次配置快照，Part 1/3 使用弹性短回答预算，Part 2 保持独立长回答。
+- “我的知识库”支持 TXT、MD、DOCX、PDF、JPG、PNG 本机提取、DeepSeek 整理、逐条预览确认、
+  启用/停用、编辑和删除；原始文件只进入本地备份，知识条目可按题目检索并显示来源。
+- 题库支持单题删除、左滑/可达按钮、批量/分类删除、清空和安全换季；删除状态、导入题和知识条目
+  纳入账号隔离的云同步，备份格式兼容旧版本。
 
 ### TTS
 
@@ -137,8 +143,8 @@ npm run android:release -- -BackendUrl https://api.example.com
 路径前缀和伪私网主机名。V2 文件名：
 
 ```text
-artifacts/ielts-speaking-meow-v2.0.0-debug.apk
-artifacts/ielts-speaking-meow-v2.0.0-release.apk
+artifacts/ielts-speaking-meow-v2.2.1-debug.apk
+artifacts/ielts-speaking-meow-v2.2.1-release.apk
 ```
 
 长期保管同一 release keystore；覆盖安装保留 IndexedDB，卸载会清除 App 私有数据。

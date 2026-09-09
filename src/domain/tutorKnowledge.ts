@@ -214,9 +214,11 @@ export function buildTutorContext(
   const docs = retrieveTutorKnowledge(question, maximum, options)
   if (docs.length === 0) return ''
   return docs
-    .map((item) => `【${item.doc.title}】${item.doc.body}`)
+    .map((item) =>
+      `[id=${item.doc.id} kind=built_in_knowledge title=${item.doc.title} reason=${item.reason}] ${item.doc.body}`,
+    )
     .join('\n')
-    .slice(0, 2_600)
+    .slice(0, 1_999)
 }
 
 function inferQuestionTypes(question: Question): Set<string> {

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   aiFeedbackSchema,
+  feedbackContextReferencesAreValid,
   importQuestionCandidateListSchema,
   materialSuggestionListSchema,
   secondAttemptAnalysisSchema,
@@ -8,6 +9,9 @@ import {
   type ImportQuestionCandidate,
   type MaterialSuggestion,
 } from '../../domain'
+import {
+  userKnowledgeFunctionSchema,
+} from '../../domain/userKnowledge'
 import type {
   LLMFeedbackRequest,
   LLMSecondAttemptRequest,
@@ -16,6 +20,9 @@ import type {
   MaterialQuestionRequest,
   MaterialSuggestionRequest,
   MaterialSuggester,
+  UserKnowledgeOrganizer,
+  UserKnowledgeOrganizeRequest,
+  UserKnowledgeCandidate,
 } from '../../ports/ai'
 import { ApiProviderError } from '../ai/providerErrors'
 import type { BackendClient, BackendPostOptions } from './backendClient'
@@ -30,7 +37,7 @@ const TEXT_TIMEOUT_MS = 105_000
  * 配置状态由 BackendHealthCache 驱动,状态未知时保持乐观(失败时本地反馈兜底)。
  */
 export class BackendTextProvider
-  implements LLMProvider, MaterialQuestionOrganizer, MaterialSuggester
+  implements LLMProvider, MaterialQuestionOrganizer, MaterialSuggester, UserKnowledgeOrganizer
 {
   readonly id = 'backend-text'
 
@@ -71,16 +78,37 @@ export class BackendTextProvider
       ...(request.learnerContext
         ? { learnerContext: request.learnerContext }
         : {}),
+      ...(request.userKnowledgeContext
+        ? { userKnowledgeContext: request.userKnowledgeContext }
+        : {}),
+      ...(request.naturalUpgradeLevel
+        ? { naturalUpgradeLevel: request.naturalUpgradeLevel }
+        : {}),
+      ...(request.spokenEnglishStyle
+        ? { spokenEnglishStyle: request.spokenEnglishStyle }
+        : {}),
     }
     const options = postOptions(request.idempotencyKey)
     const data = options
       ? await this.client.postJson<unknown>('/v1/feedback', body, TEXT_TIMEOUT_MS, options)
       : await this.client.postJson<unknown>('/v1/feedback', body, TEXT_TIMEOUT_MS)
-    return parseValidated(
+    const validated = parseValidated(
       data,
       aiFeedbackSchema,
       'Text AI 返回结构不完整,已保留本地结果。',
     )
+    if (!feedbackContextReferencesAreValid(validated, [
+      request.tutorContext,
+      request.learnerContext,
+      request.userKnowledgeContext,
+    ])) {
+      throw new ApiProviderError(
+        'invalid-response',
+        'Text AI 返回了未提供的来源,已保留本地结果。',
+        true,
+      )
+    }
+    return validated
   }
 
   async getSecondAttemptAnalysis(request: LLMSecondAttemptRequest) {
@@ -162,6 +190,31 @@ export class BackendTextProvider
     )
     return envelope.suggestions
   }
+
+  async organizeKnowledge(
+    request: UserKnowledgeOrganizeRequest,
+  ): Promise<UserKnowledgeCandidate[]> {
+    const body = {
+      fileName: request.fileName,
+      sourceHash: request.sourceHash,
+      chunks: request.chunks.slice(0, 24).map((chunk) => ({
+        index: chunk.index,
+        pageNumber: chunk.pageNumber,
+        section: chunk.section,
+        text: chunk.text.slice(0, 2_400),
+      })),
+    }
+    const options = postOptions(request.idempotencyKey)
+    const data = options
+      ? await this.client.postJson<unknown>('/v1/knowledge/organize', body, TEXT_TIMEOUT_MS, options)
+      : await this.client.postJson<unknown>('/v1/knowledge/organize', body, TEXT_TIMEOUT_MS)
+    const envelope = parseValidated(
+      data,
+      knowledgeOrganizeResponseSchema,
+      '知识库整理结果不完整，请重试。',
+    )
+    return envelope.entries
+  }
 }
 
 function postOptions(idempotencyKey: string | undefined): BackendPostOptions | undefined {
@@ -177,6 +230,25 @@ const organizeResponseSchema = z.object({
 const materialSuggestResponseSchema = z.object({
   suggestions: materialSuggestionListSchema,
 })
+
+const knowledgeCandidateSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  body: z.string().trim().min(1).max(2_000),
+  originalExcerpt: z.string().trim().min(1).max(1_000),
+  sourcePage: z.number().int().positive().nullable(),
+  sourceSection: z.string().trim().max(240).nullable(),
+  part: z.union([z.literal('all'), z.literal(1), z.literal(2), z.literal(3)]),
+  topics: z.array(z.string().trim().min(1).max(80)).max(20),
+  keywords: z.array(z.string().trim().min(1).max(80)).max(40),
+  tags: z.array(z.string().trim().min(1).max(80)).max(20),
+  functions: z.array(userKnowledgeFunctionSchema).min(1).max(8),
+  level: z.enum(['basic', 'developing', 'stretch']),
+  confidence: z.enum(['high', 'medium', 'low']),
+}).strict()
+
+const knowledgeOrganizeResponseSchema = z.object({
+  entries: z.array(knowledgeCandidateSchema).min(1).max(60),
+}).strict()
 
 function parseValidated<T>(
   data: unknown,

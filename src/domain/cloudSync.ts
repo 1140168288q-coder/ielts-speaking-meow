@@ -5,9 +5,22 @@ export const cloudSyncEntityTypeSchema = z.enum([
   'expression',
   'personal_material',
   'user_setting',
+  'imported_question',
+  'import_source_metadata',
+  'question_exclusion',
+  'question_bank_exclusion',
+  'knowledge_source',
+  'knowledge_entry',
 ])
 
-export const localDeletionEntityTypeSchema = z.enum(['session', 'expression'])
+export const localDeletionEntityTypeSchema = z.enum([
+  'session',
+  'expression',
+  'question_exclusion',
+  'question_bank_exclusion',
+  'knowledge_source',
+  'knowledge_entry',
+])
 
 export const localDeletionTombstoneSchema = z
   .object({

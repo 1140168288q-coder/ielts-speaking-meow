@@ -245,7 +245,7 @@ export function buildLearnerContext(
       memory.reusableExpressions
         .map(
           (item) =>
-            `[${item.expression.topic}] ${item.expression.text}`,
+            `[id=${item.expression.id} kind=memory title=${item.expression.topic} reason=${item.reason}] ${item.expression.text}`,
         )
         .join(' | '),
     )
@@ -256,7 +256,7 @@ export function buildLearnerContext(
         memory.reusableMemoryFacts
           .map(
             (item) =>
-              `[来源 Part ${item.fact.sourcePart ?? '未分类'}] ${item.fact.content}（${item.reason}）`,
+              `[id=memory-fact-${item.fact.createdAt.replace(/[^a-z0-9_.:-]/gi, '-')}-${item.fact.content.slice(0, 24).replace(/[^a-z0-9_-]/gi, '-')} kind=memory title=确认 Memory reason=${item.reason}] [来源 Part ${item.fact.sourcePart ?? '未分类'}] ${item.fact.content}`,
           )
           .join(' | '),
     )
@@ -265,7 +265,7 @@ export function buildLearnerContext(
     lines.push(
       '学习者确认的个人素材（生活内容，仅在适合本题时自然使用）:' +
       memory.relevantMaterials
-        .map((item) => `[${item.material.kind}:${item.material.title}] ${item.material.content.slice(0, 220)}`)
+        .map((item) => `[id=${item.material.id} kind=personal_material title=${item.material.title} reason=${item.reason}] ${item.material.content.slice(0, 220)}`)
         .join(' | '),
     )
   }

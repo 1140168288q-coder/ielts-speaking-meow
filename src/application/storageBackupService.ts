@@ -7,13 +7,23 @@ import {
   personalMaterialSchema,
   savedExpressionSchema,
   trainingSessionSchema,
+  questionExclusionSchema,
+  questionBankExclusionSchema,
+  userPreferencesSchema,
   LOCAL_DEFAULT_USER_ID,
   type PersonalMaterial,
   type SavedExpression,
   type TrainingSession,
+  type UserPreferences,
 } from '../domain'
+import {
+  userKnowledgeEntrySchema,
+  userKnowledgeSourceSchema,
+} from '../domain/userKnowledge'
 import type { AccountStorage } from '../ports/accounts'
 import type { ImportStorage } from '../ports/imports'
+import type { QuestionManagementStorage } from '../ports/questionManagement'
+import type { UserKnowledgeStorage } from '../ports/userKnowledge'
 import type { AudioStorage, LocalStorage } from '../ports/storage'
 
 const backupAudioSchema = z
@@ -27,18 +37,24 @@ const backupAudioSchema = z
 const localBackupSchema = z
   .object({
     format: z.literal('ielts-speaking-meow-backup'),
-    formatVersion: z.union([z.literal(1), z.literal(2)]),
+    formatVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     exportedAt: isoDateTimeSchema,
     sessions: z.array(trainingSessionSchema).max(20_000),
     expressions: z.array(savedExpressionSchema).max(50_000),
     audio: z.array(backupAudioSchema).max(40_000),
-    /** V2 fields are optional so V1 backups remain importable. */
+    /** Extended fields are optional so older backups remain importable. */
     accounts: z.array(accountProfileSchema).max(1_000).optional(),
     currentAccountId: z.string().max(160).nullable().optional(),
     personalMaterials: z.array(personalMaterialSchema).max(50_000).optional(),
     importSources: z.array(importSourceSchema).max(5_000).optional(),
     importedQuestions: z.array(importedQuestionRecordSchema).max(20_000).optional(),
     importedFiles: z.array(backupAudioSchema).max(5_000).optional(),
+    questionExclusions: z.array(questionExclusionSchema).max(100_000).optional(),
+    questionBankExclusions: z.array(questionBankExclusionSchema).max(5_000).optional(),
+    knowledgeSources: z.array(userKnowledgeSourceSchema).max(5_000).optional(),
+    knowledgeEntries: z.array(userKnowledgeEntrySchema).max(100_000).optional(),
+    knowledgeFiles: z.array(backupAudioSchema).max(5_000).optional(),
+    userPreferences: z.array(userPreferencesSchema).max(1_000).optional(),
   })
   .strict()
 
@@ -48,6 +64,8 @@ export interface BackupImportResult {
   recordings: number
   personalMaterials: number
   importedQuestions: number
+  knowledgeEntries?: number
+  questionExclusions?: number
   accounts: number
   skippedNewer: number
 }
@@ -67,6 +85,11 @@ export class StorageBackupService {
     ])
     const accountStorage = this.localStorage as LocalStorage & Partial<AccountStorage>
     const importStorage = this.localStorage as LocalStorage & Partial<ImportStorage>
+    const questionStorage = this.localStorage as LocalStorage & Partial<QuestionManagementStorage>
+    const knowledgeStorage = this.localStorage as LocalStorage & Partial<UserKnowledgeStorage>
+    const preferenceStorage = this.localStorage as LocalStorage & Partial<{
+      listUserPreferences(): Promise<UserPreferences[]>
+    }>
     const accounts = accountStorage.listAccounts === undefined
       ? []
       : await accountStorage.listAccounts()
@@ -101,6 +124,34 @@ export class StorageBackupService {
         }
       }
     }
+    const questionExclusions = questionStorage.listQuestionExclusions === undefined
+      ? []
+      : (await Promise.all([...ownerIds].map((ownerId) => questionStorage.listQuestionExclusions!(ownerId, { includeDeleted: true })))).flat()
+    const questionBankExclusions = questionStorage.listQuestionBankExclusions === undefined
+      ? []
+      : (await Promise.all([...ownerIds].map((ownerId) => questionStorage.listQuestionBankExclusions!(ownerId, { includeDeleted: true })))).flat()
+    const knowledgeSources = knowledgeStorage.listUserKnowledgeSources === undefined
+      ? []
+      : (await Promise.all([...ownerIds].map((ownerId) => knowledgeStorage.listUserKnowledgeSources!(ownerId, { includeDeleted: true })))).flat()
+    const knowledgeEntries = knowledgeStorage.listUserKnowledgeEntries === undefined
+      ? []
+      : (await Promise.all([...ownerIds].map((ownerId) => knowledgeStorage.listUserKnowledgeEntries!(ownerId, { includeDeleted: true })))).flat()
+    const knowledgeFiles = []
+    if (knowledgeStorage.getUserKnowledgeFile !== undefined) {
+      for (const source of knowledgeSources) {
+        const file = await knowledgeStorage.getUserKnowledgeFile(source.originalFileId)
+        if (file !== null) {
+          knowledgeFiles.push({
+            id: source.originalFileId,
+            mimeType: file.type || source.mimeType || 'application/octet-stream',
+            dataBase64: await blobToBase64(file),
+          })
+        }
+      }
+    }
+    const userPreferences = preferenceStorage.listUserPreferences === undefined
+      ? []
+      : await preferenceStorage.listUserPreferences()
     const audioIds = [...new Set(
       sessions.flatMap((session) =>
         session.attempts.flatMap((attempt) =>
@@ -123,7 +174,7 @@ export class StorageBackupService {
 
     const backup = localBackupSchema.parse({
       format: 'ielts-speaking-meow-backup',
-      formatVersion: 2,
+      formatVersion: 3,
       exportedAt: this.now().toISOString(),
       sessions,
       expressions,
@@ -134,6 +185,12 @@ export class StorageBackupService {
       importSources,
       importedQuestions,
       importedFiles,
+      questionExclusions,
+      questionBankExclusions,
+      knowledgeSources,
+      knowledgeEntries,
+      knowledgeFiles,
+      userPreferences,
     })
     return new Blob([JSON.stringify(backup)], {
       type: 'application/json',
@@ -166,19 +223,33 @@ export class StorageBackupService {
 
     const accountStorage = this.localStorage as LocalStorage & Partial<AccountStorage>
     const importStorage = this.localStorage as LocalStorage & Partial<ImportStorage>
-    const v2 = parsed.data.formatVersion === 2
-    if (v2 && (parsed.data.accounts?.length ?? 0) > 0 && accountStorage.upsertAccount === undefined) {
+    const questionStorage = this.localStorage as LocalStorage & Partial<QuestionManagementStorage>
+    const knowledgeStorage = this.localStorage as LocalStorage & Partial<UserKnowledgeStorage>
+    const preferenceStorage = this.localStorage as LocalStorage & Partial<{
+      saveUserPreferences(preferences: UserPreferences): Promise<void>
+    }>
+    const extended = parsed.data.formatVersion >= 2
+    if (extended && (parsed.data.accounts?.length ?? 0) > 0 && accountStorage.upsertAccount === undefined) {
       throw new Error('当前存储不支持恢复本地账号，请在原设备或新版 App 中导入。')
     }
-    if (v2 && (parsed.data.personalMaterials?.length ?? 0) > 0 && accountStorage.upsertPersonalMaterial === undefined) {
+    if (extended && (parsed.data.personalMaterials?.length ?? 0) > 0 && accountStorage.upsertPersonalMaterial === undefined) {
       throw new Error('当前存储不支持恢复个人素材，请升级 App 后再试。')
     }
     if (
-      v2 &&
+      extended &&
       ((parsed.data.importSources?.length ?? 0) > 0 || (parsed.data.importedQuestions?.length ?? 0) > 0) &&
       importStorage.saveImportBundle === undefined
     ) {
       throw new Error('当前存储不支持恢复导入材料，请升级 App 后再试。')
+    }
+    if (parsed.data.knowledgeEntries && parsed.data.knowledgeEntries.length > 0 && knowledgeStorage.saveUserKnowledgeBundle === undefined) {
+      throw new Error('当前存储不支持恢复个人知识库，请升级 App 后再试。')
+    }
+    if ((parsed.data.questionExclusions?.length ?? 0) > 0 && questionStorage.saveQuestionExclusion === undefined) {
+      throw new Error('当前存储不支持恢复题库隐藏状态，请升级 App 后再试。')
+    }
+    if ((parsed.data.userPreferences?.length ?? 0) > 0 && preferenceStorage.saveUserPreferences === undefined) {
+      throw new Error('当前存储不支持恢复生成偏好，请升级 App 后再试。')
     }
 
     const existingAccounts = accountStorage.listAccounts === undefined
@@ -255,6 +326,21 @@ export class StorageBackupService {
         throw new Error(`导入材料文件大小与备份元数据不一致：${source.fileName}`)
       }
     }
+    const knowledgeSources = parsed.data.knowledgeSources ?? []
+    const knowledgeEntries = parsed.data.knowledgeEntries ?? []
+    const knowledgeFiles = new Map(
+      (parsed.data.knowledgeFiles ?? []).map((item) => [item.id, base64ToBlob(item.dataBase64, item.mimeType)]),
+    )
+    const knowledgeSourceIds = new Set(knowledgeSources.map((source) => source.id))
+    for (const entry of knowledgeEntries) {
+      if (!knowledgeSourceIds.has(entry.sourceId)) throw new Error(`备份中的知识条目 ${entry.id} 缺少来源。`)
+    }
+    for (const source of knowledgeSources) {
+      const file = knowledgeFiles.get(source.originalFileId)
+      if (file === undefined || file.size !== source.fileSize) throw new Error(`知识库来源文件与备份元数据不一致：${source.fileName}`)
+    }
+    const questionExclusions = parsed.data.questionExclusions ?? []
+    const questionBankExclusions = parsed.data.questionBankExclusions ?? []
     const newerImportSourceIds = new Set<string>()
     if (importStorage.listImportSources !== undefined) {
       const existingSources = await importStorage.listImportSources()
@@ -312,6 +398,13 @@ export class StorageBackupService {
         await accountStorage.setCurrentAccountId(parsed.data.currentAccountId)
       }
     }
+    let restoredPreferences = 0
+    if (preferenceStorage.saveUserPreferences !== undefined) {
+      for (const preferences of parsed.data.userPreferences ?? []) {
+        await preferenceStorage.saveUserPreferences(preferences)
+        restoredPreferences += 1
+      }
+    }
     if (accountStorage.upsertPersonalMaterial !== undefined) {
       for (const material of parsed.data.personalMaterials ?? []) {
         if (newerMaterialIds.has(material.id)) continue
@@ -341,12 +434,42 @@ export class StorageBackupService {
       }
     }
 
+    let restoredKnowledgeEntries = 0
+    if (knowledgeStorage.saveUserKnowledgeBundle !== undefined) {
+      for (const source of knowledgeSources) {
+        const file = knowledgeFiles.get(source.originalFileId)
+        if (file === undefined) continue
+        const sourceEntries = knowledgeEntries.filter((entry) => entry.sourceId === source.id)
+        await knowledgeStorage.saveUserKnowledgeBundle({
+          source,
+          entries: sourceEntries,
+          originalFile: file,
+        })
+        restoredKnowledgeEntries += sourceEntries.length
+      }
+    }
+    let restoredQuestionExclusions = 0
+    if (questionStorage.saveQuestionExclusion !== undefined) {
+      for (const exclusion of questionExclusions) {
+        await questionStorage.saveQuestionExclusion(exclusion)
+        restoredQuestionExclusions += 1
+      }
+    }
+    if (questionStorage.saveQuestionBankExclusion !== undefined) {
+      for (const exclusion of questionBankExclusions) {
+        await questionStorage.saveQuestionBankExclusion(exclusion)
+      }
+    }
+
     return {
       sessions: parsed.data.sessions.length - newerSessionIds.size,
       expressions: parsed.data.expressions.length - newerExpressionIds.size,
       recordings: parsed.data.audio.length,
       personalMaterials: restoredMaterials,
       importedQuestions: restoredQuestions,
+      ...(restoredKnowledgeEntries > 0 ? { knowledgeEntries: restoredKnowledgeEntries } : {}),
+      ...(restoredQuestionExclusions > 0 ? { questionExclusions: restoredQuestionExclusions } : {}),
+      ...(restoredPreferences > 0 ? { preferences: restoredPreferences } : {}),
       accounts: (parsed.data.accounts?.length ?? 0) - newerAccountIds.size,
       skippedNewer:
         newerSessionIds.size +

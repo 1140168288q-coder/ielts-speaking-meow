@@ -137,6 +137,39 @@ describe('AI feedback schema', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  it('accepts user-knowledge sources and requires AI examples to be replaceable', () => {
+    const valid = aiFeedbackSchema.safeParse({
+      ...feedback,
+      naturalUpgradeSuggestions: {
+        ...feedback.naturalUpgradeSuggestions,
+        addableContent: [{
+          content: 'Add a replaceable example.',
+          source: 'ai_example',
+          sourcePart: 'unclassified',
+          replaceable: true,
+        }],
+      },
+      contextReferences: [{
+        kind: 'user_knowledge',
+        id: 'knowledge-entry-1',
+        title: 'Speaking structure notes',
+      }],
+    })
+    expect(valid.success).toBe(true)
+    expect(aiFeedbackSchema.safeParse({
+      ...feedback,
+      naturalUpgradeSuggestions: {
+        ...feedback.naturalUpgradeSuggestions,
+        addableContent: [{
+          content: 'An invented fact.',
+          source: 'ai_example',
+          sourcePart: null,
+          replaceable: false,
+        }],
+      },
+    }).success).toBe(false)
+  })
 })
 
 describe('saved expression schema', () => {

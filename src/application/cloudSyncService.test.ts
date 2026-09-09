@@ -66,6 +66,31 @@ describe('CloudSyncService', () => {
     ).resolves.toEqual({ version: 5, syncedUpdatedAt: CREATED_AT })
   })
 
+  it('uses createdAt/importedAt as the stable local timestamp for legacy-shaped entities', async () => {
+    const storage = new MemorySyncStorage()
+    const gateway = new StubGateway()
+    const service = createService(storage, gateway)
+    const operation = await service.enqueue({
+      entityType: 'question_exclusion',
+      entityId: 'question-exclusion-1',
+      payload: {
+        id: 'question-exclusion-1',
+        questionId: 'p1-home',
+        questionSource: 'built-in',
+        reason: 'single',
+        createdAt: CREATED_AT,
+        deletedAt: null,
+      },
+      deletedAt: null,
+    })
+    gateway.pushResponse = { results: [resultFor(operation, 'applied')] }
+
+    await service.flush()
+    await expect(
+      storage.getSyncEntityState('cloud-user-1', 'question_exclusion', 'question-exclusion-1'),
+    ).resolves.toEqual({ version: 1, syncedUpdatedAt: CREATED_AT })
+  })
+
   it('retains the outbox across a network failure and retries the same operationId', async () => {
     const storage = new MemorySyncStorage()
     const gateway = new StubGateway()

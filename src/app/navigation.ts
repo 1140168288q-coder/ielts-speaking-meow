@@ -7,6 +7,7 @@ export type AppView =
   | 'history'
   | 'expressions'
   | 'materials'
+  | 'knowledge'
   | 'accounts'
   | 'imports'
   | 'settings'

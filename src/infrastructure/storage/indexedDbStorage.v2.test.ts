@@ -6,6 +6,8 @@ import type {
 } from '../../domain'
 import { LOCAL_DEFAULT_USER_ID } from '../../domain/accounts'
 import type { ImportBundle } from '../../ports/imports'
+import type { ImportQuestionBankReplacement } from '../../ports/imports'
+import { questionBankExclusionId, questionExclusionId } from '../../domain/questionManagement'
 import { IndexedDbStorage } from './indexedDbStorage'
 
 const NOW = '2026-08-10T08:00:00.000Z'
@@ -24,7 +26,6 @@ const legacySession: TrainingSession = {
   createdAt: NOW,
   updatedAt: NOW,
 }
-
 const legacyExpression: SavedExpression = {
   id: 'legacy-expression',
   text: 'It helps me unwind after a busy day.',
@@ -35,7 +36,6 @@ const legacyExpression: SavedExpression = {
   sourcePart: 1,
   createdAt: NOW,
 }
-
 let databaseSequence = 0
 let databaseName = ''
 let adapters: IndexedDbStorage[] = []
@@ -76,7 +76,7 @@ describe('IndexedDbStorage v1 to v2 migration', () => {
 
     await storage.close()
     const database = await openDatabase(databaseName)
-    expect(database.version).toBe(8)
+    expect(database.version).toBe(9)
     expect(Array.from(database.objectStoreNames).sort()).toEqual(
       [
         'accounts',
@@ -94,6 +94,9 @@ describe('IndexedDbStorage v1 to v2 migration', () => {
         'syncOutbox',
         'syncState',
         'ttsCache',
+        'userKnowledgeEntries',
+        'userKnowledgeFiles',
+        'userKnowledgeSources',
       ].sort(),
     )
     const v2StoreNames = [
@@ -328,6 +331,68 @@ describe('IndexedDbStorage v2 import integrity', () => {
     expect(
       await storage.getImportedFile(wrongSource.source.originalFileId),
     ).toBeNull()
+  })
+
+  it('keeps the previous bank state when an atomic seasonal replacement aborts', async () => {
+    const storage = createAdapter()
+    const failing = createImportBundle('failing-season', 'pdf')
+    const ownerId = LOCAL_DEFAULT_USER_ID
+    const oldExclusion = {
+      id: questionBankExclusionId(ownerId, 'question-bank-old-season'),
+      ownerId,
+      bankFingerprint: 'question-bank-old-season',
+      seasonLabel: '2026-05',
+      createdAt: NOW,
+      deletedAt: null,
+    } as const
+    await storage.saveQuestionBankExclusion(oldExclusion)
+
+    const originalPut = Object.getOwnPropertyDescriptor(IDBObjectStore.prototype, 'put')?.value as IDBObjectStore['put'] | undefined
+    if (originalPut === undefined) throw new Error('IndexedDB put implementation is unavailable in the test.')
+    let injectedFailure = false
+    const putSpy = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+      this: IDBObjectStore,
+      value: unknown,
+      key?: IDBValidKey,
+    ) {
+      if (!injectedFailure && this.name === 'importedQuestions' && (value as { sourceId?: unknown }).sourceId === failing.source.id) {
+        injectedFailure = true
+        const transaction = this.transaction
+        const failure = new DOMException('Simulated seasonal replacement failure.', 'AbortError')
+        const failedRequest = { onerror: null, onsuccess: null, get error() { return failure } } as unknown as IDBRequest<IDBValidKey>
+        queueMicrotask(() => { transaction.abort(); failedRequest.onerror?.(new Event('error')) })
+        return failedRequest
+      }
+      return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key)
+    })
+
+    const replacement: ImportQuestionBankReplacement = {
+      bankExclusion: {
+        id: questionBankExclusionId(ownerId, 'question-bank-old-season'),
+        ownerId,
+        bankFingerprint: 'question-bank-old-season',
+        seasonLabel: '2026-09',
+        createdAt: NOW,
+        deletedAt: null,
+      },
+      questionExclusions: failing.questions.map((question) => ({
+        id: questionExclusionId(ownerId, question.id),
+        ownerId,
+        questionId: question.id,
+        questionSource: 'imported' as const,
+        reason: 'clear-all' as const,
+        createdAt: NOW,
+        deletedAt: null,
+      })),
+    }
+
+    await expect(storage.saveImportBundleAndReplaceQuestionBank(failing, replacement)).rejects.toThrow(
+      'Simulated seasonal replacement failure.',
+    )
+    putSpy.mockRestore()
+
+    expect(await storage.getImportSource(failing.source.id)).toBeNull()
+    expect(await storage.listQuestionBankExclusions(ownerId)).toEqual([oldExclusion])
   })
 })
 

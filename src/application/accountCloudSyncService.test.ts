@@ -16,6 +16,8 @@ import type {
 } from '../domain/models'
 import type { QuestionPracticeState } from '../domain/questionPracticeState'
 import type { PersonalMaterial } from '../domain/personalMaterials'
+import { createDefaultUserPreferences, type UserPreferences } from '../domain/userPreferences'
+import type { QuestionExclusion } from '../domain/questionManagement'
 import type {
   CloudSyncStorage,
   ListPersonalMaterialsOptions,
@@ -82,6 +84,103 @@ describe('AccountCloudSyncService', () => {
     expect(gateway.pushed.flat().map((item) => item.entityId)).toEqual([
       'submitted-session',
     ])
+  })
+
+  it('syncs generation preferences as an owner-scoped user_setting', async () => {
+    const storage = new MemoryStorage()
+    const preferences = createDefaultUserPreferences(OWNER, new Date(UPDATED_AT))
+    storage.preferences.set(OWNER, preferences)
+    const gateway = new StubGateway()
+    gateway.pullResponses.push(emptyPull(), emptyPull())
+
+    const summary = await createService(storage, gateway).synchronize()
+
+    expect(summary).toMatchObject({ status: 'synced', queued: 1, uploaded: 1 })
+    const setting = gateway.pushed.flat().find(
+      (item) => item.entityType === 'user_setting' && item.entityId === OWNER,
+    )
+    expect(setting).toBeDefined()
+    expect(setting?.payload.naturalUpgradeLevel).toBe('medium')
+    expect(setting?.payload.spokenEnglishStyle).toBe('british')
+    expect(setting?.payload).not.toHaveProperty('ownerId')
+  })
+
+  it('queues question exclusion deletion and restoration as distinct sync states', async () => {
+    const storage = new MemoryStorage()
+    const exclusion: QuestionExclusion = {
+      id: 'question-exclusion:owner:question-1',
+      ownerId: OWNER,
+      questionId: 'question-1',
+      questionSource: 'built-in',
+      reason: 'single',
+      createdAt: CREATED_AT,
+      deletedAt: null,
+    }
+    storage.questionExclusions.set(exclusion.id, exclusion)
+    const gateway = new StubGateway()
+    gateway.pullResponses.push(emptyPull(), emptyPull())
+
+    await expect(createService(storage, gateway).synchronize()).resolves.toMatchObject({
+      queued: 1,
+      uploaded: 1,
+    })
+    exclusion.deletedAt = UPDATED_AT
+    await expect(createService(storage, gateway).synchronize()).resolves.toMatchObject({
+      queued: 1,
+      uploaded: 1,
+    })
+    expect(gateway.pushed.flat().map((item) => item.operationId)).toHaveLength(2)
+    expect(gateway.pushed.flat()[1]?.payload.deletedAt).toBe(UPDATED_AT)
+  })
+
+  it('restores a remote exclusion payload including its deleted state', async () => {
+    const storage = new MemoryStorage()
+    const exclusion: QuestionExclusion = {
+      id: 'question-exclusion:owner:question-remote',
+      ownerId: OWNER,
+      questionId: 'question-remote',
+      questionSource: 'built-in',
+      reason: 'single',
+      createdAt: CREATED_AT,
+      deletedAt: UPDATED_AT,
+    }
+    const gateway = new StubGateway()
+    gateway.pullResponses.push({
+      changes: [changeFor('question_exclusion', withoutOwner(exclusion), 1)],
+      nextCursor: 1,
+      hasMore: false,
+    }, emptyPull(1))
+
+    await expect(createService(storage, gateway).synchronize()).resolves.toMatchObject({
+      status: 'synced',
+      downloaded: 1,
+    })
+    expect(storage.questionExclusions.get(exclusion.id)?.deletedAt).toBe(UPDATED_AT)
+  })
+
+  it('restores a remote user_setting without trusting its owner field', async () => {
+    const storage = new MemoryStorage()
+    const remote = createDefaultUserPreferences(OWNER, new Date(UPDATED_AT))
+    const gateway = new StubGateway()
+    gateway.pullResponses.push({
+      changes: [{
+        cursor: 1,
+        entityType: 'user_setting',
+        entityId: OWNER,
+        version: 1,
+        payload: { ...withoutOwner({ ...remote, naturalUpgradeLevel: 'challenging', spokenEnglishStyle: 'american' }) },
+        deletedAt: null,
+        updatedAt: remote.updatedAt,
+      }],
+      nextCursor: 1,
+      hasMore: false,
+    }, emptyPull(1))
+
+    const summary = await createService(storage, gateway).synchronize()
+
+    expect(summary).toMatchObject({ status: 'synced', downloaded: 1 })
+    expect(storage.preferences.get(OWNER)?.naturalUpgradeLevel).toBe('challenging')
+    expect(storage.preferences.get(OWNER)?.spokenEnglishStyle).toBe('american')
   })
 
   it('maps remote records to the selected local owner with strict entity separation', async () => {
@@ -247,6 +346,8 @@ class MemoryStorage implements LocalStorage, CloudSyncStorage {
   readonly expressions = new Map<string, SavedExpression>()
   readonly questionStates = new Map<string, QuestionPracticeState>()
   readonly materials = new Map<string, PersonalMaterial>()
+  readonly preferences = new Map<string, UserPreferences>()
+  readonly questionExclusions = new Map<string, QuestionExclusion>()
   readonly deletedSessions: string[] = []
   readonly deletedExpressions: string[] = []
   readonly deletedMaterials: string[] = []
@@ -381,6 +482,31 @@ class MemoryStorage implements LocalStorage, CloudSyncStorage {
   getPracticeTexts(): Promise<PracticeTexts | null> { return Promise.resolve(null) }
   savePracticeTexts(texts: PracticeTexts): Promise<void> {
     void texts
+    return Promise.resolve()
+  }
+  listUserPreferences(): Promise<UserPreferences[]> {
+    return Promise.resolve([...this.preferences.values()].map((value) => structuredClone(value)))
+  }
+  getUserPreferences(ownerId: string): Promise<UserPreferences | null> {
+    return Promise.resolve(cloneOrNull(this.preferences.get(ownerId)))
+  }
+  saveUserPreferences(preferences: UserPreferences): Promise<void> {
+    this.preferences.set(preferences.ownerId, structuredClone(preferences))
+    return Promise.resolve()
+  }
+  listQuestionExclusions(
+    ownerId: string,
+    options: { includeDeleted?: boolean } = {},
+  ): Promise<QuestionExclusion[]> {
+    return Promise.resolve(
+      [...this.questionExclusions.values()]
+        .filter((value) => value.ownerId === ownerId)
+        .filter((value) => options.includeDeleted === true || value.deletedAt === null)
+        .map((value) => structuredClone(value)),
+    )
+  }
+  saveQuestionExclusion(exclusion: QuestionExclusion): Promise<void> {
+    this.questionExclusions.set(exclusion.id, structuredClone(exclusion))
     return Promise.resolve()
   }
   listLocalDeletionTombstones(ownerId: string): Promise<LocalDeletionTombstone[]> {

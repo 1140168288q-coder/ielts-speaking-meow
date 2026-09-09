@@ -9,6 +9,7 @@ import type {
   ImportedQuestionRecord,
   Question,
 } from '../domain'
+import type { ImportQuestionBankReplacement } from '../ports/imports'
 import {
   ImportWorkspace,
   type ImportCandidate,
@@ -25,6 +26,7 @@ export interface ImportControllerProps {
   service: ImportMaterialService
   organizer: MaterialQuestionOrganizer
   existingQuestions: Question[]
+  replacement?: ImportQuestionBankReplacement
   onImported: (records: ImportedQuestionRecord[]) => void
   onStartQuestion: (question: Question) => void
   onBack: () => void
@@ -34,6 +36,7 @@ export function ImportController({
   service,
   organizer,
   existingQuestions,
+  replacement,
   onImported,
   onStartQuestion,
   onBack,
@@ -183,7 +186,7 @@ export function ImportController({
           cuePoints: candidate.cuePoints,
           sourcePage: sourcePages.current.get(candidate.id) ?? null,
         }))
-      const records = await service.commit(draft, domainCandidates)
+      const records = await service.commit(draft, domainCandidates, replacement)
       const skippedDuplicateCount = candidates.filter(
         (candidate) => candidate.duplicate !== null && !selected.has(candidate.id),
       ).length

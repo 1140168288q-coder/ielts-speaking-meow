@@ -1,4 +1,4 @@
-# V2.0 产品与技术架构
+# V2.2.1 产品与技术架构
 
 本文记录 V2.0 的稳定边界、数据所有权和扩展点。它不是愿望清单；“当前实现”和
 “未来预留”会明确区分，后续修改应同步更新本文和自动化测试。
@@ -7,6 +7,11 @@
 
 > 图源已通过本地声明、子图与括号平衡检查。当前开发机没有 Mermaid CLI，且出于
 > 隐私原因没有把内部拓扑上传到第三方渲染服务，因此仓库暂不提交远程生成的 SVG。
+
+V2.2.1 在不改变单题两答闭环的前提下加入三档自然提升版（简单/中等/较难）、英式/美式
+自然口语 profile、用户知识库导入与确认、来源可追溯检索、题库隐藏/批量删除/安全换季，
+以及相应的 IndexedDB 迁移、备份和账号云同步实体。原始导入文件仍只进入本机备份，AI
+示例和知识文档中的经历不会写入用户 Memory。
 
 ## 1. 稳定产品主链路
 
@@ -89,12 +94,15 @@ Backend 不使用客户端传来的 ownerId 决定数据归属。同步实体的
 | 数据 | 默认位置 | owner 隔离 | 进入云同步 |
 |---|---|---:|---:|
 | 题库生成物 | APK 静态 JSON | 不需要 | 否 |
-| 导入题/原始文件 | IndexedDB/本机 | 是 | 当前否 |
+| 导入题/来源元数据 | IndexedDB/本机 | 是 | 用户确认后，结构化元数据和题目 |
+| 导入原始文件 | IndexedDB/本机 | 是 | 否，只进本地备份 |
 | 练习与两次答案 | IndexedDB | 是 | 用户确认后 |
 | AI 反馈 | 随练习保存 | 是 | 随练习 |
 | 个人表达 | IndexedDB | 是 | 用户确认后 |
 | 个人素材 | IndexedDB | 是 | 用户确认后 |
-| 偏好设置 | IndexedDB appMeta | 是 | 当前按设备；协议预留 user_setting |
+| 偏好设置与分析 profile | IndexedDB appMeta / session | 是 | profile 随 session；偏好经 `user_setting` 手动同步 |
+| 题目隐藏/整季排除状态 | IndexedDB appMeta + tombstone | 是 | 用户确认后 |
+| 用户知识库来源/条目 | IndexedDB/本机 | 是 | 用户确认后，结构化内容和删除状态 |
 | TTS 缓存 | IndexedDB | 间接 | 否 |
 | V1.6 历史录音 | IndexedDB | 是 | 否，只保留兼容读取 |
 | Memory 快照 | 不单独存 | 是 | 否，从事实重新派生 |
@@ -163,7 +171,7 @@ Memory 不另存一份容易失真的“用户画像”，而是每次从当前�
 
 - `summary`；
 - `strengths`；
-- `problems`（2–3 个最值得改的点）；
+- `problems`（0–2 个真实且最值得改的点）；
 - `grammarSuggestions`；
 - `vocabularySuggestions`；
 - 恰好两个 `referenceAnswers`，标签顺序固定为：简单优化版 / 自然提升版；
@@ -175,6 +183,10 @@ Memory 不另存一份容易失真的“用户画像”，而是每次从当前�
 - 拒绝 Band / score / 水平评级；
 - 拒绝针对文本虚构发音、语速、停顿、语调等结论；
 - 拒绝错误标签、版本数和非法结构。
+- `contextReferences` 只能引用本次请求中带稳定 ID 的真实来源；AI 示例必须标记为可替换。
+
+自然提升 profile 由服务端从枚举 level/style 派生，不接受客户端自由 prompt。Part 1/3 使用
+弹性短回答预算，Part 2 使用独立的一到两分钟长回答预算；内容质量优先于机械凑字数。
 
 UI 的 focused 模式默认优先展示 2–3 点，其余内容折叠；expanded 模式由用户设置。
 
@@ -198,8 +210,9 @@ AudioCoordinator
 
 ## 9. 云同步协议
 
-支持实体：`session`、`expression`、`personal_material`、预留
-`user_setting`。
+支持实体：`session`、`expression`、`personal_material`、`user_setting`、`imported_question`、
+`import_source_metadata`、`question_exclusion`、`question_bank_exclusion`、
+`knowledge_source`、`knowledge_entry`。
 
 Push：
 
@@ -218,8 +231,9 @@ Pull：
 - 只有远端版本可安全应用时才更新本地基线；
 - 下载实体重新绑定到当前本地 ownerId。
 
-当前同步是账号页手动触发；没有后台自动上传。偏好对应的 `user_setting` 协议已经
-预留，但 V2 当前仍以“每台设备可独立选择隐私和外观”为准，不假装已跨设备同步。
+当前同步是账号页手动触发；没有后台自动上传。`user_setting` 会在用户明确同步时
+按云账号传输生成/显示偏好，另一设备恢复后重新加载；Memory 仍从本地事实派生，
+不会单独同步易失真的画像快照。
 
 ## 10. 商业化预留
 

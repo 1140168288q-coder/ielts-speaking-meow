@@ -5,8 +5,9 @@
 Android 客户端只调用本服务，**任何第三方密钥只存在于本服务的环境变量中**。
 
 V1.7 起不再提供 STT 能力；客户端直接用手机系统键盘语音输入答案文本。
-V2.0 的 `/v1/feedback` 接受本地 RAG / 长期 Memory 生成的可选
-`tutorContext` / `learnerContext`。Backend 持久化邮箱账号、邮箱验证状态、
+V2.2.1 的 `/v1/feedback` 接受本地 RAG / 长期 Memory / 用户知识库生成的可选
+`tutorContext` / `learnerContext` / `userKnowledgeContext`，并按枚举档位生成自然提升版。
+Backend 持久化邮箱账号、邮箱验证状态、
 Argon2 密码摘要、可撤销会话、一次性账号 token，以及已登录用户的通用增量同步
 实体与变更日志；同时提供 free / pro、feature entitlement、周期 quota、用量事件
 与未来支付 webhook 的数据模型基础。本版不接入真实支付。
@@ -24,6 +25,7 @@ Android 客户端
     │  POST /v1/feedback(Part + 题目 + 答案文本 + 可选作答时间)  → DeepSeek
     │  POST /v1/tts(文本)                                       → 火山语音合成 2.0
     │  POST /v1/organize(导入材料)                              → DeepSeek(题目整理)
+    │  POST /v1/knowledge/organize(知识分块)                    → DeepSeek(知识整理)
     ▼
 FastAPI Backend(密钥在环境变量,日志脱敏)
     └── SQLAlchemy 2 Async → SQLite(开发) / PostgreSQL(部署)
@@ -49,10 +51,11 @@ FastAPI Backend(密钥在环境变量,日志脱敏)
 | GET | `/v1/sync/pull?cursor=0&limit=200` | `Authorization: Bearer <token>`；按单调 cursor 增量拉取，limit 范围 1–500 |
 | GET | `/health` | 存活 + DeepSeek / TTS 详情:密钥是否配置、模型 / 音色、最近一次真实调用的验证状态(verified / unverified / failed + 时间),不含密钥 |
 | POST | `/health/verify` | 需要 Bearer token；真实小规模验证 DeepSeek 与 TTS 上游 |
-| POST | `/v1/feedback` | 需要已验证邮箱的 Bearer token；JSON `{part, question, answer, answerDurationSeconds?, tutorContext?, learnerContext?}` → 文本分析结构(`summary` / `strengths` / `problems` / `grammarSuggestions` / `vocabularySuggestions` / 恰好 2 个 `referenceAnswers` / `naturalUpgradeSuggestions` / `answerFramework`) |
+| POST | `/v1/feedback` | 需要已验证邮箱的 Bearer token；JSON `{part, question, answer, answerDurationSeconds?, tutorContext?, learnerContext?, userKnowledgeContext?, naturalUpgradeLevel?, spokenEnglishStyle?}` → 文本分析结构（含来源校验后的 `contextReferences`） |
 | POST | `/v1/feedback/second-attempt` | 需要已验证邮箱的 Bearer token；JSON `{part, question, answer}` → 仅包含错误后的完整句修正和可确认的个人信息候选，不读取第一答、RAG 或 Memory |
 | POST | `/v1/tts` | 需要 Bearer token；JSON `{text, language?, rate?, pitch?}` → `audio/mpeg` 二进制；rate/pitch 映射火山 speed_ratio / pitch_ratio(0.5–2.0) |
 | POST | `/v1/organize` | 需要 Bearer token；JSON `{fileName, extractedText}` → `{questions: [...]}` |
+| POST | `/v1/knowledge/organize` | 需要已验证邮箱的 Bearer token；JSON `{fileName, sourceHash, chunks[]}` → `{entries: [...]}`；最多 24 个分块 / 48,000 字符 |
 
 统一错误格式：`{"error": {"code": "...", "message": "..."}}`。主要错误码：
 `not-configured`(503) / `provider-error`(502) / `upstream-timeout`(504) /
@@ -152,7 +155,11 @@ session，服务端不会信任客户端提交的用户 ID；`payload` 顶层如
 - `session`：练习记录；
 - `expression`：个人语料；
 - `personal_material`：个人素材；
-- `user_setting`：需要跨设备保存的用户设置。
+- `imported_question`：用户导入题目的结构化题目（不含原始文件）；
+- `import_source_metadata`：导入来源元数据（不含完整提取文本和 Blob）；
+- `question_exclusion` / `question_bank_exclusion`：题目和整季题库的账号隔离删除状态；
+- `knowledge_source` / `knowledge_entry`：已确认的个人知识库来源和条目（不含原始文件）；
+- `user_setting`：按云账号同步的生成/显示偏好；客户端仍通过本地 ownerId 隔离。
 
 Push 请求最多包含 100 项：
 
@@ -219,6 +226,9 @@ outbox。冲突不会由服务端静默覆盖；客户端应先采用 `current` 
 - 修改表达时保持用户原本水平和表达习惯，不突然拔高到难以模仿的高级英语；
 - 每个答案返回恰好 2 个参考回答：简单优化版 / 自然提升版；简单优化版只基于
   用户原答案，自然提升版才结合当前题相关 RAG、统一 Memory、个人素材和必要的 AI 示例；
+- 自然提升版由服务端控制简单 / 中等 / 较难档位和英式 / 美式自然口语规则；Part 1/3 是
+  弹性短回答，Part 2 是独立的一到两分钟长回答。`contextReferences` 只能引用请求中实际
+  提供且服务端验证过的 ID，AI 示例必须标记为可替换。
 - 自然提升版额外返回可添加内容、进阶修改建议和“本题要点”句式框架；
 - 第二次回答通过独立接口分析，只返回真实错误的完整句修正和明确个人信息候选，
   客户端必须在用户确认后分别保存到个人语料或统一 Memory；

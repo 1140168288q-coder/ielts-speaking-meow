@@ -5,7 +5,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 SYNC_SCHEMA_VERSION = 1
-EntityType = Literal["session", "expression", "personal_material", "user_setting"]
+EntityType = Literal[
+    "session", "expression", "personal_material", "user_setting",
+    "imported_question", "import_source_metadata", "question_exclusion",
+    "question_bank_exclusion", "knowledge_source", "knowledge_entry",
+]
 PushStatus = Literal["applied", "conflict", "rejected"]
 
 

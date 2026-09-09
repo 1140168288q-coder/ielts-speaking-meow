@@ -42,6 +42,8 @@ export interface SettingsControllerProps {
      | 'autoPlayQuestion'
      | 'defaultPart'
      | 'feedbackDetail'
+     | 'naturalUpgradeLevel'
+     | 'spokenEnglishStyle'
      | 'memoryEnabled'
      | 'autoMatchPersonalMaterialsWithAi'
      | 'reduceMotion'
@@ -78,6 +80,8 @@ const DEFAULT_PREFERENCES = {
   autoPlayQuestion: true,
   defaultPart: 1,
   feedbackDetail: 'focused',
+  naturalUpgradeLevel: 'medium',
+  spokenEnglishStyle: 'british',
   memoryEnabled: true,
   autoMatchPersonalMaterialsWithAi: true,
   reduceMotion: false,
@@ -407,6 +411,33 @@ export function SettingsController({
             >
               <option value="focused">重点模式 · 先看 2–3 点</option>
               <option value="expanded">展开模式 · 同时打开细节</option>
+            </select>
+          </label>
+          <label className="settings-field">
+            <span>自然提升难度</span>
+            <select
+              aria-label="自然提升难度"
+              value={preferences.naturalUpgradeLevel}
+              onChange={(event) => void savePreference({
+                naturalUpgradeLevel: event.target.value as 'simple' | 'medium' | 'challenging',
+              })}
+            >
+              <option value="simple">简单 · 高频易复用</option>
+              <option value="medium">中等 · 自然混合句型</option>
+              <option value="challenging">较难 · 灵活展开</option>
+            </select>
+          </label>
+          <label className="settings-field">
+            <span>自然口语风格</span>
+            <select
+              aria-label="自然口语风格"
+              value={preferences.spokenEnglishStyle}
+              onChange={(event) => void savePreference({
+                spokenEnglishStyle: event.target.value as 'british' | 'american',
+              })}
+            >
+              <option value="british">英式自然口语</option>
+              <option value="american">美式自然口语</option>
             </select>
           </label>
         </div>

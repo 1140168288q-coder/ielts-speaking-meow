@@ -5,6 +5,11 @@ import type {
 } from '../domain/models'
 import type { ImportQuestionCandidate } from '../domain/imports'
 import type { MaterialSuggestion } from '../domain/personalMaterials'
+import type {
+  NaturalUpgradeLevel,
+  SpokenEnglishStyle,
+} from '../domain/feedbackGeneration'
+import type { UserKnowledgeFunction } from '../domain/userKnowledge'
 
 /**
  * DeepSeek 只分析用户提交的答案文本。answerDurationSeconds 是用户主动
@@ -29,6 +34,12 @@ export interface LLMFeedbackRequest {
    * 长度有限,且只包含用户已经保存在本机的数据。
    */
   learnerContext?: string
+  /** 当前账号已确认且启用的个人知识库检索结果。 */
+  userKnowledgeContext?: string
+  /** 自然提升版生成难度；缺省时 Provider 使用用户默认值。 */
+  naturalUpgradeLevel?: NaturalUpgradeLevel
+  /** 英式/美式自然口语风格。 */
+  spokenEnglishStyle?: SpokenEnglishStyle
 }
 
 export interface LLMSecondAttemptRequest {
@@ -63,6 +74,43 @@ export interface MaterialQuestionOrganizer {
   extractQuestions(
     request: MaterialQuestionRequest,
   ): Promise<ImportQuestionCandidate[]>
+}
+
+export interface UserKnowledgeChunk {
+  index: number
+  pageNumber: number | null
+  section: string | null
+  text: string
+}
+
+export interface UserKnowledgeOrganizeRequest {
+  fileName: string
+  sourceHash: string
+  chunks: UserKnowledgeChunk[]
+  idempotencyKey?: string
+}
+
+export interface UserKnowledgeCandidate {
+  title: string
+  body: string
+  originalExcerpt: string
+  sourcePage: number | null
+  sourceSection: string | null
+  part: 'all' | 1 | 2 | 3
+  topics: string[]
+  keywords: string[]
+  tags: string[]
+  functions: UserKnowledgeFunction[]
+  level: 'basic' | 'developing' | 'stretch'
+  confidence: 'high' | 'medium' | 'low'
+}
+
+/** Optional Text AI helper for turning a confirmed local extraction into private RAG entries. */
+export interface UserKnowledgeOrganizer {
+  isConfigured(): boolean
+  organizeKnowledge(
+    request: UserKnowledgeOrganizeRequest,
+  ): Promise<UserKnowledgeCandidate[]>
 }
 
 /** 一条候选个人素材;确认前不落盘、不进入任何 AI 上下文。 */

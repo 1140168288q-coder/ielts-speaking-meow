@@ -3,6 +3,7 @@ import type {
   ImportSource,
   TtsCacheEntry,
 } from '../domain'
+import type { QuestionBankExclusion, QuestionExclusion } from '../domain/questionManagement'
 
 export interface ImportBundle {
   source: ImportSource
@@ -10,13 +11,29 @@ export interface ImportBundle {
   questions: ImportedQuestionRecord[]
 }
 
+/**
+ * The state transition used by “导入并换季”. The imported bundle and these
+ * exclusion records are committed together by IndexedDB so a failed write
+ * leaves the previous active bank untouched.
+ */
+export interface ImportQuestionBankReplacement {
+  bankExclusion: QuestionBankExclusion
+  questionExclusions: QuestionExclusion[]
+}
+
 /** Durable local storage for user-imported private material. */
 export interface ImportStorage {
   saveImportBundle(bundle: ImportBundle): Promise<void>
+  saveImportBundleAndReplaceQuestionBank?(
+    bundle: ImportBundle,
+    replacement: ImportQuestionBankReplacement,
+  ): Promise<void>
   getImportSource(sourceId: string): Promise<ImportSource | null>
   listImportSources(): Promise<ImportSource[]>
   getImportedFile(fileId: string): Promise<Blob | null>
   listImportedQuestions(ownerId: string): Promise<ImportedQuestionRecord[]>
+  upsertImportSourceMetadata?(source: ImportSource): Promise<void>
+  upsertImportedQuestion?(record: ImportedQuestionRecord): Promise<void>
 }
 
 export interface TtsCacheStorage {

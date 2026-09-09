@@ -3,7 +3,11 @@ import type {
   ImportedQuestionRecord,
   ImportSource,
 } from '../../domain'
-import type { ImportBundle, ImportStorage } from '../../ports/imports'
+import type {
+  ImportBundle,
+  ImportQuestionBankReplacement,
+  ImportStorage,
+} from '../../ports/imports'
 import {
   createFile,
   createImportFileFixture,
@@ -16,6 +20,10 @@ const NOW = new Date('2026-08-10T08:30:00.000Z')
 
 class CapturingImportStorage implements ImportStorage {
   readonly bundles: ImportBundle[] = []
+  readonly replacements: Array<{
+    bundle: ImportBundle
+    replacement: ImportQuestionBankReplacement
+  }> = []
   failure: Error | null = null
 
   saveImportBundle(bundle: ImportBundle): Promise<void> {
@@ -23,6 +31,15 @@ class CapturingImportStorage implements ImportStorage {
       return Promise.reject(this.failure)
     }
     this.bundles.push(bundle)
+    return Promise.resolve()
+  }
+
+  saveImportBundleAndReplaceQuestionBank(
+    bundle: ImportBundle,
+    replacement: ImportQuestionBankReplacement,
+  ): Promise<void> {
+    if (this.failure !== null) return Promise.reject(this.failure)
+    this.replacements.push({ bundle, replacement })
     return Promise.resolve()
   }
 
@@ -113,6 +130,53 @@ describe('ImportMaterialService', () => {
         questions,
       },
     ])
+  })
+
+  it('uses the atomic replacement path and does not hide ids reimported in the new bundle', async () => {
+    const storage = new CapturingImportStorage()
+    const service = createService(storage)
+    const draft = await service.prepare(createImportFileFixture('txt'))
+    const oldId = 'p1-import-old-season-1'
+    const replacement: ImportQuestionBankReplacement = {
+      bankExclusion: {
+        id: 'question-bank-exclusion:local:old',
+        ownerId: '00000000-0000-4000-8000-000000000001',
+        bankFingerprint: 'question-bank-old-season-1',
+        seasonLabel: '2026-05',
+        createdAt: NOW.toISOString(),
+        deletedAt: null,
+      },
+      questionExclusions: [
+        {
+          id: 'question-exclusion:local:old',
+          ownerId: '00000000-0000-4000-8000-000000000001',
+          questionId: oldId,
+          questionSource: 'imported',
+          reason: 'clear-all',
+          createdAt: NOW.toISOString(),
+          deletedAt: null,
+        },
+        {
+          id: 'question-exclusion:local:reimported',
+          ownerId: '00000000-0000-4000-8000-000000000001',
+          questionId: 'p1-import-fixture-token-1',
+          questionSource: 'imported',
+          reason: 'clear-all',
+          createdAt: NOW.toISOString(),
+          deletedAt: null,
+        },
+      ],
+    }
+
+    await service.commit(draft, draft.candidates, replacement)
+
+    expect(storage.bundles).toEqual([])
+    expect(storage.replacements).toHaveLength(1)
+    expect(storage.replacements[0]?.replacement.questionExclusions).toHaveLength(1)
+    expect(storage.replacements[0]?.replacement.questionExclusions[0]?.questionId).toBe(oldId)
+    expect(storage.replacements[0]?.replacement.bankExclusion.bankFingerprint).toBe(
+      'question-bank-old-season-1',
+    )
   })
 
   it('adds speakable fallback cue points to a confirmed Part 2 candidate', async () => {

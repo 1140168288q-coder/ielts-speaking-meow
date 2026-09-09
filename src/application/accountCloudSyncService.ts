@@ -15,6 +15,20 @@ import {
   personalMaterialSchema,
   type PersonalMaterial,
 } from '../domain/personalMaterials'
+import {
+  importedQuestionRecordSchema,
+  importSourceSchema,
+  questionBankExclusionSchema,
+  questionExclusionSchema,
+  userPreferencesSchema,
+} from '../domain'
+import {
+  userKnowledgeEntrySchema,
+  userKnowledgeSourceSchema,
+  type UserKnowledgeEntry,
+  type UserKnowledgeSource,
+} from '../domain/userKnowledge'
+import type { UserPreferences } from '../domain/userPreferences'
 import { recordBelongsToAccount } from '../domain/accounts'
 import type {
   CloudSyncStorage,
@@ -22,9 +36,16 @@ import type {
   LocalStorage,
   SyncEntityState,
 } from '../ports/storage'
+import type { ImportStorage } from '../ports/imports'
+import type { UserKnowledgeStorage } from '../ports/userKnowledge'
+import type { QuestionManagementStorage } from '../ports/questionManagement'
 import { CloudSyncService } from './cloudSyncService'
 
-type AccountSyncStorage = LocalStorage & CloudSyncStorage & Pick<
+type AccountSyncStorage = LocalStorage & CloudSyncStorage & Partial<ImportStorage> & Partial<UserKnowledgeStorage> & Partial<QuestionManagementStorage> & Partial<{
+  listUserPreferences(): Promise<UserPreferences[]>
+  getUserPreferences(ownerId: string): Promise<UserPreferences | null>
+  saveUserPreferences(preferences: UserPreferences): Promise<void>
+}> & Pick<
   LocalDataMaintenance,
   'deleteSessionWithAudio'
 >
@@ -180,6 +201,31 @@ export class AccountCloudSyncService {
     const materials = await this.storage.listPersonalMaterials(this.ownerId, {
       includeDeleted: true,
     })
+    const importedQuestions = this.storage.listImportedQuestions === undefined
+      ? []
+      : await this.storage.listImportedQuestions(this.ownerId)
+    const importSources = this.storage.listImportSources === undefined
+      ? []
+      : (await this.storage.listImportSources()).filter((source) =>
+        importedQuestions.some((record) => record.sourceId === source.id),
+      )
+    const questionExclusions = this.storage.listQuestionExclusions === undefined
+      ? []
+      : await this.storage.listQuestionExclusions(this.ownerId, { includeDeleted: true })
+    const questionBankExclusions = this.storage.listQuestionBankExclusions === undefined
+      ? []
+      : await this.storage.listQuestionBankExclusions(this.ownerId, { includeDeleted: true })
+    const knowledgeSources = this.storage.listUserKnowledgeSources === undefined
+      ? []
+      : await this.storage.listUserKnowledgeSources(this.ownerId, { includeDeleted: true })
+    const knowledgeEntries = this.storage.listUserKnowledgeEntries === undefined
+      ? []
+      : await this.storage.listUserKnowledgeEntries(this.ownerId, { includeDeleted: true })
+    const userPreferences = this.storage.listUserPreferences === undefined
+      ? []
+      : (await this.storage.listUserPreferences()).filter((preferences) =>
+        preferences.ownerId === this.ownerId,
+      )
     const tombstones = await this.storage.listLocalDeletionTombstones(
       this.ownerId,
     )
@@ -212,7 +258,87 @@ export class AccountCloudSyncService {
         material.deletedAt,
       )
     }
+    for (const source of importSources) {
+      queued += await this.queueIfChanged(
+        'import_source_metadata',
+        source.id,
+        source.importedAt,
+        { ...source, extractedText: '' },
+        null,
+      )
+    }
+    for (const record of importedQuestions) {
+      queued += await this.queueIfChanged(
+        'imported_question',
+        record.id,
+        record.createdAt,
+        omitProperty(record, 'ownerId'),
+        null,
+      )
+    }
+    for (const exclusion of questionExclusions) {
+      queued += await this.queueIfChanged(
+        'question_exclusion',
+        exclusion.id,
+        exclusion.createdAt,
+        omitProperty(exclusion, 'ownerId'),
+        null,
+      )
+    }
+    for (const exclusion of questionBankExclusions) {
+      queued += await this.queueIfChanged(
+        'question_bank_exclusion',
+        exclusion.id,
+        exclusion.createdAt,
+        omitProperty(exclusion, 'ownerId'),
+        null,
+      )
+    }
+    for (const source of knowledgeSources) {
+      queued += await this.queueIfChanged(
+        'knowledge_source',
+        source.id,
+        source.updatedAt,
+        sanitizeKnowledgeSource(source),
+        source.deletedAt,
+      )
+    }
+    for (const entry of knowledgeEntries) {
+      queued += await this.queueIfChanged(
+        'knowledge_entry',
+        entry.id,
+        entry.updatedAt,
+        sanitizeKnowledgeEntry(entry),
+        entry.deletedAt,
+      )
+    }
+    for (const preferences of userPreferences) {
+      queued += await this.queueIfChanged(
+        'user_setting',
+        preferences.ownerId,
+        preferences.updatedAt,
+        omitProperty(preferences, 'ownerId'),
+        null,
+      )
+    }
     for (const tombstone of tombstones) {
+      // Question exclusions are stateful records: their deletedAt value is
+      // synced as part of the strict entity payload. A generic tombstone has
+      // no questionId/reason fields and would be unrecoverable on a new device.
+      if (
+        tombstone.entityType === 'question_exclusion' ||
+        tombstone.entityType === 'question_bank_exclusion'
+      ) {
+        // Older builds wrote a generic tombstone for these records. The
+        // current payload-based state supersedes it, so remove the stale
+        // duplicate instead of uploading an unrecoverable empty payload.
+        await this.storage.removeLocalDeletionTombstone(
+          this.ownerId,
+          tombstone.entityType,
+          tombstone.entityId,
+        )
+        continue
+      }
       queued += await this.queueIfChanged(
         tombstone.entityType,
         tombstone.entityId,
@@ -240,9 +366,24 @@ export class AccountCloudSyncService {
       entityType,
       entityId,
     )
-    if (state.syncedUpdatedAt === updatedAt) return 0
+    const syncTimestamp = readLocalSyncTimestamp(
+      entityType,
+      payload,
+      updatedAt,
+      deletedAt,
+    )
+    if (state.syncedUpdatedAt === syncTimestamp) return 0
 
-    const operationId = stableOperationId(entityType, entityId, updatedAt, deletedAt)
+    // Include the last accepted cloud version so a state that is restored to
+    // its original createdAt still gets a fresh operation id. Retries with the
+    // same version/state remain idempotent.
+    const operationId = stableOperationId(
+      entityType,
+      entityId,
+      syncTimestamp,
+      deletedAt,
+      state.version,
+    )
     const pendingIds = new Set(
       (await this.storage.listSyncOperations(this.scopeId, 100)).map(
         (operation) => operation.operationId,
@@ -260,10 +401,6 @@ export class AccountCloudSyncService {
   }
 
   private async applyRemoteChange(change: SyncChange): Promise<void> {
-    if (change.entityType === 'user_setting') {
-      throw invalidRemotePayload('云端返回了此服务不支持的数据类型。')
-    }
-
     const state = await this.storage.getSyncEntityState(
       this.scopeId,
       change.entityType,
@@ -279,7 +416,39 @@ export class AccountCloudSyncService {
       await this.applyExpression(change, state)
       return
     }
-    await this.applyMaterial(change, state)
+    if (change.entityType === 'personal_material') {
+      await this.applyMaterial(change, state)
+      return
+    }
+    if (change.entityType === 'import_source_metadata') {
+      await this.applyImportSource(change, state)
+      return
+    }
+    if (change.entityType === 'imported_question') {
+      await this.applyImportedQuestion(change, state)
+      return
+    }
+    if (change.entityType === 'question_exclusion') {
+      await this.applyQuestionExclusion(change, state)
+      return
+    }
+    if (change.entityType === 'question_bank_exclusion') {
+      await this.applyQuestionBankExclusion(change, state)
+      return
+    }
+    if (change.entityType === 'knowledge_source') {
+      await this.applyKnowledgeSource(change, state)
+      return
+    }
+    if (change.entityType === 'knowledge_entry') {
+      await this.applyKnowledgeEntry(change, state)
+      return
+    }
+    if (change.entityType === 'user_setting') {
+      await this.applyUserSetting(change, state)
+      return
+    }
+    throw invalidRemotePayload('云端返回了未知的数据类型。')
   }
 
   private async applySession(
@@ -368,6 +537,142 @@ export class AccountCloudSyncService {
       this.ownerId,
     )
     await this.storage.upsertPersonalMaterial(remote)
+  }
+
+  private async applyImportSource(change: SyncChange, state: SyncEntityState): Promise<void> {
+    if (this.storage.upsertImportSourceMetadata === undefined || this.storage.getImportSource === undefined) throw invalidRemotePayload('当前版本不支持恢复导入来源。')
+    const current = await this.storage.getImportSource(change.entityId)
+    this.assertNotConcurrentlyModified(current?.importedAt ?? null, state, change)
+    if (change.deletedAt !== null) return
+    const parsed = importSourceSchema.safeParse({
+      ...change.payload,
+      extractedText: '',
+    })
+    if (!parsed.success || parsed.data.id !== change.entityId) throw invalidRemotePayload('云端来源结构无效。')
+    await this.storage.upsertImportSourceMetadata(parsed.data)
+  }
+
+  private async applyImportedQuestion(change: SyncChange, state: SyncEntityState): Promise<void> {
+    if (this.storage.listImportedQuestions === undefined || this.storage.upsertImportedQuestion === undefined) throw invalidRemotePayload('当前版本不支持恢复导入题。')
+    const current = (await this.storage.listImportedQuestions(this.ownerId)).find((item) => item.id === change.entityId) ?? null
+    this.assertLocalOwner(current?.ownerId, change, current !== null)
+    this.assertNotConcurrentlyModified(current?.createdAt ?? null, state, change)
+    if (change.deletedAt !== null) return
+    const parsed = importedQuestionRecordSchema.safeParse({ ...change.payload, ownerId: this.ownerId })
+    if (!parsed.success || parsed.data.id !== change.entityId) throw invalidRemotePayload('云端导入题结构无效。')
+    await this.storage.upsertImportedQuestion(parsed.data)
+  }
+
+  private async applyQuestionExclusion(change: SyncChange, state: SyncEntityState): Promise<void> {
+    if (this.storage.listQuestionExclusions === undefined || this.storage.saveQuestionExclusion === undefined) throw invalidRemotePayload('当前版本不支持恢复题目状态。')
+    const current = (await this.storage.listQuestionExclusions(this.ownerId, { includeDeleted: true })).find((item) => item.id === change.entityId) ?? null
+    this.assertNotConcurrentlyModified(
+      questionExclusionSyncTimestamp(current),
+      state,
+      change,
+    )
+    const parsed = parseOwnerlessPayload(questionExclusionSchema, change, this.ownerId, {
+      deletedAt: change.deletedAt,
+    })
+    await this.storage.saveQuestionExclusion(parsed)
+  }
+
+  private async applyQuestionBankExclusion(change: SyncChange, state: SyncEntityState): Promise<void> {
+    if (this.storage.listQuestionBankExclusions === undefined || this.storage.saveQuestionBankExclusion === undefined) throw invalidRemotePayload('当前版本不支持恢复题库状态。')
+    const current = (await this.storage.listQuestionBankExclusions(this.ownerId, { includeDeleted: true })).find((item) => item.id === change.entityId) ?? null
+    this.assertNotConcurrentlyModified(
+      questionBankExclusionSyncTimestamp(current),
+      state,
+      change,
+    )
+    const parsed = parseOwnerlessPayload(questionBankExclusionSchema, change, this.ownerId, {
+      deletedAt: change.deletedAt,
+    })
+    await this.storage.saveQuestionBankExclusion(parsed)
+  }
+
+  private async applyKnowledgeSource(change: SyncChange, state: SyncEntityState): Promise<void> {
+    if (this.storage.listUserKnowledgeSources === undefined || this.storage.updateUserKnowledgeSource === undefined) throw invalidRemotePayload('当前版本不支持恢复个人知识来源。')
+    const current = (await this.storage.listUserKnowledgeSources(this.ownerId, { includeDeleted: true })).find((item) => item.id === change.entityId) ?? null
+    this.assertNotConcurrentlyModified(current?.updatedAt ?? null, state, change)
+    if (change.deletedAt !== null) {
+      if (current !== null) {
+        await this.storage.updateUserKnowledgeSource({ ...current, status: 'disabled', deletedAt: change.deletedAt, updatedAt: change.updatedAt })
+        if (
+          this.storage.listUserKnowledgeEntries !== undefined &&
+          this.storage.updateUserKnowledgeEntry !== undefined
+        ) {
+          const entries = await this.storage.listUserKnowledgeEntries(this.ownerId, { includeDeleted: true })
+          for (const entry of entries.filter((item) => item.sourceId === current.id && item.deletedAt === null)) {
+            await this.storage.updateUserKnowledgeEntry({
+              ...entry,
+              enabled: false,
+              deletedAt: change.deletedAt,
+              updatedAt: change.updatedAt,
+            })
+          }
+        }
+      }
+      return
+    }
+    const parsed = parseOwnerlessPayload(userKnowledgeSourceSchema, change, this.ownerId)
+    await this.storage.updateUserKnowledgeSource(parsed)
+  }
+
+  private async applyKnowledgeEntry(change: SyncChange, state: SyncEntityState): Promise<void> {
+    if (this.storage.listUserKnowledgeEntries === undefined || this.storage.updateUserKnowledgeEntry === undefined) throw invalidRemotePayload('当前版本不支持恢复个人知识条目。')
+    const current = (await this.storage.listUserKnowledgeEntries(this.ownerId, { includeDeleted: true })).find((item) => item.id === change.entityId) ?? null
+    this.assertNotConcurrentlyModified(current?.updatedAt ?? null, state, change)
+    if (change.deletedAt !== null) {
+      if (current !== null) {
+        await this.storage.updateUserKnowledgeEntry({ ...current, enabled: false, deletedAt: change.deletedAt, updatedAt: change.updatedAt })
+        if (
+          this.storage.listUserKnowledgeSources !== undefined &&
+          this.storage.updateUserKnowledgeSource !== undefined
+        ) {
+          const source = (await this.storage.listUserKnowledgeSources(this.ownerId, { includeDeleted: true }))
+            .find((item) => item.id === current.sourceId)
+          if (source !== undefined && source.deletedAt === null) {
+            const entries = this.storage.listUserKnowledgeEntries === undefined
+              ? []
+              : await this.storage.listUserKnowledgeEntries(this.ownerId)
+            const entryCount = entries.filter((item) => item.sourceId === source.id && item.enabled && item.deletedAt === null).length
+            await this.storage.updateUserKnowledgeSource({
+              ...source,
+              entryCount,
+              status: entryCount > 0 ? 'ready' : 'disabled',
+              updatedAt: change.updatedAt,
+            })
+          }
+        }
+      }
+      return
+    }
+    const parsed = parseOwnerlessPayload(userKnowledgeEntrySchema, change, this.ownerId)
+    await this.storage.updateUserKnowledgeEntry(parsed)
+  }
+
+  private async applyUserSetting(change: SyncChange, state: SyncEntityState): Promise<void> {
+    if (this.storage.getUserPreferences === undefined || this.storage.saveUserPreferences === undefined) {
+      throw invalidRemotePayload('当前版本不支持恢复用户偏好。')
+    }
+    if (change.deletedAt !== null) {
+      throw invalidRemotePayload('用户偏好不支持云端删除。')
+    }
+    if (change.entityId !== this.ownerId) {
+      throw invalidRemotePayload('云端用户偏好归属无效。')
+    }
+    const current = await this.storage.getUserPreferences(this.ownerId)
+    this.assertNotConcurrentlyModified(current?.updatedAt ?? null, state, change)
+    if (Object.prototype.hasOwnProperty.call(change.payload, 'ownerId')) {
+      throw invalidRemotePayload('云端用户偏好不应包含本地账号 ownerId。')
+    }
+    const parsed = userPreferencesSchema.safeParse({
+      ...change.payload,
+      ownerId: this.ownerId,
+    })
+    if (!parsed.success) throw invalidRemotePayload('云端用户偏好结构无效，本机偏好未被修改。')
+    await this.storage.saveUserPreferences(parsed.data)
   }
 
   private async clearSyncedDeletionTombstones(): Promise<void> {
@@ -479,6 +784,14 @@ function sanitizeMaterial(material: PersonalMaterial): SyncPayload {
   return omitProperty(material, 'ownerId')
 }
 
+function sanitizeKnowledgeSource(source: UserKnowledgeSource): SyncPayload {
+  return omitProperty(source, 'ownerId')
+}
+
+function sanitizeKnowledgeEntry(entry: UserKnowledgeEntry): SyncPayload {
+  return omitProperty(entry, 'ownerId')
+}
+
 function validateDeletionPayload(change: SyncChange): void {
   if (
     ('ownerId' in change.payload) ||
@@ -490,9 +803,64 @@ function validateDeletionPayload(change: SyncChange): void {
 }
 
 function readPayloadUpdatedAt(change: SyncChange): string {
-  return typeof change.payload.updatedAt === 'string'
-    ? change.payload.updatedAt
-    : change.updatedAt
+  let timestamp = change.updatedAt
+  for (const key of ['updatedAt', 'createdAt', 'importedAt'] as const) {
+    if (typeof change.payload[key] === 'string') {
+      timestamp = change.payload[key]
+      break
+    }
+  }
+  if (
+    (change.entityType === 'question_exclusion' ||
+      change.entityType === 'question_bank_exclusion') &&
+    typeof change.payload.deletedAt === 'string' &&
+    change.payload.deletedAt.length > 0
+  ) {
+    return `${timestamp}|deleted:${change.payload.deletedAt}`
+  }
+  return timestamp
+}
+
+function questionExclusionSyncTimestamp(
+  value: { createdAt: string; deletedAt: string | null } | null,
+): string | null {
+  if (value === null) return null
+  return value.deletedAt === null
+    ? value.createdAt
+    : `${value.createdAt}|deleted:${value.deletedAt}`
+}
+
+function questionBankExclusionSyncTimestamp(
+  value: { createdAt: string; deletedAt: string | null } | null,
+): string | null {
+  if (value === null) return null
+  return value.deletedAt === null
+    ? value.createdAt
+    : `${value.createdAt}|deleted:${value.deletedAt}`
+}
+
+function readLocalSyncTimestamp(
+  entityType: CloudSyncEntityType,
+  payload: SyncPayload,
+  fallback: string,
+  deletedAt: string | null,
+): string {
+  let timestamp = fallback
+  for (const key of ['updatedAt', 'createdAt', 'importedAt'] as const) {
+    if (typeof payload[key] === 'string') {
+      timestamp = payload[key]
+      break
+    }
+  }
+  if (
+    deletedAt === null &&
+    (entityType === 'question_exclusion' || entityType === 'question_bank_exclusion') &&
+    typeof payload.deletedAt === 'string' &&
+    payload.deletedAt.length > 0
+  ) {
+    return `${timestamp}|deleted:${payload.deletedAt}`
+  }
+  return timestamp
 }
 
 function isUnsubmittedDraft(session: TrainingSession): boolean {
@@ -537,8 +905,9 @@ function stableOperationId(
   entityId: string,
   updatedAt: string,
   deletedAt: string | null,
+  baseVersion: number,
 ): string {
-  const identity = `${entityType}\u0000${entityId}\u0000${updatedAt}\u0000${deletedAt ?? ''}`
+  const identity = `${entityType}\u0000${entityId}\u0000${updatedAt}\u0000${deletedAt ?? ''}\u0000${baseVersion}`
   let first = 0x811c9dc5
   let second = 0x9e3779b9
   for (let index = 0; index < identity.length; index += 1) {

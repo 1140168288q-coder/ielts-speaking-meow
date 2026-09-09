@@ -52,8 +52,18 @@ function Get-DockerDesktopPath {
 }
 
 function Test-DockerEngine {
-    & docker.exe info --format '{{.ServerVersion}}' *> $null
-    return $LASTEXITCODE -eq 0
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & docker.exe info --format '{{.ServerVersion}}' *> $null
+        return $LASTEXITCODE -eq 0
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
 }
 
 function Start-DockerDesktopIfNeeded {

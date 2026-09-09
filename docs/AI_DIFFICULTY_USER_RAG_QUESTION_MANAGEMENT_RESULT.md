@@ -79,7 +79,8 @@ Debug（SHA-256 `036321a5e330c02eb745553610e25cab26d1f92a93ecf4aa068676c4bf9789e
   `docker compose config --quiet` 校验；未打印或提交任何密钥。
 - 已修复 Windows 公网栈脚本在 Docker 引擎未运行时的异常处理，并尝试启动现有公网栈；本机
   Docker Desktop 当前仍未提供可用 Linux Engine，因此未伪称容器或公网健康检查已经完成。
-- 代码提交、版本标签和远端推送将在本次交付提交完成后记录在此处。
+- 本轮代码已提交到 `codex/v2-product-refactor`，版本标签为 `v2.2.1`；最终提交与远端推送状态
+  以交付时的 Git 记录为准。
 
 ## 真实环境限制
 

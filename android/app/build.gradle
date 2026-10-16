@@ -16,8 +16,8 @@ android {
         applicationId "com.ieltsspeakingmeow.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 20
-        versionName "2.2.1"
+        versionCode 21
+        versionName "2.2.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config"]
         aaptOptions {

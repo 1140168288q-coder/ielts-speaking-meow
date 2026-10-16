@@ -257,11 +257,11 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
 
-    expect(await screen.findByText('Backend 可达：是')).toBeTruthy()
-    expect(screen.getByText('DeepSeek 已配置：是')).toBeTruthy()
-    expect(screen.getByText('DeepSeek 已验证：尚未实际验证')).toBeTruthy()
+    expect(await screen.findByText('服务状态：已经连接，上次反馈没成功')).toBeTruthy()
+    expect(screen.getByText('模型：已配置，待验证')).toBeTruthy()
+    expect(screen.getByText('Backend 可达：是')).toBeTruthy()
     expect(screen.getByText(/最近一次反馈：失败/)).toBeTruthy()
-    expect(screen.getByText('AI 反馈需检查')).toBeTruthy()
+    expect(screen.getByText('AI 还没睡醒，点一下检查')).toBeTruthy()
   })
 
   it('checks the cloud backend on demand and lists provider status', async () => {
@@ -271,8 +271,8 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /重新检查连接/ }))
-    expect(await screen.findByText(/连接正常/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /唤醒一下 AI/ }))
+    expect(await screen.findByText('云端服务连接正常。')).toBeTruthy()
     expect(harness.refreshHealth).toHaveBeenCalledTimes(2)
   })
 
@@ -283,9 +283,9 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /重新检查连接/ }))
-    expect(await screen.findByText(/网络连接失败/)).toBeTruthy()
-    expect(screen.getByText(/离线/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /唤醒一下 AI/ }))
+    expect(await screen.findByText('云端服务暂时没回应，离线练习不受影响。')).toBeTruthy()
+    expect(screen.getAllByText(/离线/).length).toBeGreaterThan(0)
   })
 
   it('runs real upstream verification on demand', async () => {
@@ -298,7 +298,7 @@ describe('SettingsController', () => {
     await user.click(screen.getByText('高级连接设置'))
     await user.click(screen.getByRole('button', { name: /验证上游服务/ }))
     await waitFor(() => expect(harness.verifyProviders).toHaveBeenCalledTimes(1))
-    expect(await screen.findByText(/上游验证通过/)).toBeTruthy()
+    expect(await screen.findByText(/验证通过：AI 反馈与云端朗读/)).toBeTruthy()
   })
 
   it('tests the system TTS directly through the system provider', async () => {
@@ -339,7 +339,7 @@ describe('SettingsController', () => {
     })
     render(<SettingsController {...harness} />)
     await waitFor(() => expect(harness.refreshHealth).toHaveBeenCalled())
-    await user.click(screen.getByRole('button', { name: /试听云端默认/ }))
+    await user.click(screen.getByRole('button', { name: /试听一下云端声音/ }))
     expect(harness.preferredVoiceSpeak).not.toHaveBeenCalled()
     expect(harness.systemTtsSpeak).toHaveBeenCalledWith(expect.objectContaining({
       text: 'Hello, this is your IELTS speaking coach.',

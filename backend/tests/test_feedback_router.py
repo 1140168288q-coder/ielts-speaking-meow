@@ -101,6 +101,50 @@ async def test_feedback_happy_path(make_app):
     assert body["problems"]
 
 
+@pytest.mark.parametrize(
+    ("source_part", "expected"),
+    [
+        ("1", 1),
+        ("Part 2", 2),
+        ("P3", 3),
+        ("all", "unclassified"),
+        ("null", None),
+    ],
+)
+async def test_feedback_normalizes_equivalent_source_part_spellings(
+    make_app, source_part, expected
+):
+    feedback = json.loads(json.dumps(TEXT_FEEDBACK))
+    feedback["naturalUpgradeSuggestions"]["addableContent"][0][
+        "sourcePart"
+    ] = source_part
+    app, _ = make_app(deepseek_ok_handler(feedback))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
+
+    assert response.status_code == 200
+    assert response.json()["naturalUpgradeSuggestions"]["addableContent"][0][
+        "sourcePart"
+    ] == expected
+
+
+async def test_feedback_still_rejects_unknown_source_part(make_app):
+    feedback = json.loads(json.dumps(TEXT_FEEDBACK))
+    feedback["naturalUpgradeSuggestions"]["addableContent"][0][
+        "sourcePart"
+    ] = "the current speaking section"
+    app, _ = make_app(deepseek_ok_handler(feedback))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await post_authenticated(client, "/v1/feedback", FEEDBACK_PAYLOAD)
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "provider-error"
+
+
 async def test_feedback_sends_text_only_payload(make_app):
     captured = {}
 

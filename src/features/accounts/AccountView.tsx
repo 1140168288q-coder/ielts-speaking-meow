@@ -31,6 +31,7 @@ export function AccountView({
   const [busy, setBusy] = useState(false)
   const [switchingId, setSwitchingId] = useState<string | null>(null)
   const [switchPin, setSwitchPin] = useState('')
+  const visibleAccountName = (name: string | undefined) => name === '本机用户' ? '本机游客' : (name ?? '未登录')
 
   const refresh = async () => {
     setAccounts(await service.listAccounts())
@@ -83,8 +84,8 @@ export function AccountView({
         <p className="eyebrow">Account & sync</p>
         <h1>账号与同步</h1>
         <p>
-          一个账号，一份坚持。验证邮箱后，你的努力可以跟着你去任何设备；
-          不联网的日子，它们也一直在这里。
+          验证邮箱后，你的练习记录就能跟着你换设备；离线的时候，
+          它们也安安稳稳待在这台手机里。
         </p>
       </div>
 
@@ -92,9 +93,9 @@ export function AccountView({
 
       <section className="account-current-card">
         <div>
-          <p className="eyebrow">当前本机资料</p>
-          <h2>{current?.displayName ?? '未登录'}</h2>
-          <p className="settings-note">这台设备上的练习身份；与云端邮箱账号相互独立。</p>
+          <p className="eyebrow">本机练习</p>
+          <h2>{visibleAccountName(current?.displayName)}</h2>
+          <p className="settings-note">没绑邮箱之前，你的练习都只存在这台手机上。</p>
         </div>
         <span className="account-avatar" aria-hidden="true"><UserRound size={24} /></span>
       </section>
@@ -124,7 +125,7 @@ export function AccountView({
               return (
                 <article key={account.id} className={isCurrent ? 'active' : ''}>
                   <div>
-                    <strong>{account.displayName}</strong>
+                    <strong>{visibleAccountName(account.displayName)}</strong>
                     <small>
                       创建于 {formatDate(account.createdAt)}
                       {hasPin ? ' · 有本地 PIN' : ' · 无 PIN'}

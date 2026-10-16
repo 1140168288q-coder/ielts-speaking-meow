@@ -110,8 +110,8 @@ export function ImportController({
         setFailure({
           code: 'no-questions',
           detail: organizer.isConfigured()
-            ? '可明确选择用 Text AI 整理，或手工粘贴。'
-            : '可手工粘贴，或先在设置中配置 Text AI。',
+            ? '可以让 AI 帮你整理，也可以手工粘贴。'
+            : '可以手工粘贴，或先在设置中打开 AI 整理。',
         })
         setPhase('error')
       } else {
@@ -131,7 +131,7 @@ export function ImportController({
     setProgress({
       stage: 'finding-questions',
       percent: null,
-      detail: '仅将提取后的文字发送给 DeepSeek；原文件和图片不会上传。',
+      detail: '只把提取后的文字交给 AI 整理；原文件和图片不会上传。',
     })
     try {
       const organized = await organizer.extractQuestions({
@@ -143,7 +143,7 @@ export function ImportController({
       if (organized.length === 0) {
         setFailure({
           code: 'ai-failed',
-          detail: 'DeepSeek 没有整理出题目；本地候选题仍保留在预览中。',
+          detail: 'AI 没有整理出题目；本地候选题仍保留在预览中。',
         })
         setPhase('error')
         return
@@ -156,11 +156,11 @@ export function ImportController({
       setCandidates(nextCandidates)
       setFailure(null)
       setPhase('review')
-    } catch (error) {
+    } catch {
       if (token !== operation.current) return
       setFailure({
         code: 'ai-failed',
-        detail: error instanceof Error ? error.message : 'DeepSeek 请求失败。',
+        detail: 'AI 整理失败，本地候选题仍保留在预览中。',
       })
       setPhase('error')
     }

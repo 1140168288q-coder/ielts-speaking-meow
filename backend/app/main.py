@@ -69,7 +69,7 @@ def create_app(
                 await client.aclose()
 
     app = FastAPI(
-        title="雅思口语喵 Backend", version="2.2.1", lifespan=lifespan
+        title="雅思口语喵 Backend", version="2.2.2", lifespan=lifespan
     )
     app.state.settings = settings
     app.state.client = client

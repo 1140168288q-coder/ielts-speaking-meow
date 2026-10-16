@@ -51,7 +51,7 @@ describe('AccountView', () => {
 
     render(<AccountView service={service} onSwitched={onSwitched} />)
 
-    expect(await screen.findByText('本机用户')).toBeInTheDocument()
+    expect((await screen.findAllByText('本机游客')).length).toBeGreaterThan(0)
 
     await user.type(screen.getByLabelText('昵称'), '小明')
     await user.type(screen.getByLabelText('本地 PIN（可选，4-6 位数字）'), '1234')

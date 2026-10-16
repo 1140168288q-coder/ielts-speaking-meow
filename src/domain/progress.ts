@@ -116,7 +116,7 @@ export function recommendQuestion(
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   if (practiced.length === 0) {
     const first = questions.find((question) => question.part === 1) ?? questions[0]!
-    return { question: first, reason: '从一题短回答开始，先建立真实开口的节奏。' }
+    return { question: first, reason: '不用完美，先张嘴。节奏比流利更重要。' }
   }
 
   const questionCounts = new Map<string, number>()

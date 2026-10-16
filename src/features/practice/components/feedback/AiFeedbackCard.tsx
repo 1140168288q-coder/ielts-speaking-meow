@@ -155,7 +155,7 @@ export function AiFeedbackCard({
 function contextKindLabel(kind: NonNullable<AiFeedback['contextReferences']>[number]['kind']): string {
   if (kind === 'built_in_knowledge') return '内置教学知识'
   if (kind === 'user_knowledge') return '我的知识库'
-  if (kind === 'memory') return '已确认 Memory'
+  if (kind === 'memory') return '已确认长期记忆'
   return '已确认个人素材'
 }
 

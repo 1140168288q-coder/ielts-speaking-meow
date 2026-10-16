@@ -1,0 +1,8 @@
+{
+  "kind": "source_path_and_line_bounds_not_semantic_proof",
+  "checked_on": "2026-09-21",
+  "source_paths_checked": 65,
+  "references_checked": 116,
+  "passed": true,
+  "problems": []
+}

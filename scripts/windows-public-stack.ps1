@@ -125,6 +125,24 @@ function Ensure-PublicStack {
     return Invoke-Compose -Arguments @('up', '-d')
 }
 
+function Test-PublicStackRunning {
+    $common = @(
+        '--env-file', $EnvFile,
+        '-f', $ComposeFile,
+        '-f', $CloudflareComposeFile
+    )
+    $running = & docker.exe compose @common ps --status running --services 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        return $false
+    }
+    foreach ($service in @('postgres', 'backend', 'cloudflared')) {
+        if ($running -notcontains $service) {
+            return $false
+        }
+    }
+    return $true
+}
+
 function Get-PublicHealthUrl {
     $accountUrlLine = Get-Content -LiteralPath $EnvFile |
         Where-Object { $_ -match '^APP_ACCOUNT_URL=' } |
@@ -165,6 +183,7 @@ function Register-PublicStackTask {
         -StartWhenAvailable `
         -AllowStartIfOnBatteries `
         -DontStopIfGoingOnBatteries `
+        -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
         -RestartCount 3 `
         -RestartInterval (New-TimeSpan -Minutes 1)
     $principal = New-ScheduledTaskPrincipal `
@@ -200,6 +219,11 @@ function Invoke-Watch {
     while ($true) {
         if (-not (Test-DockerEngine)) {
             [void] (Ensure-PublicStack)
+        }
+        elseif (-not (Test-PublicStackRunning)) {
+            Write-Log '发现服务容器已停止，重新启动完整公网服务栈。'
+            [void] (Ensure-PublicStack)
+            $consecutiveFailures = 0
         }
         elseif (Test-PublicHealth) {
             if ($consecutiveFailures -gt 0) {

@@ -1,0 +1,32 @@
+你是「雅思口语喵」项目的 UI 优化执行者（gpt-5.6-sol，medium 思考强度）。请按用户提供的《应用界面文字与排版优化建议》**完成整个软件的 UI 文字内容与排版优化**，并端到端走完：自测 → 完善 → 提交 git → 同步公网（v2.2.2）→ 打包 release APK。
+
+【项目地址】
+源码真实目录（**必须在这里执行**，junction 路径 C:\Users\11401\ielts_meow 会导致 ESLint/构建报错）：
+D:\111-Trae_project\雅思喵\雅思口语喵
+（Android-first：React + TypeScript + Vite + Capacitor）
+
+【优化依据（唯一文案/排版依据，务必完整落实）】
+docs/UI_COPY_LAYOUT_OPTIMIZATION_v2.2.2.md（由用户提供的 Word 文档零修改转成的 Markdown，含 9 张表格）
+内容含：① 九个页面的**逐条文案对照**（原文→建议改成+原因）② **8 项排版建议**（信息层级、首页橙色卡片题目突出、模式卡片等高、题库筛选区、复盘 tab 一行、账号页卡片对齐、设置页英文小标签、底部 Tab 栏）③ **风格总纲**：像温柔的猫陪伴练口语；说清楚的地方不啰嗦，该有温度的地方允许撒娇；**技术术语（Backend/DeepSeek/本机用户等）全部藏进"高级设置"，前台不出现工程师视角的词汇**。
+
+【已完成的前置（无需重做）】
+- 已创建 checkpoint：tag `checkpoint-ui-v2.2.2-pre`、commit `dea899e`（开工前备份已完成）
+- 当前分支 `codex/v2-product-refactor`
+
+【任务步骤】
+1. **先读**：优化建议全文 + 现有 UI 源码结构（src/ 下页面/组件、样式），理解现有设计系统（暖橙治愈系）与现有模式。
+2. **逐条落实文案**：按建议表把**每一个页面**的文案改成"建议改成"的版本；若某条与产品实际不符（如原文已不同），以**建议的意图**为准做等效替换，并在报告中记录该条的实际处理。技术术语统一收进高级设置区。
+3. **逐项落实排版**：8 项排版建议全部实现（信息层级/首页卡片主次/模式卡等高/题库筛选两行+横滚/复盘 tab 一行居中+空状态不被 tab 遮挡/账号两卡对齐/设置英文小标签弱化+分割线/底部 tab 圆角与配色），并修复建议中提到的**真实 bug**（如空状态被底部 tab 遮挡、tab 换行错位、序号颜色过浅）。
+4. **自查完善**：改完后**自己逐页面检查**（可用构建产物 + 截图/浏览器验证或至少严格对照清单逐条核对），确认"全部界面和文字用户看着舒服"；发现不协调处继续改，直到满意。列出**逐条对照清单**（建议项→是否落实→落实位置文件）证明无遗漏。
+5. **测试**：运行项目既有验证（`npm run lint` / `typecheck` / `test` / `build`，按 package.json 实际脚本），全部通过；并确认核心训练流程未被破坏。
+6. **版本与提交**：版本号升至 **2.2.2**（package.json / android/app/build.gradle versionCode+1、versionName "2.2.2"，versionCode 应为 21）。git 提交（英文 conventional commit message），**不推送远程**。
+7. **同步公网**：按项目既有部署流程（docker compose + cloudflare tunnel，参考 docs/DEPLOY_WINDOWS_PUBLIC.md、compose.cloudflare.yaml、.env.deploy）重建部署，使公网 https://api.formomentward.com/health 返回 **2.2.2**；部署前按惯例备份 DB。
+8. **打包 release APK**：用项目既有构建脚本，**BackendUrl 指向 `https://api.formomentward.com`**（手机端默认连公网），产出 release APK，给出**路径 + 大小 + SHA256**。若 release 签名需配置项而缺失，如实说明并给出最接近的可交付版本（不伪造）。
+
+【硬约束】
+- 只做 UI 文案/排版优化与必要 bug 修复，**不做无关重构、不改核心业务逻辑**。
+- 严格遵循仓库 AGENTS.md 的约定（Android-first、local-first、不泄露 secrets、验证 LLM 输出、failure path 等）。
+- 不伪造测试/构建/部署成功；每条给真实证据（命令+输出）。
+- 遇到影响最终结果、需要用户拍板的方向性决策，停下输出 `DECISION-PENDING: 问题 + 2~3 方案`。
+- 报告写入 `docs/UI_OPTIMIZATION_v2.2.2_REPORT.md`（含逐条对照清单、测试结果、部署证据、APK 信息、遗留项）。
+- 结束消息给摘要：落实了什么、测试结果、公网版本、APK 路径/SHA256、遗留项。

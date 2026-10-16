@@ -35,3 +35,10 @@ artifacts/v1.1-qa/
 secrets/
 backups/
 *.dump
+
+# 本机工具配置、临时预览与大体积录屏
+/.codex/
+/runtime/
+/tmp/
+/docs/ui-opt-sol-last.txt
+/*.mp4

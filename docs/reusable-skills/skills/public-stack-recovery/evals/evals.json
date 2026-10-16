@@ -1,0 +1,18 @@
+{
+  "skill_name": "public-stack-recovery",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "自托管知识助手Docker正常，公网502，数据库和API容器已退出但隧道还在运行。监控只重启隧道。请给只读诊断和修复方案，不能停生产或删除数据。",
+      "expected_output": "全依赖检查，现有编排保留卷，区分running/ready/公网，故障演练仅计划不执行。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Windows登录启动的AI服务监控过几天停了；厂商API HTTPS可达但隧道连不上。请分层定位，不得全局关闭VPN。",
+      "expected_output": "守护生命周期/运行限制与数据通道分别诊断，证据驱动网络路径，不擅改全局VPN。",
+      "files": []
+    }
+  ]
+}
+

@@ -78,9 +78,9 @@ describe('ImportController AI failure recovery', () => {
       await screen.findByRole('heading', { name: '确认后再加入题库' }),
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '用 DeepSeek 智能整理' }))
+    await user.click(screen.getByRole('button', { name: '让 AI 帮我整理' }))
     expect(
-      await screen.findByRole('heading', { name: 'Text AI 没有完成整理' }),
+      await screen.findByRole('heading', { name: 'AI 没有完成整理' }),
     ).toBeInTheDocument()
 
     await user.click(
@@ -128,9 +128,9 @@ describe('ImportController AI failure recovery', () => {
     )
     await screen.findByRole('heading', { name: '确认后再加入题库' })
 
-    await user.click(screen.getByRole('button', { name: '用 DeepSeek 智能整理' }))
+    await user.click(screen.getByRole('button', { name: '让 AI 帮我整理' }))
     expect(
-      await screen.findByText(/DeepSeek 没有整理出题目/),
+      await screen.findByText(/AI 没有整理出题目/),
     ).toBeInTheDocument()
 
     await user.click(

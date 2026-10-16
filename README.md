@@ -1,4 +1,4 @@
-# 雅思口语喵 V2.2.1
+# 雅思口语喵 V2.2.2
 
 Android-first、local-first 的 IELTS Speaking 单题训练 App。它围绕“两次回答、
 长期 Memory、个人素材复用”形成持续学习闭环：

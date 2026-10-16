@@ -806,7 +806,7 @@ export function App() {
           accountLabel={
             cloudSession
               ? (cloudSession.user.displayName?.trim() || '云端用户')
-              : (currentAccount?.displayName ?? '本机用户')
+              : visibleAccountName(currentAccount?.displayName)
           }
           apiConnected={apiConnected}
           onBrandClick={() => navigateSafely('home')}
@@ -837,7 +837,7 @@ export function App() {
             questions={visibleQuestions}
             sessions={sessions}
             expressionCount={expressions.length}
-            accountName={currentAccount?.displayName ?? '本机用户'}
+            accountName={visibleAccountName(currentAccount?.displayName)}
             titleOverride={preferences.homeTitleOverride}
             subtitleOverride={preferences.homeSubtitleOverride}
             onStart={(question) => void startQuestion(question)}
@@ -985,7 +985,7 @@ export function App() {
                     emailVerified={cloudSession.user.emailVerified}
                     onSync={() => void runCloudSync()}
                     bindingRequired={currentAccount?.cloudAccountId == null}
-                    localProfileName={currentAccount?.displayName ?? '本机用户'}
+                    localProfileName={visibleAccountName(currentAccount?.displayName)}
                   />
                 ) : null}
               </>
@@ -1042,4 +1042,9 @@ export function App() {
       ) : null}
     </div>
   )
+}
+
+function visibleAccountName(name: string | undefined): string {
+  if (name === undefined || name === '本机用户') return '本机游客'
+  return name
 }

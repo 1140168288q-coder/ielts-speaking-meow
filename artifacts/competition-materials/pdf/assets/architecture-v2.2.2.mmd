@@ -1,0 +1,23 @@
+flowchart TB
+  UI["Android 界面<br/>选题 · 双答 · 复盘"]
+  LOCAL["本地训练与保存<br/>PracticeService / IndexedDB"]
+  CLIENT["上下文与 AI 请求<br/>Provider / BackendClient"]
+  TTS["语音播放协调<br/>AI TTS / 系统 TTS"]
+  API["自建后端 FastAPI<br/>鉴权 · 模型代理 · 手动同步"]
+  DB["PostgreSQL<br/>账号与同步数据"]
+  AI["DeepSeek<br/>文本分析"]
+  VOICE["火山语音<br/>语音合成"]
+  UI <--> LOCAL
+  UI --> CLIENT
+  UI --> TTS
+  CLIENT -->|HTTPS| API
+  TTS --> API
+  API --> DB
+  API --> AI
+  API --> VOICE
+  classDef app fill:#FFF2E6,stroke:#B7441E,color:#2F2A26,stroke-width:1px
+  classDef data fill:#FFF9E8,stroke:#C78A2A,color:#2F2A26,stroke-width:1px
+  classDef cloud fill:#EAF2FC,stroke:#3471B8,color:#2F2A26,stroke-width:1px
+  class UI,CLIENT,TTS app
+  class LOCAL,DB data
+  class API,AI,VOICE cloud

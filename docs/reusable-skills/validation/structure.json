@@ -1,0 +1,110 @@
+{
+  "kind": "structural_validation_not_behavioral_proof",
+  "skill_count": 12,
+  "scenario_count": 24,
+  "passed": true,
+  "problems": [],
+  "skills": [
+    {
+      "name": "agent-delivery-handoff",
+      "passed": true,
+      "lines": 36,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "ai-contract-reliability",
+      "passed": true,
+      "lines": 39,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "ai-usage-idempotency",
+      "passed": true,
+      "lines": 38,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "async-workflow-integrity",
+      "passed": true,
+      "lines": 37,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "core-loop-scope",
+      "passed": true,
+      "lines": 101,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "evidence-based-demo",
+      "passed": true,
+      "lines": 38,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "evidence-based-release",
+      "passed": true,
+      "lines": 37,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "grounded-rag-memory",
+      "passed": true,
+      "lines": 117,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "interruptible-provider-fallback",
+      "passed": true,
+      "lines": 96,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "local-first-sync-recovery",
+      "passed": true,
+      "lines": 112,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "public-stack-recovery",
+      "passed": true,
+      "lines": 37,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    },
+    {
+      "name": "source-import-pipeline",
+      "passed": true,
+      "lines": 98,
+      "scenarios": 2,
+      "official": "Skill is valid!",
+      "errors": []
+    }
+  ],
+  "checked_on": "2026-09-21",
+  "validator_negative_check": {
+    "passed": true,
+    "scenario": "A missing intra-skill reference in a temporary copy was correctly rejected."
+  }
+}

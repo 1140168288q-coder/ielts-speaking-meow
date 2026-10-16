@@ -93,7 +93,7 @@ export function KnowledgeLibrary({
         candidate,
       })))
       setMessage(organizer.isConfigured()
-        ? `DeepSeek 返回 ${result.length} 条候选。逐条检查后再保存。`
+        ? `AI 整理出 ${result.length} 条候选。逐条检查后再保存。`
         : `当前离线，已生成 ${result.length} 条本地草稿。检查后可直接保存，稍后仍可编辑。`)
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'AI 整理失败；原始提取仍保留在当前草稿。')
@@ -194,8 +194,8 @@ export function KnowledgeLibrary({
     <section className="page-stack knowledge-library-page">
       <div className="question-library-heading">
         <div>
-          <p className="eyebrow">Private teaching RAG</p>
-          <h1>我的知识库</h1>
+          <p className="eyebrow">Your learning library</p>
+          <h1>我的语料库</h1>
           <p>导入自己的教学资料或表达资料。它与“我的真实素材”分开保存，只有你确认后的条目才会参与自然提升版。</p>
         </div>
         <button className="primary-button compact" type="button" onClick={() => inputRef.current?.click()} disabled={busy}>
@@ -232,10 +232,10 @@ export function KnowledgeLibrary({
           {draft.extraction.warnings.length > 0 ? (
             <ul className="warning-list">{draft.extraction.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
           ) : null}
-          <p className="privacy-note">原始文件只保存在本机备份中；发送给 DeepSeek 的是带页码和章节的文本分块，不包含账号密钥。</p>
+          <p className="privacy-note">原始文件只保存在本机备份中；交给 AI 的只有带页码和章节的文字片段，不包含账号信息。</p>
           {candidates.length === 0 ? (
             <button type="button" className="secondary-button" onClick={() => void organize()} disabled={busy}>
-              {organizer.isConfigured() ? '用 DeepSeek 整理为知识条目' : '离线生成本地草稿'}
+              {organizer.isConfigured() ? '让 AI 整理成资料卡' : '离线生成本地草稿'}
             </button>
           ) : (
             <>

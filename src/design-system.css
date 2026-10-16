@@ -219,10 +219,11 @@ select:focus-visible {
 .eyebrow {
   margin: 0 0 8px;
   color: var(--ds-accent);
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 9px;
+  font-weight: 700;
   letter-spacing: 0.15em;
   text-transform: uppercase;
+  opacity: 0.62;
 }
 
 .primary-button {
@@ -312,8 +313,8 @@ select:focus-visible {
   min-height: 54px;
   gap: 3px;
   border: 0;
-  border-radius: 16px;
-  color: var(--ds-text-soft);
+  border-radius: 10px;
+  color: #746c65;
   background: transparent;
   font-size: 10px;
 }
@@ -323,7 +324,7 @@ select:focus-visible {
 }
 
 .bottom-nav button.active {
-  color: var(--ds-primary-strong);
+  color: #9f3d16;
   background: var(--ds-primary-soft);
   box-shadow: none;
 }
@@ -341,7 +342,8 @@ select:focus-visible {
 .review-center-heading h1 {
   margin: 0;
   color: var(--ds-text);
-  font-size: clamp(27px, 6vw, 38px);
+  font-size: clamp(30px, 6.6vw, 41px);
+  font-weight: 820;
   line-height: 1.12;
   letter-spacing: -0.035em;
 }
@@ -353,6 +355,10 @@ select:focus-visible {
   margin: 10px 0 0;
   color: var(--ds-text-soft);
   line-height: 1.65;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .week-pill {
@@ -413,32 +419,40 @@ select:focus-visible {
   font-size: clamp(28px, 7vw, 43px);
   line-height: 1.12;
   letter-spacing: -0.025em;
+  font-weight: 800;
 }
 
 .today-focus-card > p {
   max-width: 570px;
   margin: 0;
-  color: #ffe3cb;
+  color: rgba(255, 250, 243, 0.72);
+  font-size: 13px;
   line-height: 1.7;
 }
 
 .today-focus-actions {
   display: flex;
-  gap: 10px;
+  gap: 16px;
   margin-top: 28px;
 }
 
 .today-focus-card .primary-button {
+  padding-inline: 12px;
   border-color: #fff;
   color: var(--ds-vivid-deep);
   background: #fff;
   box-shadow: 0 4px 0 #f0b489;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .today-focus-card .secondary-button {
+  padding-inline: 12px;
   border-color: rgba(255, 255, 255, 0.27);
   color: #fff;
   background: rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .focus-loop {
@@ -498,7 +512,7 @@ select:focus-visible {
   grid-template-rows: auto auto;
   align-items: center;
   gap: 2px 10px;
-  min-height: 104px;
+  min-height: 120px;
   padding: 16px;
   border: 1px solid var(--ds-line);
   border-radius: var(--ds-radius-md);
@@ -518,26 +532,33 @@ select:focus-visible {
   width: 40px;
   height: 40px;
   grid-row: 1 / 3;
+  grid-column: 1;
   align-items: center;
   justify-content: center;
-  border-radius: 13px;
+  border-radius: 50%;
   color: var(--ds-primary);
   background: var(--ds-primary-soft);
 }
 
 .practice-mode-grid strong {
+  grid-column: 2;
+  grid-row: 1;
   align-self: end;
   font-size: 14px;
 }
 
 .practice-mode-grid small {
+  grid-column: 2;
+  grid-row: 2;
   align-self: start;
   color: var(--ds-text-soft);
   font-size: 10px;
 }
 
 .practice-mode-grid button > svg {
+  grid-column: 3;
   grid-row: 1 / 3;
+  justify-self: end;
   color: var(--ds-text-soft);
 }
 
@@ -603,6 +624,28 @@ select:focus-visible {
   gap: 18px;
 }
 
+.question-library-tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 10px;
+}
+
+.question-library-tools button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  border: 0;
+  color: var(--ds-primary-strong);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 760;
+}
+
 .part-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -658,6 +701,10 @@ select:focus-visible {
   position: relative;
   grid-template-columns: 45px minmax(0, 1fr) auto auto;
   transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.question-number {
+  color: var(--ds-primary-strong);
 }
 
 .question-row.management {
@@ -920,6 +967,8 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ds-line);
 }
 
 .question-filter-actions > span {
@@ -969,8 +1018,8 @@ select:focus-visible {
 
 .review-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
   padding: 5px;
   border: 1px solid var(--ds-line);
   border-radius: 16px;
@@ -982,12 +1031,17 @@ select:focus-visible {
   min-height: 44px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 2px;
   border: 0;
   border-radius: 12px;
   color: var(--ds-text-soft);
   background: transparent;
+  font-size: 9px;
   font-weight: 760;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .review-tabs button.active {
@@ -1010,7 +1064,7 @@ select:focus-visible {
 
 .empty-state {
   display: grid;
-  min-height: 330px;
+  min-height: 360px;
   place-content: center;
   padding: 28px;
   border: 1px dashed var(--ds-line);
@@ -1019,6 +1073,17 @@ select:focus-visible {
   background: var(--ds-surface-raised);
   box-shadow: var(--ds-shadow-sm);
   text-align: center;
+}
+
+.review-center .empty-state {
+  margin-bottom: 16px;
+  scroll-margin-bottom: calc(100px + env(safe-area-inset-bottom));
+}
+
+.empty-state > svg {
+  width: 42px;
+  height: 42px;
+  justify-self: center;
 }
 
 .history-list .history-open {
@@ -1135,6 +1200,24 @@ select:focus-visible {
   padding: 18px;
   border-color: color-mix(in srgb, var(--ds-primary) 30%, var(--ds-line));
   scroll-margin-top: 82px;
+}
+
+.account-current-card {
+  min-height: 148px;
+  align-items: flex-start;
+  padding: 18px;
+  border-radius: var(--ds-radius-lg);
+}
+
+.cloud-account-label.verified::before {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #2f8a68;
+  content: "";
+  box-shadow: 0 0 0 3px color-mix(in srgb, #2f8a68 13%, transparent);
 }
 
 .account-page {
@@ -1622,7 +1705,7 @@ select:focus-visible {
   }
 
   .practice-mode-grid button {
-    min-height: 76px;
+    min-height: 120px;
   }
 
   .today-focus-actions {
@@ -1653,8 +1736,8 @@ select:focus-visible {
     display: grid;
   }
 
-  .question-library-heading > button {
-    width: max-content;
+  .question-library-tools {
+    justify-content: flex-start;
   }
 
   .question-filter-actions {
@@ -1821,6 +1904,20 @@ select:focus-visible {
 
 .settings-page-heading > p:last-child {
   color: var(--ds-text-soft);
+}
+
+.settings-card > div:first-child > .eyebrow,
+.settings-card-heading .eyebrow {
+  color: var(--ds-text-soft);
+  font-size: 9px;
+  font-weight: 650;
+  opacity: 0.5;
+}
+
+.settings-card > div:first-child > h2,
+.settings-card-heading h2 {
+  font-size: clamp(21px, 5vw, 27px);
+  font-weight: 820;
 }
 
 .settings-card-heading {
@@ -2058,6 +2155,27 @@ select:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.preference-grid > .settings-field {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ds-line);
+}
+
+.friendly-service-status {
+  padding: 12px 14px;
+  border-top: 1px solid var(--ds-line);
+  border-bottom: 1px solid var(--ds-line);
+  list-style: none;
+}
+
+.storage-intro {
+  display: grid;
+  gap: 8px;
+}
+
+.storage-intro p {
+  margin: 0;
 }
 
 .settings-field {

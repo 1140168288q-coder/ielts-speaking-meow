@@ -153,8 +153,8 @@ export function SubmitCorpusStage({
           <section className="second-review-section">
             <div className="section-heading compact-heading">
               <div>
-                <p className="eyebrow"><Brain aria-hidden="true" size={16} /> Memory</p>
-                <h3>这些个人信息要加入你的长期 Memory 吗？</h3>
+                <p className="eyebrow"><Brain aria-hidden="true" size={16} /> 长期记忆</p>
+                <h3>这些个人信息要加入你的长期记忆吗？</h3>
               </div>
             </div>
             {analysis.memoryCandidates.length > 0 ? (

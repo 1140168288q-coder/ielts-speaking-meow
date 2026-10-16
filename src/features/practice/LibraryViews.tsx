@@ -66,9 +66,9 @@ export function LearnerMemoryPanel({
     setFactMessage(null)
     try {
       await onUpdateFactPart(sessionId, factId, sourcePart)
-      setFactMessage('Memory 归类已更新。')
+      setFactMessage('长期记忆归类已更新。')
     } catch (error) {
-      setFactMessage(error instanceof Error ? error.message : 'Memory 归类保存失败。')
+      setFactMessage(error instanceof Error ? error.message : '长期记忆归类保存失败。')
     } finally {
       setFactBusyId(null)
     }
@@ -76,14 +76,14 @@ export function LearnerMemoryPanel({
 
   const deleteFact = async (sessionId: string, factId: string, content: string) => {
     if (!onDeleteFact || factBusyId !== null) return
-    if (!window.confirm(`确定删除这条 Memory 吗？\n${content}`)) return
+    if (!window.confirm(`确定删除这条长期记忆吗？\n${content}`)) return
     setFactBusyId(factId)
     setFactMessage(null)
     try {
       await onDeleteFact(sessionId, factId)
-      setFactMessage('Memory 已删除。')
+      setFactMessage('长期记忆已删除。')
     } catch (error) {
-      setFactMessage(error instanceof Error ? error.message : 'Memory 删除失败。')
+      setFactMessage(error instanceof Error ? error.message : '长期记忆删除失败。')
     } finally {
       setFactBusyId(null)
     }
@@ -91,15 +91,15 @@ export function LearnerMemoryPanel({
 
   return (
     <details className="learner-memory-details">
-      <summary>你的口语轨迹 · 点开看看这段时间的痕迹</summary>
+      <summary>点开，看看自己走了多远</summary>
       <section className="learner-memory-panel">
         <span className="memory-icon"><Brain aria-hidden="true" size={21} /></span>
         <div>
           <p className="eyebrow">Your speaking trail</p>
           <h2>每一次开口，都被悄悄记住</h2>
           <p>练过的每一题都在告诉你：哪里已经稳了，哪里值得再来一次。</p>
-          <div className="question-filter-chips" role="group" aria-label="Memory Part 筛选">
-            <button type="button" className={selectedPart === 'all' ? 'active' : ''} aria-pressed={selectedPart === 'all'} onClick={() => setSelectedPart('all')}>全部 Memory</button>
+          <div className="question-filter-chips" role="group" aria-label="长期记忆 Part 筛选">
+            <button type="button" className={selectedPart === 'all' ? 'active' : ''} aria-pressed={selectedPart === 'all'} onClick={() => setSelectedPart('all')}>全部记忆</button>
             {([1, 2, 3] as const).map((part) => (
               <button key={part} type="button" className={selectedPart === part ? 'active' : ''} aria-pressed={selectedPart === part} onClick={() => setSelectedPart(part)}>Part {part}</button>
             ))}
@@ -112,7 +112,7 @@ export function LearnerMemoryPanel({
                 <article key={fact.id} className="memory-fact-item">
                   <span>P{fact.sourcePart ?? '未分类'} · {fact.content}</span>
                   {onUpdateFactPart || onDeleteFact ? (
-                    <div className="question-filter-chips" role="group" aria-label={`管理 Memory：${fact.content}`}>
+                    <div className="question-filter-chips" role="group" aria-label={`管理长期记忆：${fact.content}`}>
                       {onUpdateFactPart ? (
                         <>
                           {([1, 2, 3] as const).map((part) => (
@@ -244,7 +244,7 @@ export function HistoryView({
           })}
         </div>
       ) : (
-        <EmptyState title="还没有练习记录" body="从一道 Part 1 小题开始，说出你的第一次真实回答。" />
+        <EmptyState title="这里还安安静静的" body="从一道 Part 1 小题开始吧，第一句哪怕磕磕巴巴也没关系。" />
       )}
     </section>
   )

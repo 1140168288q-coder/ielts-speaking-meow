@@ -268,7 +268,7 @@ export function CloudAccountPanel({
         <div className="cloud-account-content">
           <div className="account-status-heading">
             <div>
-              <p className="eyebrow">
+              <p className={`eyebrow cloud-account-label${session.user.emailVerified ? ' verified' : ''}`}>
                 云账号 · {session.user.emailVerified ? '已验证' : '待验证'}
               </p>
               <h2>{session.user.email}</h2>
@@ -281,8 +281,8 @@ export function CloudAccountPanel({
             </span>
           </div>
           <p className="settings-note">
-            登录有效期至 {formatAccountDate(session.expiresAt)}。学习资料同步启用前，
-            本机内容不会自动上传。
+            登录有效期到 {formatAccountDate(session.expiresAt)}。没开同步之前，
+            手机里的内容不会偷偷上传。
           </p>
 
           {!session.user.emailVerified ? (

@@ -198,7 +198,7 @@ export function PracticeFlow({
       )
       if (!textAi.isConfigured()) {
         setAiRetryable(false)
-        setAiNote('Text AI 未配置；已保留本地规则提示，可以继续完成第二次回答。')
+        setAiNote('AI 反馈尚未启用；已保留本地规则提示，可以继续完成第二次回答。')
         return
       }
       if (
@@ -211,7 +211,7 @@ export function PracticeFlow({
       }
 
       if (aiRequestPromiseRef.current !== null) {
-        setAiNote('Text AI 反馈仍在处理中，请等待本次请求完成。')
+        setAiNote('AI 反馈仍在处理中，请等待本次请求完成。')
         return
       }
 
@@ -275,7 +275,7 @@ export function PracticeFlow({
           setAiNote(
             error instanceof Error
               ? `${error.message} 已转用本地规则提示。`
-              : 'Text AI 暂不可用；已转用本地规则提示。',
+              : 'AI 反馈暂不可用；已转用本地规则提示。',
           )
         } finally {
           if (generation === aiRequestGenerationRef.current) {
@@ -303,12 +303,12 @@ export function PracticeFlow({
       )
       if (!textAi.isConfigured()) {
         setAiRetryable(false)
-        setAiNote('Text AI 未配置；已保留本地手动候选，可以直接确认语料。')
+        setAiNote('AI 反馈尚未启用；已保留本地手动候选，可以直接确认语料。')
         return
       }
       if (textAi.getSecondAttemptAnalysis === undefined) {
         setAiRetryable(false)
-        setAiNote('当前 Text AI 不支持二答分析；已保留本地手动候选。')
+        setAiNote('当前 AI 反馈不支持二答分析；已保留本地手动候选。')
         return
       }
       if (
@@ -436,7 +436,7 @@ export function PracticeFlow({
       clearPracticeDraft(session, attemptNumber)
       setMessage(
         aiConfigured
-          ? '第二次回答已保存，正在整理修正句和可加入 Memory 的信息。'
+          ? '第二次回答已保存，正在整理修正句和可加入长期记忆的信息。'
           : '第二次回答已保存；当前使用本地手动候选，可以直接确认语料。',
       )
       void requestSecondAnalysis(saved)
@@ -478,7 +478,7 @@ export function PracticeFlow({
       )
       onChange(result.session)
       setMessage(
-        `第二次回答已完成${result.expressions.length > 0 ? `，收录 ${result.expressions.length} 句个人语料` : ''}${memoryCandidates.length > 0 ? `，加入 ${memoryCandidates.length} 条 Memory` : ''}。`,
+        `第二次回答已完成${result.expressions.length > 0 ? `，收录 ${result.expressions.length} 句个人语料` : ''}${memoryCandidates.length > 0 ? `，加入 ${memoryCandidates.length} 条长期记忆` : ''}。`,
       )
     } catch (error) {
       showError(error, '收录失败，请重试。')

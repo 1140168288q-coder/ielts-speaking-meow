@@ -79,7 +79,7 @@ const failureCopy: Record<ImportFailure['code'], { title: string; body: string }
     body: '源文件没有被修改，也没有创建半成品题目。你可以重试或手工粘贴。',
   },
   'ai-failed': {
-    title: 'Text AI 没有完成整理',
+    title: 'AI 没有完成整理',
     body: '本地提取内容仍在当前预览中；你可以重试、继续使用本地候选题或手工粘贴。',
   },
   'no-questions': {
@@ -177,7 +177,7 @@ function SelectStep({ props }: { props: ImportWorkspaceProps }) {
         <p className={styles.eyebrow}>本地题库</p>
         <h1>导入自己的 IELTS 口语题</h1>
         <p>
-          文档在本机提取；JPG、PNG 和扫描 PDF 使用 Android 本机 OCR，不发送给 Text AI。
+          文档在本机提取；JPG、PNG 和扫描 PDF 使用 Android 本机 OCR，不发送给云端 AI。
         </p>
         <div className={styles.formatList} aria-label="支持的文件格式">
           {formatLabels.map((label) => <span key={label}>{label}</span>)}
@@ -457,12 +457,12 @@ function ReviewStep({ props }: { props: ImportWorkspaceProps }) {
               disabled={!props.textAiAvailable}
               onClick={props.onOrganizeWithTextAi}
             >
-              用 DeepSeek 智能整理
+              让 AI 帮我整理
             </button>
             <small>
               {props.textAiAvailable
-                ? '仅点击后才会把提取文字发送到 DeepSeek；失败时本地候选题不丢失。'
-                : '需要已配置的云端 Text AI；当前仍可继续使用本地候选题。'}
+                ? '只有点击后才会把提取文字交给 AI；失败时本地候选题也不会丢失。'
+                : '需要先启用云端 AI；当前仍可继续使用本地候选题。'}
             </small>
           </div>
         ) : null}
@@ -591,7 +591,7 @@ function ErrorStep({ props }: { props: ImportWorkspaceProps }) {
               className={styles.secondaryButton}
               onClick={props.onOrganizeWithTextAi}
             >
-              用 DeepSeek 智能整理
+              让 AI 帮我整理
             </button>
             <small>这是一次明确上传操作；原文件和图片不会上传。</small>
           </div>

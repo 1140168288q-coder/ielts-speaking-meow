@@ -42,7 +42,7 @@ export function CloudSyncCard({
           <li><Database aria-hidden="true" size={15} />个人素材（你确认保留的故事与观点）</li>
         </ul>
         <p className="privacy-caption">
-          不同步未提交草稿、Memory 快照、原始录音、导入文件、语音缓存或密钥。
+          不同步未提交草稿、长期记忆快照、原始录音、导入文件、语音缓存或密钥。
         </p>
         {message ? (
           <div className={`sync-message ${status}`} role={status === 'error' || status === 'conflict' ? 'alert' : 'status'}>

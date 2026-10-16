@@ -13,7 +13,7 @@ import time
 from typing import Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from ..config import Settings
 from ..errors import BackendError, not_configured, provider_error
@@ -139,6 +139,26 @@ class NaturalUpgradeSuggestion(StrictResponseModel):
     source: Literal["memory", "personal_material", "rag", "user_knowledge", "ai_example"]
     sourcePart: Literal[1, 2, 3, "unclassified"] | None
     replaceable: bool
+
+    @field_validator("sourcePart", mode="before")
+    @classmethod
+    def normalize_source_part(cls, value: object) -> object:
+        """Accept harmless JSON spelling drift without weakening the enum."""
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().lower().replace("_", " ").replace("-", " ")
+        compact = normalized.replace(" ", "")
+        if compact in {"1", "part1", "p1"}:
+            return 1
+        if compact in {"2", "part2", "p2"}:
+            return 2
+        if compact in {"3", "part3", "p3"}:
+            return 3
+        if normalized in {"all", "unclassified", "unknown", "未分类"}:
+            return "unclassified"
+        if normalized in {"null", "none"}:
+            return None
+        return value
 
 
 class NaturalUpgradeSuggestions(StrictResponseModel):
@@ -285,7 +305,7 @@ class DeepSeekService:
                             {
                                 "content": "可添加的理由、例子或细节",
                                 "source": "memory | personal_material | user_knowledge | rag | ai_example",
-                                "sourcePart": "来源 Part 或 unclassified/null",
+                                "sourcePart": "只能是 JSON 数字 1/2/3、字符串 unclassified 或 JSON null",
                                 "replaceable": True,
                             }
                         ],
@@ -320,6 +340,9 @@ class DeepSeekService:
                     "Part 3 使用观点、原因、例子,需要时补结果或比较",
                     "summary 不超过 2 句,problems 最多 2 条且只能写真实重点,没有问题时用下一步练习目标承接",
                     "grammarSuggestions 和 vocabularySuggestions 各最多 2 条",
+                    "addableContent.sourcePart 必须使用 JSON 数字 1、2、3；"
+                    "无法归类时写字符串 unclassified，AI 示例写 null；"
+                    "不要写 Part 1、P1、all、字符串数字或其他说明文字",
                     "不要评价发音、语速、停顿、语调或任何语音表现",
                     "不要给出 IELTS Band 分数、分数段或任何水平评分",
                     "contextReferences 只能引用请求中实际提供且真正使用的来源 id",

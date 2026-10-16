@@ -90,11 +90,11 @@ export function StorageManager({
   return (
     <section className="settings-card storage-card">
       <h2 className="section-heading">本地数据与备份</h2>
-      <p className="settings-note">
-        你的每一份回答都先住在这台手机里。导出备份，像给这段练习之旅拍一张快照——
-        里面包含本机全部账号、个人素材、导入题和早期版本留下的录音，请像日记一样保管。
-        恢复时会与现有记录合并，较新的本地记录会被保留。
-      </p>
+      <div className="settings-note storage-intro">
+        <p>你的每一次开口，都先存在这台手机里。</p>
+        <p>导出一份备份，就像把这段练习时光装进信封——里面有你的账号、语料、题目和录音，请好好收着。</p>
+        <p>恢复备份时，新旧记录会自动合并，不会覆盖你最新的练习。</p>
+      </div>
       {summary ? (
         <div className="storage-summary" aria-label="本地存储概览">
           <div><small>练习</small><strong>{summary.sessions}</strong></div>
@@ -110,7 +110,7 @@ export function StorageManager({
           disabled={busy}
           onClick={() => void exportBackup()}
         >
-          导出完整本地备份
+          导出备份
         </button>
         <label className={busy ? 'file-button disabled' : 'file-button'}>
           恢复备份
@@ -127,7 +127,7 @@ export function StorageManager({
           disabled={busy || (summary?.ttsCacheEntries ?? 0) === 0}
           onClick={() => void clearTts()}
         >
-          清理 AI 语音缓存
+          清掉 AI 缓存
         </button>
       </div>
       {message ? <div className="inline-note" role="status">{message}</div> : null}

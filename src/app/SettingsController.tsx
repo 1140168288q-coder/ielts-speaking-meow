@@ -135,7 +135,7 @@ export function SettingsController({
     } else {
       setHealthFeedback({
         tone: 'error',
-        text: result.failure ?? '云端服务暂不可用。',
+        text: '云端服务暂时没回应，离线练习不受影响。',
       })
     }
   }
@@ -143,14 +143,14 @@ export function SettingsController({
   const verifyUpstream = async () => {
     if (busy) return
     setBusy(true)
-    setVerifyFeedback({ tone: 'busy', text: '正在真实调用上游服务验证…' })
+    setVerifyFeedback({ tone: 'busy', text: '正在验证 AI 与云端朗读服务…' })
     try {
       const result = await healthCache.verifyProviders()
       setSnapshot(result)
       if (result.health === null) {
         setVerifyFeedback({
           tone: 'error',
-          text: result.failure ?? '云端服务暂不可用,无法验证上游。',
+          text: result.failure ?? '云端服务暂不可用，暂时无法完成验证。',
         })
         return
       }
@@ -160,18 +160,18 @@ export function SettingsController({
       if (failed.length > 0) {
         setVerifyFeedback({
           tone: 'error',
-          text: '验证失败：密钥可能无效或未开通对应资源，请检查 Backend 配置。',
+          text: '验证失败：连接凭据可能无效，或对应服务尚未开通。',
         })
       } else {
         setVerifyFeedback({
           tone: 'success',
-          text: '上游验证通过：DeepSeek 与云端 TTS 均可正常调用。',
+          text: '验证通过：AI 反馈与云端朗读均可正常使用。',
         })
       }
     } catch (error) {
       setVerifyFeedback({
         tone: 'error',
-        text: error instanceof Error ? error.message : '上游验证失败。',
+        text: error instanceof Error ? error.message : '云端服务验证失败。',
       })
     } finally {
       setBusy(false)
@@ -231,14 +231,14 @@ export function SettingsController({
       if (!status.available) {
         setTtsFeedback({
           tone: 'error',
-          text: '当前设备没有可用的系统 TTS 引擎，请在系统设置中安装或启用。',
+          text: '当前设备没有可用的系统朗读，请在系统设置中安装或启用语音服务。',
         })
         return
       }
       if (!status.englishAvailable) {
         setTtsFeedback({
           tone: 'error',
-          text: '未检测到英语语音包：请安装英语语音包或切换 TTS 引擎后再试，否则英语题目会“正在播报”但无声。',
+          text: '未检测到英语语音包：请安装英语语音包或切换朗读服务后再试，否则英语题目可能没有声音。',
         })
         return
       }
@@ -354,13 +354,12 @@ export function SettingsController({
         ) : null}
         <p className="eyebrow">Settings</p>
         <h1>设置</h1>
-        <p>常用选项放在前面；服务地址和供应商验证收在高级设置里。</p>
       </header>
       <section className="settings-card appearance-settings-card">
         <div>
           <p className="eyebrow">Appearance</p>
           <h2>外观</h2>
-          <p className="settings-note">跟随系统，也可以单独固定浅色或深色。</p>
+          <p className="settings-note">跟着系统走，或者你自己定。</p>
         </div>
         <div className="theme-options" role="radiogroup" aria-label="外观主题">
           {([
@@ -387,7 +386,7 @@ export function SettingsController({
         <div>
           <p className="eyebrow">Training defaults</p>
           <h2>训练与反馈</h2>
-          <p className="settings-note">只保留会改变训练流程的选项，并按当前本地账号独立保存。</p>
+          <p className="settings-note">这些设置会跟着你本机的练习进度各自保存。</p>
         </div>
         <div className="preference-grid">
           <label className="settings-field">
@@ -507,17 +506,15 @@ export function SettingsController({
             <h2>AI 反馈与自然音色</h2>
           </div>
           <span className={deepseekReady ? 'service-state online' : 'service-state offline'}>
-            {health === null ? '当前离线 · Backend 不可达' : deepseekReady ? 'AI 反馈可用' : 'AI 反馈需检查'}
+            {health === null ? 'AI 暂时离线' : deepseekReady ? 'AI 反馈可用' : 'AI 还没睡醒，点一下检查'}
           </span>
         </div>
         <p className="settings-note">
           云端用于生成精简反馈和自然朗读。即使断网，答题、保存、本地提示和系统朗读仍然可用。
         </p>
-        <ul className="settings-providers">
-          <li>Backend 可达：{health === null ? '否' : '是'}</li>
-          <li>DeepSeek 已配置：{deepseek?.configured === true ? '是' : '否'}</li>
-          <li>DeepSeek 已验证：{verificationSummary(deepseek)}</li>
-          <li>最近一次反馈：{requestSummary(deepseek)}</li>
+        <ul className="settings-providers friendly-service-status">
+          <li>服务状态：{friendlyServiceSummary(health, deepseek)}</li>
+          <li>模型：{friendlyModelSummary(deepseek)}</li>
         </ul>
         <div className="settings-actions">
           <button
@@ -526,7 +523,7 @@ export function SettingsController({
             onClick={() => void refreshHealth()}
             disabled={busy}
           >
-            {busy ? '检查中…' : '重新检查连接'}
+            {busy ? '正在叫醒…' : '唤醒一下 AI'}
           </button>
           {health?.providers.volc_tts?.configured ? (
             <button
@@ -535,7 +532,7 @@ export function SettingsController({
               onClick={() => void previewCloudVoice()}
               disabled={busy}
             >
-              试听{selectedVoicePreset.label}
+              试听一下云端声音
             </button>
           ) : null}
         </div>
@@ -556,6 +553,10 @@ export function SettingsController({
               <li>服务版本：{health?.version ?? '未连接'}</li>
               <li>服务地址：{configStore.getBaseUrl()}</li>
               <li>上次检查：{formatCheckedAt(snapshot.checkedAt)}</li>
+              <li>Backend 可达：{health === null ? '否' : '是'}</li>
+              <li>DeepSeek 已配置：{deepseek?.configured === true ? '是' : '否'}</li>
+              <li>DeepSeek 已验证：{verificationSummary(deepseek)}</li>
+              <li>最近一次反馈：{requestSummary(deepseek)}</li>
             </ul>
             {locked ? (
               <p className="settings-meta">正式版本地址已固定，不能在 App 内修改。</p>
@@ -621,7 +622,7 @@ export function SettingsController({
                 ttsVoicePreset: event.target.value as UserPreferences['ttsVoicePreset'],
               })}
             >
-              <option value="backend-default">云端默认 · 沿用 Backend 配置</option>
+              <option value="backend-default">云端默认</option>
               {TTS_VOICE_PRESETS.map((preset) => (
                 <option key={preset.id} value={preset.id}>
                   {preset.label}
@@ -673,7 +674,7 @@ export function SettingsController({
         </p>
         <ul className="settings-providers">
           <li>
-            系统 TTS 引擎:
+            系统朗读引擎：
             {systemTtsStatus === null
               ? '正在检测…'
               : (systemTtsStatus.engine ?? '未检测到')}
@@ -737,6 +738,24 @@ function verificationSummary(provider: BackendProviderHealth | undefined): strin
     return '是'
   }
   return `否${verification.lastError ? ` · ${verification.lastError}` : ''}`
+}
+
+function friendlyServiceSummary(
+  health: BackendHealthSnapshot['health'],
+  provider: BackendProviderHealth | undefined,
+): string {
+  if (health === null) return '暂时连不上，离线练习不受影响'
+  const request = provider?.lastRequest
+  if (request === undefined || request.status === 'never') return '连接正常，还没跑过一次反馈'
+  if (request.status === 'succeeded') return '连接正常，反馈可以使用'
+  return '已经连接，上次反馈没成功'
+}
+
+function friendlyModelSummary(provider: BackendProviderHealth | undefined): string {
+  if (provider?.configured !== true) return '还没准备好'
+  if (provider.verification?.status === 'verified') return '已配置，可以使用'
+  if (provider.verification?.status === 'failed') return '已配置，需要重新检查'
+  return '已配置，待验证'
 }
 
 function requestSummary(provider: BackendProviderHealth | undefined): string {

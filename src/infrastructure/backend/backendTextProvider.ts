@@ -89,26 +89,30 @@ export class BackendTextProvider
         : {}),
     }
     const options = postOptions(request.idempotencyKey)
-    const data = options
-      ? await this.client.postJson<unknown>('/v1/feedback', body, TEXT_TIMEOUT_MS, options)
-      : await this.client.postJson<unknown>('/v1/feedback', body, TEXT_TIMEOUT_MS)
-    const validated = parseValidated(
-      data,
-      aiFeedbackSchema,
-      'Text AI 返回结构不完整,已保留本地结果。',
-    )
-    if (!feedbackContextReferencesAreValid(validated, [
-      request.tutorContext,
-      request.learnerContext,
-      request.userKnowledgeContext,
-    ])) {
-      throw new ApiProviderError(
-        'invalid-response',
-        'Text AI 返回了未提供的来源,已保留本地结果。',
-        true,
+    try {
+      const data = options
+        ? await this.client.postJson<unknown>('/v1/feedback', body, TEXT_TIMEOUT_MS, options)
+        : await this.client.postJson<unknown>('/v1/feedback', body, TEXT_TIMEOUT_MS)
+      const validated = parseValidated(
+        data,
+        aiFeedbackSchema,
+        'Text AI 返回结构不完整,已保留本地结果。',
       )
+      if (!feedbackContextReferencesAreValid(validated, [
+        request.tutorContext,
+        request.learnerContext,
+        request.userKnowledgeContext,
+      ])) {
+        throw new ApiProviderError(
+          'invalid-response',
+          'Text AI 返回了未提供的来源,已保留本地结果。',
+          true,
+        )
+      }
+      return validated
+    } finally {
+      await this.refreshHealth()
     }
-    return validated
   }
 
   async getSecondAttemptAnalysis(request: LLMSecondAttemptRequest) {
@@ -126,23 +130,27 @@ export class BackendTextProvider
       answer: request.answer,
     }
     const options = postOptions(request.idempotencyKey)
-    const data = options
-      ? await this.client.postJson<unknown>(
-        '/v1/feedback/second-attempt',
-        body,
-        TEXT_TIMEOUT_MS,
-        options,
+    try {
+      const data = options
+        ? await this.client.postJson<unknown>(
+          '/v1/feedback/second-attempt',
+          body,
+          TEXT_TIMEOUT_MS,
+          options,
+        )
+        : await this.client.postJson<unknown>(
+          '/v1/feedback/second-attempt',
+          body,
+          TEXT_TIMEOUT_MS,
+        )
+      return parseValidated(
+        data,
+        secondAttemptAnalysisSchema,
+        '第二次回答分析结果不完整,已保留你的答案。',
       )
-      : await this.client.postJson<unknown>(
-        '/v1/feedback/second-attempt',
-        body,
-        TEXT_TIMEOUT_MS,
-      )
-    return parseValidated(
-      data,
-      secondAttemptAnalysisSchema,
-      '第二次回答分析结果不完整,已保留你的答案。',
-    )
+    } finally {
+      await this.refreshHealth()
+    }
   }
 
   async extractQuestions(
@@ -214,6 +222,12 @@ export class BackendTextProvider
       '知识库整理结果不完整，请重试。',
     )
     return envelope.entries
+  }
+
+  private async refreshHealth(): Promise<void> {
+    if (this.health) {
+      await this.health.refresh()
+    }
   }
 }
 

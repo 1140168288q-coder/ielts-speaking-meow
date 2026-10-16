@@ -1,0 +1,1942 @@
+{
+  "format": "ielts-speaking-meow-backup",
+  "formatVersion": 3,
+  "exportedAt": "2026-09-18T02:00:00.000Z",
+  "accounts": [
+    {
+      "id": "demo-20260918-account",
+      "userId": "6f081750-553d-42d0-903c-246891187218",
+      "displayName": "录屏演示（虚构数据）",
+      "pinHash": null,
+      "cloudAccountId": null,
+      "createdAt": "2026-09-10T09:00:00.000Z",
+      "lastLoginAt": "2026-09-18T02:00:00.000Z"
+    }
+  ],
+  "currentAccountId": null,
+  "sessions": [
+    {
+      "id": "demo-20260918-session-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "questionId": "p1-where-is-your-hometown-001",
+      "questionSnapshot": {
+        "id": "p1-where-is-your-hometown-001",
+        "part": 1,
+        "topic": "Hometown",
+        "prompt": "Where is your hometown?",
+        "difficulty": "foundation",
+        "source": "雅思口语喵内置题库",
+        "category": "必考话题",
+        "isNew": false
+      },
+      "part": 1,
+      "status": "completed",
+      "attempts": [
+        {
+          "id": "demo-20260918-session-1-attempt-1",
+          "attemptNumber": 1,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "My hometown is Hangzhou. It have a beautiful lake. I like walk there with my family.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-10T09:00:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 16,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-10T09:00:00.000Z",
+          "updatedAt": "2026-09-10T09:00:00.000Z"
+        },
+        {
+          "id": "demo-20260918-session-1-attempt-2",
+          "attemptNumber": 2,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "I come from Hangzhou, a city in eastern China. I especially like West Lake because my family and I often walks there on weekends.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-10T09:08:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 24,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-10T09:08:00.000Z",
+          "updatedAt": "2026-09-10T09:08:00.000Z"
+        }
+      ],
+      "localFeedback": [],
+      "aiFeedback": {
+        "summary": "【虚构演示反馈，非真实模型调用】先修正动词形式，再用一个具体细节展开回答。",
+        "strengths": [
+          "已经直接回应题目。",
+          "内容有清楚的个人视角。"
+        ],
+        "problems": [
+          "部分动词形式需要调整。",
+          "可以用一个具体细节说明原因。"
+        ],
+        "grammarSuggestions": [
+          "先直接交代家乡；第三人称单数用 has，like 后用 walking。"
+        ],
+        "vocabularySuggestions": [
+          "选用自己容易复用的短表达，不必堆叠复杂词汇。"
+        ],
+        "referenceAnswers": [
+          {
+            "label": "简单优化版",
+            "text": "My hometown is Hangzhou. It has a beautiful lake. I like walking there with my family."
+          },
+          {
+            "label": "自然提升版",
+            "text": "I come from Hangzhou, a city in eastern China. I especially like West Lake because my family and I often walk there on weekends."
+          }
+        ],
+        "naturalUpgradeSuggestions": {
+          "addableContent": [
+            {
+              "content": "可补充一个时间、场景或具体原因；以下拓展属于虚构演示角色，请替换为自己的经历。",
+              "source": "ai_example",
+              "sourcePart": null,
+              "replaceable": true
+            }
+          ],
+          "advancedChanges": [
+            "把观点与原因连接起来，让内容更完整。"
+          ]
+        },
+        "answerFramework": [
+          {
+            "label": "直接回应",
+            "template": "先用一句话回答当前题目。"
+          },
+          {
+            "label": "具体展开",
+            "template": "补充一个真实细节，再说明原因或感受。"
+          }
+        ],
+        "contextReferences": []
+      },
+      "feedbackGenerationProfile": {
+        "level": "medium",
+        "style": "british",
+        "profileVersion": 1
+      },
+      "secondAttemptAnalysis": {
+        "correctedSentences": [
+          {
+            "original": "I especially like West Lake because my family and I often walks there on weekends.",
+            "corrected": "I especially like West Lake because my family and I often walk there on weekends.",
+            "reason": "核对主语与动词形式，保留原句事实。"
+          }
+        ],
+        "memoryCandidates": [
+          {
+            "content": "家乡是杭州，喜欢与家人在西湖散步。",
+            "kind": "place",
+            "topicTags": [
+              "Hometown",
+              "家乡杭州"
+            ],
+            "sourceSentence": "I come from Hangzhou, a city in eastern China.",
+            "sourcePart": 1
+          }
+        ]
+      },
+      "confirmedMemoryFacts": [
+        {
+          "content": "家乡是杭州，喜欢与家人在西湖散步。",
+          "kind": "place",
+          "topicTags": [
+            "Hometown",
+            "家乡杭州"
+          ],
+          "sourceSentence": "I come from Hangzhou, a city in eastern China.",
+          "sourcePart": 1,
+          "id": "demo-20260918-fact-0",
+          "sourceAttempt": 2,
+          "createdAt": "2026-09-10T09:08:00.000Z"
+        }
+      ],
+      "comparison": null,
+      "createdAt": "2026-09-10T09:00:00.000Z",
+      "updatedAt": "2026-09-10T09:08:00.000Z"
+    },
+    {
+      "id": "demo-20260918-session-2",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "questionId": "p1-do-you-like-reading-001",
+      "questionSnapshot": {
+        "id": "p1-do-you-like-reading-001",
+        "part": 1,
+        "topic": "Reading",
+        "prompt": "Do you like reading?",
+        "difficulty": "foundation",
+        "source": "雅思口语喵内置题库",
+        "category": "EVENTS",
+        "isNew": false
+      },
+      "part": 1,
+      "status": "completed",
+      "attempts": [
+        {
+          "id": "demo-20260918-session-2-attempt-1",
+          "attemptNumber": 1,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Yes, I like read short stories. I read before bed because it help me relax.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-11T09:00:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 15,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-11T09:00:00.000Z",
+          "updatedAt": "2026-09-11T09:00:00.000Z"
+        },
+        {
+          "id": "demo-20260918-session-2-attempt-2",
+          "attemptNumber": 2,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Yes, I enjoy reading short stories before bed. I usually spend twenty minutes on a book because it help me switch off after studying.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-11T09:08:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 24,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-11T09:08:00.000Z",
+          "updatedAt": "2026-09-11T09:08:00.000Z"
+        }
+      ],
+      "localFeedback": [],
+      "aiFeedback": {
+        "summary": "【虚构演示反馈，非真实模型调用】先修正动词形式，再用一个具体细节展开回答。",
+        "strengths": [
+          "已经直接回应题目。",
+          "内容有清楚的个人视角。"
+        ],
+        "problems": [
+          "部分动词形式需要调整。",
+          "可以用一个具体细节说明原因。"
+        ],
+        "grammarSuggestions": [
+          "like 后用 reading；it 作主语时用 helps。"
+        ],
+        "vocabularySuggestions": [
+          "选用自己容易复用的短表达，不必堆叠复杂词汇。"
+        ],
+        "referenceAnswers": [
+          {
+            "label": "简单优化版",
+            "text": "Yes, I like reading short stories. I read before bed because it helps me relax."
+          },
+          {
+            "label": "自然提升版",
+            "text": "Yes, I enjoy reading short stories before bed. I usually spend twenty minutes on a book because it helps me switch off after studying."
+          }
+        ],
+        "naturalUpgradeSuggestions": {
+          "addableContent": [
+            {
+              "content": "可补充一个时间、场景或具体原因；以下拓展属于虚构演示角色，请替换为自己的经历。",
+              "source": "ai_example",
+              "sourcePart": null,
+              "replaceable": true
+            }
+          ],
+          "advancedChanges": [
+            "把观点与原因连接起来，让内容更完整。"
+          ]
+        },
+        "answerFramework": [
+          {
+            "label": "直接回应",
+            "template": "先用一句话回答当前题目。"
+          },
+          {
+            "label": "具体展开",
+            "template": "补充一个真实细节，再说明原因或感受。"
+          }
+        ],
+        "contextReferences": []
+      },
+      "feedbackGenerationProfile": {
+        "level": "medium",
+        "style": "british",
+        "profileVersion": 1
+      },
+      "secondAttemptAnalysis": {
+        "correctedSentences": [
+          {
+            "original": "I usually spend twenty minutes on a book because it help me switch off after studying.",
+            "corrected": "I usually spend twenty minutes on a book because it helps me switch off after studying.",
+            "reason": "核对主语与动词形式，保留原句事实。"
+          }
+        ],
+        "memoryCandidates": [
+          {
+            "content": "喜欢睡前读二十分钟短篇故事。",
+            "kind": "experience",
+            "topicTags": [
+              "Reading",
+              "睡前阅读"
+            ],
+            "sourceSentence": "I enjoy reading short stories before bed.",
+            "sourcePart": 1
+          }
+        ]
+      },
+      "confirmedMemoryFacts": [
+        {
+          "content": "喜欢睡前读二十分钟短篇故事。",
+          "kind": "experience",
+          "topicTags": [
+            "Reading",
+            "睡前阅读"
+          ],
+          "sourceSentence": "I enjoy reading short stories before bed.",
+          "sourcePart": 1,
+          "id": "demo-20260918-fact-1",
+          "sourceAttempt": 2,
+          "createdAt": "2026-09-11T09:08:00.000Z"
+        }
+      ],
+      "comparison": null,
+      "createdAt": "2026-09-11T09:00:00.000Z",
+      "updatedAt": "2026-09-11T09:08:00.000Z"
+    },
+    {
+      "id": "demo-20260918-session-3",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "questionId": "p1-do-you-still-like-going-to-parks-now-001",
+      "questionSnapshot": {
+        "id": "p1-do-you-still-like-going-to-parks-now-001",
+        "part": 1,
+        "topic": "Public gardens and parks",
+        "prompt": "Do you still like going to parks now?",
+        "difficulty": "foundation",
+        "source": "雅思口语喵内置题库",
+        "category": "PLACE",
+        "isNew": true
+      },
+      "part": 1,
+      "status": "completed",
+      "attempts": [
+        {
+          "id": "demo-20260918-session-3-attempt-1",
+          "attemptNumber": 1,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Yes, I still likes parks. I go there on weekends. The trees makes me feel calm.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-12T09:00:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 16,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-12T09:00:00.000Z",
+          "updatedAt": "2026-09-12T09:00:00.000Z"
+        },
+        {
+          "id": "demo-20260918-session-3-attempt-2",
+          "attemptNumber": 2,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Yes, I often visit a park near my university on weekends. Walking under the trees give me a break from my screen, especially after a busy week.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-12T09:08:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 27,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-12T09:08:00.000Z",
+          "updatedAt": "2026-09-12T09:08:00.000Z"
+        }
+      ],
+      "localFeedback": [],
+      "aiFeedback": {
+        "summary": "【虚构演示反馈，非真实模型调用】先修正动词形式，再用一个具体细节展开回答。",
+        "strengths": [
+          "已经直接回应题目。",
+          "内容有清楚的个人视角。"
+        ],
+        "problems": [
+          "部分动词形式需要调整。",
+          "可以用一个具体细节说明原因。"
+        ],
+        "grammarSuggestions": [
+          "I 后用 like，复数主语 trees 后用 make。"
+        ],
+        "vocabularySuggestions": [
+          "选用自己容易复用的短表达，不必堆叠复杂词汇。"
+        ],
+        "referenceAnswers": [
+          {
+            "label": "简单优化版",
+            "text": "Yes, I still like parks. I go there on weekends. The trees make me feel calm."
+          },
+          {
+            "label": "自然提升版",
+            "text": "Yes, I often visit a park near my university on weekends. Walking under the trees gives me a break from my screen, especially after a busy week."
+          }
+        ],
+        "naturalUpgradeSuggestions": {
+          "addableContent": [
+            {
+              "content": "可补充一个时间、场景或具体原因；以下拓展属于虚构演示角色，请替换为自己的经历。",
+              "source": "ai_example",
+              "sourcePart": null,
+              "replaceable": true
+            }
+          ],
+          "advancedChanges": [
+            "把观点与原因连接起来，让内容更完整。"
+          ]
+        },
+        "answerFramework": [
+          {
+            "label": "直接回应",
+            "template": "先用一句话回答当前题目。"
+          },
+          {
+            "label": "具体展开",
+            "template": "补充一个真实细节，再说明原因或感受。"
+          }
+        ],
+        "contextReferences": []
+      },
+      "feedbackGenerationProfile": {
+        "level": "medium",
+        "style": "british",
+        "profileVersion": 1
+      },
+      "secondAttemptAnalysis": {
+        "correctedSentences": [
+          {
+            "original": "Walking under the trees give me a break from my screen, especially after a busy week.",
+            "corrected": "Walking under the trees gives me a break from my screen, especially after a busy week.",
+            "reason": "核对主语与动词形式，保留原句事实。"
+          }
+        ],
+        "memoryCandidates": [
+          {
+            "content": "周末会去大学附近的公园散步。",
+            "kind": "experience",
+            "topicTags": [
+              "Public gardens and parks",
+              "公园散步"
+            ],
+            "sourceSentence": "I often visit a park near my university on weekends.",
+            "sourcePart": 1
+          }
+        ]
+      },
+      "confirmedMemoryFacts": [
+        {
+          "content": "周末会去大学附近的公园散步。",
+          "kind": "experience",
+          "topicTags": [
+            "Public gardens and parks",
+            "公园散步"
+          ],
+          "sourceSentence": "I often visit a park near my university on weekends.",
+          "sourcePart": 1,
+          "id": "demo-20260918-fact-2",
+          "sourceAttempt": 2,
+          "createdAt": "2026-09-12T09:08:00.000Z"
+        }
+      ],
+      "comparison": null,
+      "createdAt": "2026-09-12T09:00:00.000Z",
+      "updatedAt": "2026-09-12T09:08:00.000Z"
+    },
+    {
+      "id": "demo-20260918-session-4",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "questionId": "p1-what-technology-do-you-use-when-you-study-001",
+      "questionSnapshot": {
+        "id": "p1-what-technology-do-you-use-when-you-study-001",
+        "part": 1,
+        "topic": "Work or Studies",
+        "prompt": "What technology do you use when you study?",
+        "difficulty": "foundation",
+        "source": "雅思口语喵内置题库",
+        "category": "必考话题",
+        "isNew": false
+      },
+      "part": 1,
+      "status": "completed",
+      "attempts": [
+        {
+          "id": "demo-20260918-session-4-attempt-1",
+          "attemptNumber": 1,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "I use a laptop for take notes. It help me find information and keep my files together.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-13T09:00:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 17,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-13T09:00:00.000Z",
+          "updatedAt": "2026-09-13T09:00:00.000Z"
+        },
+        {
+          "id": "demo-20260918-session-4-attempt-2",
+          "attemptNumber": 2,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "I mainly use a laptop to take notes and organise reading materials. Keeping my files in one place make it easier to review before exams.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-13T09:08:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 25,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-13T09:08:00.000Z",
+          "updatedAt": "2026-09-13T09:08:00.000Z"
+        }
+      ],
+      "localFeedback": [],
+      "aiFeedback": {
+        "summary": "【虚构演示反馈，非真实模型调用】先修正动词形式，再用一个具体细节展开回答。",
+        "strengths": [
+          "已经直接回应题目。",
+          "内容有清楚的个人视角。"
+        ],
+        "problems": [
+          "部分动词形式需要调整。",
+          "可以用一个具体细节说明原因。"
+        ],
+        "grammarSuggestions": [
+          "for 后用 taking；it 作主语时用 helps。"
+        ],
+        "vocabularySuggestions": [
+          "选用自己容易复用的短表达，不必堆叠复杂词汇。"
+        ],
+        "referenceAnswers": [
+          {
+            "label": "简单优化版",
+            "text": "I use a laptop for taking notes. It helps me find information and keep my files together."
+          },
+          {
+            "label": "自然提升版",
+            "text": "I mainly use a laptop to take notes and organise reading materials. Keeping my files in one place makes it easier to review before exams."
+          }
+        ],
+        "naturalUpgradeSuggestions": {
+          "addableContent": [
+            {
+              "content": "可补充一个时间、场景或具体原因；以下拓展属于虚构演示角色，请替换为自己的经历。",
+              "source": "ai_example",
+              "sourcePart": null,
+              "replaceable": true
+            }
+          ],
+          "advancedChanges": [
+            "把观点与原因连接起来，让内容更完整。"
+          ]
+        },
+        "answerFramework": [
+          {
+            "label": "直接回应",
+            "template": "先用一句话回答当前题目。"
+          },
+          {
+            "label": "具体展开",
+            "template": "补充一个真实细节，再说明原因或感受。"
+          }
+        ],
+        "contextReferences": []
+      },
+      "feedbackGenerationProfile": {
+        "level": "medium",
+        "style": "british",
+        "profileVersion": 1
+      },
+      "secondAttemptAnalysis": {
+        "correctedSentences": [
+          {
+            "original": "Keeping my files in one place make it easier to review before exams.",
+            "corrected": "Keeping my files in one place makes it easier to review before exams.",
+            "reason": "核对主语与动词形式，保留原句事实。"
+          }
+        ],
+        "memoryCandidates": [
+          {
+            "content": "学习时用笔记本电脑记笔记和整理阅读资料。",
+            "kind": "experience",
+            "topicTags": [
+              "Work or Studies",
+              "学习工具"
+            ],
+            "sourceSentence": "I mainly use a laptop to take notes and organise reading materials.",
+            "sourcePart": 1
+          }
+        ]
+      },
+      "confirmedMemoryFacts": [
+        {
+          "content": "学习时用笔记本电脑记笔记和整理阅读资料。",
+          "kind": "experience",
+          "topicTags": [
+            "Work or Studies",
+            "学习工具"
+          ],
+          "sourceSentence": "I mainly use a laptop to take notes and organise reading materials.",
+          "sourcePart": 1,
+          "id": "demo-20260918-fact-3",
+          "sourceAttempt": 2,
+          "createdAt": "2026-09-13T09:08:00.000Z"
+        }
+      ],
+      "comparison": null,
+      "createdAt": "2026-09-13T09:00:00.000Z",
+      "updatedAt": "2026-09-13T09:08:00.000Z"
+    },
+    {
+      "id": "demo-20260918-session-5",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "questionId": "p1-do-you-have-any-hobbies-001",
+      "questionSnapshot": {
+        "id": "p1-do-you-have-any-hobbies-001",
+        "part": 1,
+        "topic": "Hobby",
+        "prompt": "Do you have any hobbies?",
+        "difficulty": "foundation",
+        "source": "雅思口语喵内置题库",
+        "category": "ABSTRACT",
+        "isNew": false
+      },
+      "part": 1,
+      "status": "completed",
+      "attempts": [
+        {
+          "id": "demo-20260918-session-5-attempt-1",
+          "attemptNumber": 1,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "I like play badminton. I play it with my roommate on Sunday. It make me relaxed.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-14T09:00:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 16,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-14T09:00:00.000Z",
+          "updatedAt": "2026-09-14T09:00:00.000Z"
+        },
+        {
+          "id": "demo-20260918-session-5-attempt-2",
+          "attemptNumber": 2,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Yes, I enjoy playing badminton. My roommate and I play at the campus gym on Sundays. It helps me relax after studying, and we usually plays for an hour.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-14T09:08:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 29,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-14T09:08:00.000Z",
+          "updatedAt": "2026-09-14T09:08:00.000Z"
+        }
+      ],
+      "localFeedback": [],
+      "aiFeedback": {
+        "summary": "【虚构演示反馈，非真实模型调用】先修正动词形式，再用一个具体细节展开回答。",
+        "strengths": [
+          "已经直接回应题目。",
+          "内容有清楚的个人视角。"
+        ],
+        "problems": [
+          "部分动词形式需要调整。",
+          "可以用一个具体细节说明原因。"
+        ],
+        "grammarSuggestions": [
+          "like 后用 playing；用 helps me relax 表达放松。"
+        ],
+        "vocabularySuggestions": [
+          "选用自己容易复用的短表达，不必堆叠复杂词汇。"
+        ],
+        "referenceAnswers": [
+          {
+            "label": "简单优化版",
+            "text": "I like playing badminton. I play it with my roommate on Sundays. It helps me relax."
+          },
+          {
+            "label": "自然提升版",
+            "text": "Yes, I enjoy playing badminton. My roommate and I play at the campus gym on Sundays. It helps me relax after studying, and we usually play for an hour."
+          }
+        ],
+        "naturalUpgradeSuggestions": {
+          "addableContent": [
+            {
+              "content": "可补充一个时间、场景或具体原因；以下拓展属于虚构演示角色，请替换为自己的经历。",
+              "source": "ai_example",
+              "sourcePart": null,
+              "replaceable": true
+            }
+          ],
+          "advancedChanges": [
+            "把观点与原因连接起来，让内容更完整。"
+          ]
+        },
+        "answerFramework": [
+          {
+            "label": "直接回应",
+            "template": "先用一句话回答当前题目。"
+          },
+          {
+            "label": "具体展开",
+            "template": "补充一个真实细节，再说明原因或感受。"
+          }
+        ],
+        "contextReferences": []
+      },
+      "feedbackGenerationProfile": {
+        "level": "medium",
+        "style": "british",
+        "profileVersion": 1
+      },
+      "secondAttemptAnalysis": {
+        "correctedSentences": [
+          {
+            "original": "It helps me relax after studying, and we usually plays for an hour.",
+            "corrected": "It helps me relax after studying, and we usually play for an hour.",
+            "reason": "核对主语与动词形式，保留原句事实。"
+          }
+        ],
+        "memoryCandidates": [
+          {
+            "content": "周日与室友在校园体育馆打羽毛球。",
+            "kind": "experience",
+            "topicTags": [
+              "Hobby",
+              "周日羽毛球"
+            ],
+            "sourceSentence": "My roommate and I play at the campus gym on Sundays.",
+            "sourcePart": 1
+          }
+        ]
+      },
+      "confirmedMemoryFacts": [
+        {
+          "content": "周日与室友在校园体育馆打羽毛球。",
+          "kind": "experience",
+          "topicTags": [
+            "Hobby",
+            "周日羽毛球"
+          ],
+          "sourceSentence": "My roommate and I play at the campus gym on Sundays.",
+          "sourcePart": 1,
+          "id": "demo-20260918-fact-4",
+          "sourceAttempt": 2,
+          "createdAt": "2026-09-14T09:08:00.000Z"
+        }
+      ],
+      "comparison": null,
+      "createdAt": "2026-09-14T09:00:00.000Z",
+      "updatedAt": "2026-09-14T09:08:00.000Z"
+    },
+    {
+      "id": "demo-20260918-session-6",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "questionId": "p1-do-you-have-the-same-hobbies-as-your-family--001",
+      "questionSnapshot": {
+        "id": "p1-do-you-have-the-same-hobbies-as-your-family--001",
+        "part": 1,
+        "topic": "Hobby",
+        "prompt": "Do you have the same hobbies as your family members?",
+        "difficulty": "foundation",
+        "source": "雅思口语喵内置题库",
+        "category": "ABSTRACT",
+        "isNew": false
+      },
+      "part": 1,
+      "status": "completed",
+      "attempts": [
+        {
+          "id": "demo-20260918-session-6-attempt-1",
+          "attemptNumber": 1,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Not really. My parents likes walking, but I prefer badminton. We sometimes walk together.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-15T09:00:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 14,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-15T09:00:00.000Z",
+          "updatedAt": "2026-09-15T09:00:00.000Z"
+        },
+        {
+          "id": "demo-20260918-session-6-attempt-2",
+          "attemptNumber": 2,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Not exactly. My parents prefer walking, while I enjoy badminton. We still takes a walk together when I visit home, so we have something to share.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-15T09:08:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 26,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-15T09:08:00.000Z",
+          "updatedAt": "2026-09-15T09:08:00.000Z"
+        }
+      ],
+      "localFeedback": [],
+      "aiFeedback": {
+        "summary": "【虚构演示反馈，非真实模型调用】先修正动词形式，再用一个具体细节展开回答。",
+        "strengths": [
+          "已经直接回应题目。",
+          "内容有清楚的个人视角。"
+        ],
+        "problems": [
+          "部分动词形式需要调整。",
+          "可以用一个具体细节说明原因。"
+        ],
+        "grammarSuggestions": [
+          "parents 是复数，后面用 like；用 while 连接不同喜好。"
+        ],
+        "vocabularySuggestions": [
+          "选用自己容易复用的短表达，不必堆叠复杂词汇。"
+        ],
+        "referenceAnswers": [
+          {
+            "label": "简单优化版",
+            "text": "Not really. My parents like walking, but I prefer badminton. We sometimes walk together."
+          },
+          {
+            "label": "自然提升版",
+            "text": "Not exactly. My parents prefer walking, while I enjoy badminton. We still take a walk together when I visit home, so we have something to share."
+          }
+        ],
+        "naturalUpgradeSuggestions": {
+          "addableContent": [
+            {
+              "content": "可补充一个时间、场景或具体原因；以下拓展属于虚构演示角色，请替换为自己的经历。",
+              "source": "ai_example",
+              "sourcePart": null,
+              "replaceable": true
+            }
+          ],
+          "advancedChanges": [
+            "把观点与原因连接起来，让内容更完整。"
+          ]
+        },
+        "answerFramework": [
+          {
+            "label": "直接回应",
+            "template": "先用一句话回答当前题目。"
+          },
+          {
+            "label": "具体展开",
+            "template": "补充一个真实细节，再说明原因或感受。"
+          }
+        ],
+        "contextReferences": []
+      },
+      "feedbackGenerationProfile": {
+        "level": "medium",
+        "style": "british",
+        "profileVersion": 1
+      },
+      "secondAttemptAnalysis": {
+        "correctedSentences": [
+          {
+            "original": "We still takes a walk together when I visit home, so we have something to share.",
+            "corrected": "We still take a walk together when I visit home, so we have something to share.",
+            "reason": "核对主语与动词形式，保留原句事实。"
+          }
+        ],
+        "memoryCandidates": [
+          {
+            "content": "父母喜欢散步，回家时会与他们一起走走。",
+            "kind": "preference",
+            "topicTags": [
+              "Hobby",
+              "家人的爱好"
+            ],
+            "sourceSentence": "My parents prefer walking, while I enjoy badminton.",
+            "sourcePart": 1
+          }
+        ]
+      },
+      "confirmedMemoryFacts": [
+        {
+          "content": "父母喜欢散步，回家时会与他们一起走走。",
+          "kind": "preference",
+          "topicTags": [
+            "Hobby",
+            "家人的爱好"
+          ],
+          "sourceSentence": "My parents prefer walking, while I enjoy badminton.",
+          "sourcePart": 1,
+          "id": "demo-20260918-fact-5",
+          "sourceAttempt": 2,
+          "createdAt": "2026-09-15T09:08:00.000Z"
+        }
+      ],
+      "comparison": null,
+      "createdAt": "2026-09-15T09:00:00.000Z",
+      "updatedAt": "2026-09-15T09:08:00.000Z"
+    },
+    {
+      "id": "demo-20260918-session-7",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "questionId": "p2-describe-a-friend-from-your-childhood-001",
+      "questionSnapshot": {
+        "id": "p2-describe-a-friend-from-your-childhood-001",
+        "part": 2,
+        "topic": "friend from your childhood",
+        "prompt": "Describe a friend from your childhood",
+        "difficulty": "developing",
+        "source": "雅思口语喵内置题库",
+        "category": "PEOPLE",
+        "isNew": true,
+        "cuePoints": [
+          "Who he/she is",
+          "Where and how you met each other",
+          "What you often did together",
+          "And explain what made you like him/her"
+        ],
+        "relatedPart3Ids": [
+          "p3-do-you-still-keep-in-touch-with-your-friends-001",
+          "p3-how-important-is-childhood-friendship-to-chi-001",
+          "p3-what-do-you-think-of-communicating-via-socia-001",
+          "p3-do-you-think-online-communication-through-so-001",
+          "p3-what-s-the-difference-between-having-younger-001",
+          "p3-has-technology-changed-people-s-friendships--001"
+        ]
+      },
+      "part": 2,
+      "status": "completed",
+      "attempts": [
+        {
+          "id": "demo-20260918-session-7-attempt-1",
+          "attemptNumber": 1,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "I want to talk about Xiaoyu. We meet in primary school. He was kind and we played badminton. He help me when I was nervous about a class presentation. We still talk online.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-16T09:00:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 33,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-16T09:00:00.000Z",
+          "updatedAt": "2026-09-16T09:00:00.000Z"
+        },
+        {
+          "id": "demo-20260918-session-7-attempt-2",
+          "attemptNumber": 2,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "I would like to talk about Xiaoyu, a friend I met in primary school. We sat next to each other and started chatting during breaks. He was patient and always willing to listen. One memory that stands out is preparing a class presentation together. I was worried about forgetting my ideas, so he helped me practise after school. We also played badminton in a small playground near our homes. We went to different universities later, but we still sends each other messages. What I value most is that I can talk honestly with him. Even a short conversation makes me feel supported.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-16T09:08:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 102,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-16T09:08:00.000Z",
+          "updatedAt": "2026-09-16T09:08:00.000Z"
+        }
+      ],
+      "localFeedback": [],
+      "aiFeedback": {
+        "summary": "【虚构演示反馈，非真实模型调用】先修正动词形式，再用一个具体细节展开回答。",
+        "strengths": [
+          "已经直接回应题目。",
+          "内容有清楚的个人视角。"
+        ],
+        "problems": [
+          "部分动词形式需要调整。",
+          "可以用一个具体细节说明原因。"
+        ],
+        "grammarSuggestions": [
+          "叙述童年经历用 met 和 helped；再补一个支持朋友特点的具体事件。"
+        ],
+        "vocabularySuggestions": [
+          "选用自己容易复用的短表达，不必堆叠复杂词汇。"
+        ],
+        "referenceAnswers": [
+          {
+            "label": "简单优化版",
+            "text": "I want to talk about Xiaoyu. We met in primary school. He was kind and we played badminton. He helped me when I was nervous about a class presentation. We still talk online."
+          },
+          {
+            "label": "自然提升版",
+            "text": "I would like to talk about Xiaoyu, a friend I met in primary school. We sat next to each other and started chatting during breaks. He was patient and always willing to listen. One memory that stands out is preparing a class presentation together. I was worried about forgetting my ideas, so he helped me practise after school. We also played badminton in a small playground near our homes. We went to different universities later, but we still send each other messages. What I value most is that I can talk honestly with him. Even a short conversation makes me feel supported."
+          }
+        ],
+        "naturalUpgradeSuggestions": {
+          "addableContent": [
+            {
+              "content": "可补充一个时间、场景或具体原因；以下拓展属于虚构演示角色，请替换为自己的经历。",
+              "source": "ai_example",
+              "sourcePart": null,
+              "replaceable": true
+            }
+          ],
+          "advancedChanges": [
+            "把观点与原因连接起来，让内容更完整。"
+          ]
+        },
+        "answerFramework": [
+          {
+            "label": "直接回应",
+            "template": "先用一句话回答当前题目。"
+          },
+          {
+            "label": "具体展开",
+            "template": "补充一个真实细节，再说明原因或感受。"
+          }
+        ],
+        "contextReferences": []
+      },
+      "feedbackGenerationProfile": {
+        "level": "medium",
+        "style": "british",
+        "profileVersion": 1
+      },
+      "secondAttemptAnalysis": {
+        "correctedSentences": [
+          {
+            "original": "We went to different universities later, but we still sends each other messages.",
+            "corrected": "We went to different universities later, but we still send each other messages.",
+            "reason": "核对主语与动词形式，保留原句事实。"
+          }
+        ],
+        "memoryCandidates": [
+          {
+            "content": "小学认识朋友小宇，对方曾帮助自己准备课堂展示。",
+            "kind": "person",
+            "topicTags": [
+              "friend from your childhood",
+              "童年朋友小宇"
+            ],
+            "sourceSentence": "I would like to talk about Xiaoyu, a friend I met in primary school.",
+            "sourcePart": 2
+          }
+        ]
+      },
+      "confirmedMemoryFacts": [
+        {
+          "content": "小学认识朋友小宇，对方曾帮助自己准备课堂展示。",
+          "kind": "person",
+          "topicTags": [
+            "friend from your childhood",
+            "童年朋友小宇"
+          ],
+          "sourceSentence": "I would like to talk about Xiaoyu, a friend I met in primary school.",
+          "sourcePart": 2,
+          "id": "demo-20260918-fact-6",
+          "sourceAttempt": 2,
+          "createdAt": "2026-09-16T09:08:00.000Z"
+        }
+      ],
+      "comparison": null,
+      "createdAt": "2026-09-16T09:00:00.000Z",
+      "updatedAt": "2026-09-16T09:08:00.000Z"
+    },
+    {
+      "id": "demo-20260918-session-8",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "questionId": "p3-has-technology-changed-people-s-friendships--001",
+      "questionSnapshot": {
+        "id": "p3-has-technology-changed-people-s-friendships--001",
+        "part": 3,
+        "topic": "friend from your childhood",
+        "prompt": "Has technology changed people's friendships? How?",
+        "difficulty": "stretch",
+        "source": "雅思口语喵内置题库",
+        "category": "PEOPLE",
+        "isNew": true,
+        "part2QuestionId": "p2-describe-a-friend-from-your-childhood-001"
+      },
+      "part": 3,
+      "status": "completed",
+      "attempts": [
+        {
+          "id": "demo-20260918-session-8-attempt-1",
+          "attemptNumber": 1,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Yes, technology make it easier to contact friends. People can send messages. But online talk cannot replace meet in person.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-17T09:00:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 20,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-17T09:00:00.000Z",
+          "updatedAt": "2026-09-17T09:00:00.000Z"
+        },
+        {
+          "id": "demo-20260918-session-8-attempt-2",
+          "attemptNumber": 2,
+          "audio": null,
+          "transcript": {
+            "status": "ready",
+            "text": "Yes, technology makes it easier to stay in touch, especially when friends live in different cities. However, short messages sometimes causes misunderstandings. I think online contact works best when people also make time to meet in person.",
+            "originalText": null,
+            "source": "manual",
+            "errorCode": null,
+            "updatedAt": "2026-09-17T09:08:00.000Z"
+          },
+          "metrics": {
+            "durationMs": 0,
+            "wordCount": 37,
+            "wordsPerMinute": null,
+            "fillerWords": [],
+            "fillerCount": 0,
+            "repeatedWords": [],
+            "repeatedWordCount": 0,
+            "caveats": [
+              "虚构演示样例；未采集录音或真实作答时间。"
+            ]
+          },
+          "createdAt": "2026-09-17T09:08:00.000Z",
+          "updatedAt": "2026-09-17T09:08:00.000Z"
+        }
+      ],
+      "localFeedback": [],
+      "aiFeedback": {
+        "summary": "【虚构演示反馈，非真实模型调用】先修正动词形式，再用一个具体细节展开回答。",
+        "strengths": [
+          "已经直接回应题目。",
+          "内容有清楚的个人视角。"
+        ],
+        "problems": [
+          "部分动词形式需要调整。",
+          "可以用一个具体细节说明原因。"
+        ],
+        "grammarSuggestions": [
+          "technology 作主语时用 makes；replace 后用 meeting。"
+        ],
+        "vocabularySuggestions": [
+          "选用自己容易复用的短表达，不必堆叠复杂词汇。"
+        ],
+        "referenceAnswers": [
+          {
+            "label": "简单优化版",
+            "text": "Yes, technology makes it easier to contact friends. People can send messages. But talking online cannot replace meeting in person."
+          },
+          {
+            "label": "自然提升版",
+            "text": "Yes, technology makes it easier to stay in touch, especially when friends live in different cities. However, short messages sometimes cause misunderstandings. I think online contact works best when people also make time to meet in person."
+          }
+        ],
+        "naturalUpgradeSuggestions": {
+          "addableContent": [
+            {
+              "content": "可补充一个时间、场景或具体原因；以下拓展属于虚构演示角色，请替换为自己的经历。",
+              "source": "ai_example",
+              "sourcePart": null,
+              "replaceable": true
+            }
+          ],
+          "advancedChanges": [
+            "把观点与原因连接起来，让内容更完整。"
+          ]
+        },
+        "answerFramework": [
+          {
+            "label": "直接回应",
+            "template": "先用一句话回答当前题目。"
+          },
+          {
+            "label": "具体展开",
+            "template": "补充一个真实细节，再说明原因或感受。"
+          }
+        ],
+        "contextReferences": []
+      },
+      "feedbackGenerationProfile": {
+        "level": "medium",
+        "style": "british",
+        "profileVersion": 1
+      },
+      "secondAttemptAnalysis": {
+        "correctedSentences": [
+          {
+            "original": "However, short messages sometimes causes misunderstandings.",
+            "corrected": "However, short messages sometimes cause misunderstandings.",
+            "reason": "核对主语与动词形式，保留原句事实。"
+          }
+        ],
+        "memoryCandidates": [
+          {
+            "content": "认为线上联系有帮助，但仍需要面对面相处。",
+            "kind": "opinion",
+            "topicTags": [
+              "friend from your childhood",
+              "科技与友谊"
+            ],
+            "sourceSentence": "I think online contact works best when people also make time to meet in person.",
+            "sourcePart": 3
+          }
+        ]
+      },
+      "confirmedMemoryFacts": [
+        {
+          "content": "认为线上联系有帮助，但仍需要面对面相处。",
+          "kind": "opinion",
+          "topicTags": [
+            "friend from your childhood",
+            "科技与友谊"
+          ],
+          "sourceSentence": "I think online contact works best when people also make time to meet in person.",
+          "sourcePart": 3,
+          "id": "demo-20260918-fact-7",
+          "sourceAttempt": 2,
+          "createdAt": "2026-09-17T09:08:00.000Z"
+        }
+      ],
+      "comparison": null,
+      "createdAt": "2026-09-17T09:00:00.000Z",
+      "updatedAt": "2026-09-17T09:08:00.000Z"
+    }
+  ],
+  "expressions": [
+    {
+      "id": "demo-20260918-expression-0-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "I come from Hangzhou, a city in eastern China.",
+      "topic": "Hometown",
+      "sourcePart": 1,
+      "questionId": "p1-where-is-your-hometown-001",
+      "sessionId": "demo-20260918-session-1",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-10T09:08:00.000Z",
+      "updatedAt": "2026-09-10T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-0-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "I especially like West Lake because my family and I often walk there on weekends.",
+      "topic": "Hometown",
+      "sourcePart": 1,
+      "questionId": "p1-where-is-your-hometown-001",
+      "sessionId": "demo-20260918-session-1",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-10T09:08:00.000Z",
+      "updatedAt": "2026-09-10T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-1-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "I enjoy reading short stories before bed.",
+      "topic": "Reading",
+      "sourcePart": 1,
+      "questionId": "p1-do-you-like-reading-001",
+      "sessionId": "demo-20260918-session-2",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-11T09:08:00.000Z",
+      "updatedAt": "2026-09-11T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-1-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "I usually spend twenty minutes on a book because it helps me switch off after studying.",
+      "topic": "Reading",
+      "sourcePart": 1,
+      "questionId": "p1-do-you-like-reading-001",
+      "sessionId": "demo-20260918-session-2",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-11T09:08:00.000Z",
+      "updatedAt": "2026-09-11T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-2-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "I often visit a park near my university on weekends.",
+      "topic": "Public gardens and parks",
+      "sourcePart": 1,
+      "questionId": "p1-do-you-still-like-going-to-parks-now-001",
+      "sessionId": "demo-20260918-session-3",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-12T09:08:00.000Z",
+      "updatedAt": "2026-09-12T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-2-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "Walking under the trees gives me a break from my screen, especially after a busy week.",
+      "topic": "Public gardens and parks",
+      "sourcePart": 1,
+      "questionId": "p1-do-you-still-like-going-to-parks-now-001",
+      "sessionId": "demo-20260918-session-3",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-12T09:08:00.000Z",
+      "updatedAt": "2026-09-12T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-3-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "I mainly use a laptop to take notes and organise reading materials.",
+      "topic": "Work or Studies",
+      "sourcePart": 1,
+      "questionId": "p1-what-technology-do-you-use-when-you-study-001",
+      "sessionId": "demo-20260918-session-4",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-13T09:08:00.000Z",
+      "updatedAt": "2026-09-13T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-3-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "Keeping my files in one place makes it easier to review before exams.",
+      "topic": "Work or Studies",
+      "sourcePart": 1,
+      "questionId": "p1-what-technology-do-you-use-when-you-study-001",
+      "sessionId": "demo-20260918-session-4",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-13T09:08:00.000Z",
+      "updatedAt": "2026-09-13T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-4-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "My roommate and I play at the campus gym on Sundays.",
+      "topic": "Hobby",
+      "sourcePart": 1,
+      "questionId": "p1-do-you-have-any-hobbies-001",
+      "sessionId": "demo-20260918-session-5",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-14T09:08:00.000Z",
+      "updatedAt": "2026-09-14T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-4-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "It helps me relax after studying, and we usually play for an hour.",
+      "topic": "Hobby",
+      "sourcePart": 1,
+      "questionId": "p1-do-you-have-any-hobbies-001",
+      "sessionId": "demo-20260918-session-5",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-14T09:08:00.000Z",
+      "updatedAt": "2026-09-14T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-5-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "My parents prefer walking, while I enjoy badminton.",
+      "topic": "Hobby",
+      "sourcePart": 1,
+      "questionId": "p1-do-you-have-the-same-hobbies-as-your-family--001",
+      "sessionId": "demo-20260918-session-6",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-15T09:08:00.000Z",
+      "updatedAt": "2026-09-15T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-5-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "We still take a walk together when I visit home, so we have something to share.",
+      "topic": "Hobby",
+      "sourcePart": 1,
+      "questionId": "p1-do-you-have-the-same-hobbies-as-your-family--001",
+      "sessionId": "demo-20260918-session-6",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-15T09:08:00.000Z",
+      "updatedAt": "2026-09-15T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-6-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "I would like to talk about Xiaoyu, a friend I met in primary school.",
+      "topic": "friend from your childhood",
+      "sourcePart": 2,
+      "questionId": "p2-describe-a-friend-from-your-childhood-001",
+      "sessionId": "demo-20260918-session-7",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-16T09:08:00.000Z",
+      "updatedAt": "2026-09-16T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-6-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "We went to different universities later, but we still send each other messages.",
+      "topic": "friend from your childhood",
+      "sourcePart": 2,
+      "questionId": "p2-describe-a-friend-from-your-childhood-001",
+      "sessionId": "demo-20260918-session-7",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-16T09:08:00.000Z",
+      "updatedAt": "2026-09-16T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-7-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "I think online contact works best when people also make time to meet in person.",
+      "topic": "friend from your childhood",
+      "sourcePart": 3,
+      "questionId": "p3-has-technology-changed-people-s-friendships--001",
+      "sessionId": "demo-20260918-session-8",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-17T09:08:00.000Z",
+      "updatedAt": "2026-09-17T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    },
+    {
+      "id": "demo-20260918-expression-7-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "text": "However, short messages sometimes cause misunderstandings.",
+      "topic": "friend from your childhood",
+      "sourcePart": 3,
+      "questionId": "p3-has-technology-changed-people-s-friendships--001",
+      "sessionId": "demo-20260918-session-8",
+      "sourceAttempt": 2,
+      "createdAt": "2026-09-17T09:08:00.000Z",
+      "updatedAt": "2026-09-17T09:08:00.000Z",
+      "reviewCount": 0,
+      "reuseCount": 0
+    }
+  ],
+  "audio": [],
+  "personalMaterials": [
+    {
+      "id": "demo-20260918-material-0",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "家乡杭州（演示）",
+      "content": "【虚构演示角色素材】家乡是杭州，喜欢与家人在西湖散步。\nI come from Hangzhou, a city in eastern China. I especially like West Lake because my family and I often walk there on weekends.",
+      "kind": "place",
+      "sourcePart": 1,
+      "topicTags": [
+        "Hometown",
+        "家乡杭州"
+      ],
+      "questionIds": [
+        "p1-where-is-your-hometown-001"
+      ],
+      "sourceSessionId": "demo-20260918-session-1",
+      "status": "confirmed",
+      "createdAt": "2026-09-10T09:08:00.000Z",
+      "updatedAt": "2026-09-10T09:08:00.000Z",
+      "version": 1,
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-material-1",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "睡前阅读（演示）",
+      "content": "【虚构演示角色素材】喜欢睡前读二十分钟短篇故事。\nYes, I enjoy reading short stories before bed. I usually spend twenty minutes on a book because it helps me switch off after studying.",
+      "kind": "experience",
+      "sourcePart": 1,
+      "topicTags": [
+        "Reading",
+        "睡前阅读"
+      ],
+      "questionIds": [
+        "p1-do-you-like-reading-001"
+      ],
+      "sourceSessionId": "demo-20260918-session-2",
+      "status": "confirmed",
+      "createdAt": "2026-09-11T09:08:00.000Z",
+      "updatedAt": "2026-09-11T09:08:00.000Z",
+      "version": 1,
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-material-2",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "公园散步（演示）",
+      "content": "【虚构演示角色素材】周末会去大学附近的公园散步。\nYes, I often visit a park near my university on weekends. Walking under the trees gives me a break from my screen, especially after a busy week.",
+      "kind": "experience",
+      "sourcePart": 1,
+      "topicTags": [
+        "Public gardens and parks",
+        "公园散步"
+      ],
+      "questionIds": [
+        "p1-do-you-still-like-going-to-parks-now-001"
+      ],
+      "sourceSessionId": "demo-20260918-session-3",
+      "status": "confirmed",
+      "createdAt": "2026-09-12T09:08:00.000Z",
+      "updatedAt": "2026-09-12T09:08:00.000Z",
+      "version": 1,
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-material-3",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "学习工具（演示）",
+      "content": "【虚构演示角色素材】学习时用笔记本电脑记笔记和整理阅读资料。\nI mainly use a laptop to take notes and organise reading materials. Keeping my files in one place makes it easier to review before exams.",
+      "kind": "experience",
+      "sourcePart": 1,
+      "topicTags": [
+        "Work or Studies",
+        "学习工具"
+      ],
+      "questionIds": [
+        "p1-what-technology-do-you-use-when-you-study-001"
+      ],
+      "sourceSessionId": "demo-20260918-session-4",
+      "status": "confirmed",
+      "createdAt": "2026-09-13T09:08:00.000Z",
+      "updatedAt": "2026-09-13T09:08:00.000Z",
+      "version": 1,
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-material-4",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "周日羽毛球（演示）",
+      "content": "【虚构演示角色素材】周日与室友在校园体育馆打羽毛球。\nYes, I enjoy playing badminton. My roommate and I play at the campus gym on Sundays. It helps me relax after studying, and we usually play for an hour.",
+      "kind": "experience",
+      "sourcePart": 1,
+      "topicTags": [
+        "Hobby",
+        "周日羽毛球"
+      ],
+      "questionIds": [
+        "p1-do-you-have-any-hobbies-001"
+      ],
+      "sourceSessionId": "demo-20260918-session-5",
+      "status": "confirmed",
+      "createdAt": "2026-09-14T09:08:00.000Z",
+      "updatedAt": "2026-09-14T09:08:00.000Z",
+      "version": 1,
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-material-5",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "家人的爱好（演示）",
+      "content": "【虚构演示角色素材】父母喜欢散步，回家时会与他们一起走走。\nNot exactly. My parents prefer walking, while I enjoy badminton. We still take a walk together when I visit home, so we have something to share.",
+      "kind": "opinion",
+      "sourcePart": 1,
+      "topicTags": [
+        "Hobby",
+        "家人的爱好"
+      ],
+      "questionIds": [
+        "p1-do-you-have-the-same-hobbies-as-your-family--001"
+      ],
+      "sourceSessionId": "demo-20260918-session-6",
+      "status": "confirmed",
+      "createdAt": "2026-09-15T09:08:00.000Z",
+      "updatedAt": "2026-09-15T09:08:00.000Z",
+      "version": 1,
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-material-6",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "童年朋友小宇（演示）",
+      "content": "【虚构演示角色素材】小学认识朋友小宇，对方曾帮助自己准备课堂展示。\nI would like to talk about Xiaoyu, a friend I met in primary school. We sat next to each other and started chatting during breaks. He was patient and always willing to listen. One memory that stands out is preparing a class presentation together. I was worried about forgetting my ideas, so he helped me practise after school. We also played badminton in a small playground near our homes. We went to different universities later, but we still send each other messages. What I value most is that I can talk honestly with him. Even a short conversation makes me feel supported.",
+      "kind": "person",
+      "sourcePart": 2,
+      "topicTags": [
+        "friend from your childhood",
+        "童年朋友小宇"
+      ],
+      "questionIds": [
+        "p2-describe-a-friend-from-your-childhood-001"
+      ],
+      "sourceSessionId": "demo-20260918-session-7",
+      "status": "confirmed",
+      "createdAt": "2026-09-16T09:08:00.000Z",
+      "updatedAt": "2026-09-16T09:08:00.000Z",
+      "version": 1,
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-material-7",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "科技与友谊（演示）",
+      "content": "【虚构演示角色素材】认为线上联系有帮助，但仍需要面对面相处。\nYes, technology makes it easier to stay in touch, especially when friends live in different cities. However, short messages sometimes cause misunderstandings. I think online contact works best when people also make time to meet in person.",
+      "kind": "opinion",
+      "sourcePart": 3,
+      "topicTags": [
+        "friend from your childhood",
+        "科技与友谊"
+      ],
+      "questionIds": [
+        "p3-has-technology-changed-people-s-friendships--001"
+      ],
+      "sourceSessionId": "demo-20260918-session-8",
+      "status": "confirmed",
+      "createdAt": "2026-09-17T09:08:00.000Z",
+      "updatedAt": "2026-09-17T09:08:00.000Z",
+      "version": 1,
+      "deletedAt": null
+    }
+  ],
+  "importSources": [],
+  "importedQuestions": [],
+  "importedFiles": [],
+  "knowledgeSources": [
+    {
+      "id": "demo-20260918-knowledge-source",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "fileName": "演示教学笔记.md",
+      "mimeType": "text/markdown",
+      "fileSize": 583,
+      "format": "md",
+      "extractionMode": "plain-text",
+      "originalFileId": "demo-20260918-knowledge-file",
+      "sourceSha256": "64de93921f7bad79fdf361cd418d17f0be242b7813a418b39640d519f890ffa2",
+      "title": "录屏演示教学笔记（自写样例）",
+      "status": "ready",
+      "entryCount": 4,
+      "importedAt": "2026-09-18T02:00:00.000Z",
+      "updatedAt": "2026-09-18T02:00:00.000Z",
+      "deletedAt": null
+    }
+  ],
+  "knowledgeEntries": [
+    {
+      "id": "demo-20260918-knowledge-0",
+      "sourceId": "demo-20260918-knowledge-source",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "爱好题：回答与原因",
+      "body": "先直接说出爱好，再说明与谁、何时或为什么。只使用自己真实的经历。",
+      "originalExcerpt": "先直接说出爱好，再说明与谁、何时或为什么。只使用自己真实的经历。",
+      "sourcePage": null,
+      "sourceSection": "爱好题：回答与原因",
+      "part": 1,
+      "topics": [
+        "Hobby"
+      ],
+      "keywords": [
+        "hobbies",
+        "badminton",
+        "hobby"
+      ],
+      "tags": [
+        "演示资料"
+      ],
+      "functions": [
+        "structure",
+        "topic"
+      ],
+      "level": "developing",
+      "confidence": "high",
+      "enabled": true,
+      "createdAt": "2026-09-18T02:00:00.000Z",
+      "updatedAt": "2026-09-18T02:00:00.000Z",
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-knowledge-1",
+      "sourceId": "demo-20260918-knowledge-source",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "家乡题：一个具体细节",
+      "body": "介绍家乡后选择一个地点或生活细节展开，避免罗列太多景点。",
+      "originalExcerpt": "介绍家乡后选择一个地点或生活细节展开，避免罗列太多景点。",
+      "sourcePage": null,
+      "sourceSection": "家乡题：一个具体细节",
+      "part": 1,
+      "topics": [
+        "Hometown"
+      ],
+      "keywords": [
+        "hometown",
+        "city",
+        "lake"
+      ],
+      "tags": [
+        "演示资料"
+      ],
+      "functions": [
+        "structure",
+        "topic"
+      ],
+      "level": "developing",
+      "confidence": "high",
+      "enabled": true,
+      "createdAt": "2026-09-18T02:00:00.000Z",
+      "updatedAt": "2026-09-18T02:00:00.000Z",
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-knowledge-2",
+      "sourceId": "demo-20260918-knowledge-source",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "人物题：用事件说明特点",
+      "body": "先交代如何认识，再通过一件具体小事说明朋友的特点，最后说明现在的关系。",
+      "originalExcerpt": "先交代如何认识，再通过一件具体小事说明朋友的特点，最后说明现在的关系。",
+      "sourcePage": null,
+      "sourceSection": "人物题：用事件说明特点",
+      "part": 2,
+      "topics": [
+        "friend from your childhood"
+      ],
+      "keywords": [
+        "friend",
+        "childhood",
+        "person"
+      ],
+      "tags": [
+        "演示资料"
+      ],
+      "functions": [
+        "structure",
+        "topic"
+      ],
+      "level": "developing",
+      "confidence": "high",
+      "enabled": true,
+      "createdAt": "2026-09-18T02:00:00.000Z",
+      "updatedAt": "2026-09-18T02:00:00.000Z",
+      "deletedAt": null
+    },
+    {
+      "id": "demo-20260918-knowledge-3",
+      "sourceId": "demo-20260918-knowledge-source",
+      "ownerId": "6f081750-553d-42d0-903c-246891187218",
+      "title": "观点题：观点与限制",
+      "body": "先提出观点，给出一个原因或例子，再用一句话说明限制条件。",
+      "originalExcerpt": "先提出观点，给出一个原因或例子，再用一句话说明限制条件。",
+      "sourcePage": null,
+      "sourceSection": "观点题：观点与限制",
+      "part": 3,
+      "topics": [
+        "Technology"
+      ],
+      "keywords": [
+        "technology",
+        "friendships",
+        "contact"
+      ],
+      "tags": [
+        "演示资料"
+      ],
+      "functions": [
+        "structure",
+        "topic"
+      ],
+      "level": "developing",
+      "confidence": "high",
+      "enabled": true,
+      "createdAt": "2026-09-18T02:00:00.000Z",
+      "updatedAt": "2026-09-18T02:00:00.000Z",
+      "deletedAt": null
+    }
+  ],
+  "knowledgeFiles": [
+    {
+      "id": "demo-20260918-knowledge-file",
+      "mimeType": "text/markdown",
+      "dataBase64": "IyDlvZXlsY/mvJTnpLrmlZnlrabnrJTorrAKCuiHquWGmea8lOekuui1hOaWme+8jOS4jeS7o+ihqOeUqOaIt+e7j+WOhuOAggoKIyMg54ix5aW96aKY77ya5Zue562U5LiO5Y6f5ZugCuWFiOebtOaOpeivtOWHuueIseWlve+8jOWGjeivtOaYjuS4juiwgeOAgeS9leaXtuaIluS4uuS7gOS5iOOAguWPquS9v+eUqOiHquW3seecn+WunueahOe7j+WOhuOAggoKIyMg5a625Lmh6aKY77ya5LiA5Liq5YW35L2T57uG6IqCCuS7i+e7jeWutuS5oeWQjumAieaLqeS4gOS4quWcsOeCueaIlueUn+a0u+e7huiKguWxleW8gO+8jOmBv+WFjee9l+WIl+WkquWkmuaZr+eCueOAggoKIyMg5Lq654mp6aKY77ya55So5LqL5Lu26K+05piO54m554K5CuWFiOS6pOS7o+WmguS9leiupOivhu+8jOWGjemAmui/h+S4gOS7tuWFt+S9k+Wwj+S6i+ivtOaYjuaci+WPi+eahOeJueeCue+8jOacgOWQjuivtOaYjueOsOWcqOeahOWFs+ezu+OAggoKIyMg6KeC54K56aKY77ya6KeC54K55LiO6ZmQ5Yi2CuWFiOaPkOWHuuingueCue+8jOe7meWHuuS4gOS4quWOn+WboOaIluS+i+WtkO+8jOWGjeeUqOS4gOWPpeivneivtOaYjumZkOWItuadoeS7tuOAgg=="
+    }
+  ]
+}

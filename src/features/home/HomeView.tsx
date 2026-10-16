@@ -19,7 +19,6 @@ export function HomeView({
   questions,
   sessions,
   expressionCount,
-  accountName,
   titleOverride = null,
   subtitleOverride = null,
   onStart,
@@ -55,7 +54,7 @@ export function HomeView({
   const focusMeta = resumable && resumableQuestion
     ? `${partLabel(resumableQuestion.part)} · ${statusLabel[resumable.status]}`
     : focusQuestion
-      ? `${partLabel(focusQuestion.part)} · 一道题完成两次回答`
+      ? `${partLabel(focusQuestion.part)} · 一道题，答两次`
       : '题库准备完成'
 
   const startFocus = () => {
@@ -71,8 +70,8 @@ export function HomeView({
       <header className="home-welcome">
         <div>
           <p className="eyebrow">Today · Speaking practice</p>
-          <h1>{titleOverride?.trim() || `${accountName}，今天也说出口。`}</h1>
-          <p>{subtitleOverride?.trim() || '说一遍，听一听，再说一遍。进步藏在第二次开口里。'}</p>
+          <h1>{titleOverride?.trim() || '嗨，今天也开口说一句吧。'}</h1>
+          <p>{subtitleOverride?.trim() || '说一遍，听一听，再说一遍——进步，总是发生在第二次开口的时候。'}</p>
         </div>
         <button type="button" className="week-pill" onClick={onOpenReview}>
           <CheckCircle2 aria-hidden="true" size={17} />
@@ -85,7 +84,7 @@ export function HomeView({
           <span className="focus-icon" aria-hidden="true">
             {resumable ? <RotateCcw size={19} /> : <Sparkles size={19} />}
           </span>
-          <span>{resumable ? '继续未完成练习' : '今日建议'}</span>
+          <span>{resumable ? '继续未完成练习' : '今日一题'}</span>
           <small>{focusMeta}</small>
         </div>
         <h2 id="today-focus-title">
@@ -94,7 +93,7 @@ export function HomeView({
         <p>
           {resumable
             ? '你的答案和反馈都已保留，直接回到上次停下的位置。'
-            : recommendation?.reason ?? '先说自己的版本，AI 只帮你抓最值得改的重点。'}
+            : recommendation?.reason ?? '不用完美，先张嘴。节奏比流利更重要。'}
         </p>
         <div className="today-focus-actions">
           <button
@@ -103,17 +102,17 @@ export function HomeView({
             disabled={!focusQuestion}
             onClick={startFocus}
           >
-            {resumable ? '继续完成' : '开始今日一题'}
+            {resumable ? '继续完成' : '就这题，开练'}
             <ArrowRight aria-hidden="true" size={18} />
           </button>
           <button type="button" className="secondary-button" onClick={() => onOpenLibrary()}>
-            自己挑题
+            我自己挑
           </button>
         </div>
         <div className="focus-loop" aria-label="本次训练流程">
           <span><b>1</b>先回答</span>
           <i aria-hidden="true" />
-          <span><b>2</b>抓重点</span>
+          <span><b>2</b>听一听</span>
           <i aria-hidden="true" />
           <span><b>3</b>再回答</span>
         </div>
@@ -123,26 +122,26 @@ export function HomeView({
         <div className="section-heading compact-heading">
           <div>
             <p className="eyebrow">Choose a focus</p>
-            <h2>按你今天的状态开始</h2>
+            <h2>今天想练哪种？</h2>
           </div>
         </div>
         <div className="practice-mode-grid">
           <button type="button" onClick={() => onOpenLibrary(1)}>
             <span className="mode-icon"><MessageCircleMore size={21} /></span>
             <strong>短回答</strong>
-            <small>Part 1 · 热身开口</small>
+            <small>Part 1 · 热个身，随口聊两句</small>
             <ArrowRight aria-hidden="true" size={17} />
           </button>
           <button type="button" onClick={() => onOpenLibrary(2)}>
             <span className="mode-icon"><BookOpenText size={21} /></span>
             <strong>话题卡</strong>
-            <small>Part 2 · 完整展开</small>
+            <small>Part 2 · 给你一分钟，讲个小故事</small>
             <ArrowRight aria-hidden="true" size={17} />
           </button>
           <button type="button" onClick={() => onOpenLibrary(3)}>
             <span className="mode-icon"><Layers3 size={21} /></span>
             <strong>观点题</strong>
-            <small>Part 3 · 解释理由</small>
+            <small>Part 3 · 抬个杠，说出你的理由</small>
             <ArrowRight aria-hidden="true" size={17} />
           </button>
         </div>
@@ -152,7 +151,7 @@ export function HomeView({
         <button type="button" onClick={onOpenReview} aria-label="打开复盘中心">
           <div>
             <p className="eyebrow">Your learning trail</p>
-            <h2>练过的内容，正在变成你的话。</h2>
+            <h2>你说过的每一句话，都在悄悄变成你的。</h2>
           </div>
           <ArrowRight aria-hidden="true" size={19} />
         </button>

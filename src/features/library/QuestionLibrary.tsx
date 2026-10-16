@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Search,
   SearchX,
+  Settings2,
   Shuffle,
   Upload,
 } from 'lucide-react'
@@ -128,21 +129,24 @@ export function QuestionLibrary({
       <div className="question-library-heading">
         <div>
           <p className="eyebrow">{bankMeta.seasonLabel} · Question bank</p>
-          <h1>选一道真正想练的题</h1>
-          <p>按 Part、主题和新旧题筛选。一次只加载少量结果，找题更快。</p>
+          <h1>挑一道顺眼的，开练</h1>
+          <p>按 Part、主题、新旧题筛一筛，每次只出一批，不眼花。</p>
         </div>
-        <button className="secondary-button compact" type="button" onClick={() => onImport(false)}>
-          <Upload aria-hidden="true" size={16} />
-          导入
-        </button>
-        <button className="secondary-button compact" type="button" onClick={() => onImport(true)}>
-          导入并换季
-        </button>
-        {onDeleteQuestions || onClearAll ? (
-          <button className="secondary-button compact" type="button" onClick={() => { setManagementMode((current) => !current); setSelectedIds(new Set()); setSelectedCategories(new Set()) }}>
-            {managementMode ? '完成管理' : '管理题库'}
+        <div className="question-library-tools" aria-label="题库操作">
+          <button type="button" onClick={() => onImport(false)}>
+            <Upload aria-hidden="true" size={15} />
+            导入题库
           </button>
-        ) : null}
+          <button type="button" onClick={() => onImport(true)}>
+            换季更新
+          </button>
+          {onDeleteQuestions || onClearAll ? (
+            <button type="button" onClick={() => { setManagementMode((current) => !current); setSelectedIds(new Set()); setSelectedCategories(new Set()) }}>
+              <Settings2 aria-hidden="true" size={15} />
+              {managementMode ? '完成管理' : '管理题库'}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="part-tabs" role="tablist" aria-label="IELTS Speaking 部分">
@@ -213,15 +217,15 @@ export function QuestionLibrary({
               aria-pressed={category === item}
               onClick={() => { setCategory(item); setVisibleLimit(20) }}
             >
-              {item}
+              {categoryDisplayLabel(item)}
             </button>
           ))}
         </div>
         <div className="question-filter-chips" role="group" aria-label="练习状态">
           {([
-            ['all', '全部状态'],
-            ['undone', '仅未做'],
-            ['done', '仅已做'],
+            ['all', '全部'],
+            ['undone', '还没练'],
+            ['done', '练过了'],
           ] as const).map(([value, label]) => (
             <button
               type="button"
@@ -250,7 +254,7 @@ export function QuestionLibrary({
             onClick={pickRandom}
           >
             <Shuffle aria-hidden="true" size={16} />
-            随机一题
+            随机抽一道
           </button>
           <span>{visiblePartQuestions.length} 道结果</span>
         </div>
@@ -277,7 +281,7 @@ export function QuestionLibrary({
           </label>
           <fieldset className="category-management">
             <legend>按类别选择（会删除当前 Part 下该类别的实际题目）</legend>
-            {categories.map((item) => <label key={item}><input type="checkbox" checked={selectedCategories.has(item)} onChange={(event) => setSelectedCategories((current) => { const next = new Set(current); if (event.target.checked) next.add(item); else next.delete(item); return next })} />{item}</label>)}
+            {categories.map((item) => <label key={item}><input type="checkbox" checked={selectedCategories.has(item)} onChange={(event) => setSelectedCategories((current) => { const next = new Set(current); if (event.target.checked) next.add(item); else next.delete(item); return next })} />{categoryDisplayLabel(item)}</label>)}
           </fieldset>
           {onClearAll ? <button type="button" className="danger-button" onClick={onClearAll}>清空当前题库（保留历史记录）</button> : null}
         </section>
@@ -400,9 +404,9 @@ function QuestionRow({
           </small>
           <strong>{question.prompt}</strong>
           <span>
-            {question.category ?? '导入题目'}
+            {categoryDisplayLabel(question.category ?? '导入题目')}
             {followUps.length > 0 ? ` · 对应 Part 3 ${followUps.length} 道` : ''}
-            {' · 开始练习 '}
+            {' · 开始练这道 '}
             <ArrowRight aria-hidden="true" size={14} />
           </span>
         </button>
@@ -412,7 +416,7 @@ function QuestionRow({
           aria-pressed={isDone}
           onClick={() => onToggleDone(question.id, !isDone)}
         >
-          {isDone ? '标为未做' : '标为已做'}
+          {isDone ? '取消勾选' : '打个勾'}
         </button>
         {onDelete ? (
           <>
@@ -474,9 +478,9 @@ function QuestionStatus({
   isNew: boolean | undefined
   isDone: boolean
 }) {
-  const doneLabel = isDone ? <b className="done-tag">已做</b> : <span>未做</span>
+  const doneLabel = isDone ? <b className="done-tag">练过了</b> : <span>未练</span>
   if (isNew === true) return <>{doneLabel} · <b className="new-tag">新题</b></>
-  if (isNew === false) return <>{doneLabel} · <span>保留题</span></>
+  if (isNew === false) return <>{doneLabel}</>
   return <>{doneLabel} · <span>自定义</span></>
 }
 
@@ -509,7 +513,7 @@ function groupQuestions(questions: Question[]): Array<{
     byLabel.set(label, list)
   }
   for (const [label, list] of byLabel) {
-    groups.push({ label, questions: list })
+    groups.push({ label: categoryDisplayLabel(label), questions: list })
   }
   return groups
 }
@@ -539,4 +543,14 @@ function difficultyLabel(difficulty: Question['difficulty']): string {
   if (difficulty === 'developing') return '进阶'
   if (difficulty === 'stretch') return '拓展'
   return '基础'
+}
+
+function categoryDisplayLabel(category: string): string {
+  const labels: Record<string, string> = {
+    PLACE: '地点',
+    PEOPLE: '人物',
+    OBJECTS: '物品',
+    EVENTS: '事件',
+  }
+  return labels[category] ?? category
 }

@@ -1,0 +1,18 @@
+{
+  "skill_name": "async-workflow-integrity",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "简历助手先提取经历，再写求职信。用户修改经历后旧提取结果晚到，覆盖了新内容；自动保存也偶尔丢字段。请设计最小修复与可控时序测试。",
+      "expected_output": "使用owner/entity/version、写入时校验、原子read-modify-write，不只取消HTTP；独立阶段状态。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "AI食谱App在生成结果返回后选中食材，用户手动编辑后页面刷新会重置。重复确认会收藏两份，且收藏与日志分两次写。请审查正确性边界。",
+      "expected_output": "草稿按结果身份初始化，保留编辑，去重，区分分步写入与全事务，失败恢复。",
+      "files": []
+    }
+  ]
+}
+

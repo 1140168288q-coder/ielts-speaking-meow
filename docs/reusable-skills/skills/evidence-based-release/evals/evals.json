@@ -1,0 +1,18 @@
+{
+  "skill_name": "evidence-based-release",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我的Rust桌面AI工具测试全通过，也有一个release.exe。帮我列出真正可交付的检查顺序。不能发布，签名配置不确定，数据库有用户数据。",
+      "expected_output": "核对内部版本/签名/hash、工作区和备份恢复，设备/真实AI与mock分开，不执行发布。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "SaaS仓库显示1.9.0，线上健康返回1.8.2。容器都running，有数据库迁移。请给保留数据的更新与验收计划，不把健康200当AI成功。",
+      "expected_output": "核对镜像/容器/外部版本，备份与迁移兼容，目标部署和业务验证边界。",
+      "files": []
+    }
+  ]
+}
+

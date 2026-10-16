@@ -1,0 +1,70 @@
+{
+  "kind": "small_nonblind_document_coverage_comparison",
+  "checked_on": "2026-09-21",
+  "cases": [
+    {
+      "name": "contract-drift",
+      "variants": {
+        "with_skill": {
+          "passed": 5,
+          "total": 5,
+          "grade": "iteration-1/contract-drift/with_skill/grading.json"
+        },
+        "without_skill": {
+          "passed": 5,
+          "total": 5,
+          "grade": "iteration-1/contract-drift/without_skill/grading.json"
+        }
+      }
+    },
+    {
+      "name": "memory-provenance",
+      "variants": {
+        "with_skill": {
+          "passed": 5,
+          "total": 5,
+          "grade": "iteration-1/memory-provenance/with_skill/grading.json"
+        },
+        "without_skill": {
+          "passed": 3,
+          "total": 5,
+          "grade": "iteration-1/memory-provenance/without_skill/grading.json"
+        }
+      }
+    },
+    {
+      "name": "quota-crash-replay",
+      "variants": {
+        "with_skill": {
+          "passed": 5,
+          "total": 5,
+          "grade": "iteration-1/quota-crash-replay/with_skill/grading.json"
+        },
+        "without_skill": {
+          "passed": 3,
+          "total": 5,
+          "grade": "iteration-1/quota-crash-replay/without_skill/grading.json"
+        }
+      }
+    }
+  ],
+  "totals": {
+    "with_skill": {
+      "passed": 15,
+      "total": 15
+    },
+    "without_skill": {
+      "passed": 11,
+      "total": 15
+    }
+  },
+  "runtime_tests_executed": false,
+  "tokens": null,
+  "duration_seconds": null,
+  "limitations": [
+    "Three cases, one output per variant; no significance or stable improvement claim.",
+    "Grader could see variant labels.",
+    "Four of fifteen assertions discriminate; failed criteria mean missing explicit coverage, not runtime failure.",
+    "No runtime implementation, full trigger evaluation, or user rating was performed."
+  ]
+}

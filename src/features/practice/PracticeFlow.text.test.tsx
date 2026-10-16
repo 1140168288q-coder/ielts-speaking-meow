@@ -728,7 +728,7 @@ describe('PracticeFlow V1.7 text answer flow', () => {
         onBack={() => undefined}
       />,
     )
-    await waitFor(() => expect(screen.getByText(/Text AI 未配置/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/AI 反馈尚未启用/)).toBeInTheDocument())
     expect(screen.getByText(/本地挑出的手动候选/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试二答分析' })).toBeNull()
   })

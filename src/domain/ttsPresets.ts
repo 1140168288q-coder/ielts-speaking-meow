@@ -90,10 +90,10 @@ export const TTS_VOICE_PRESETS = [
 
 const DEFAULT_TTS_VOICE_PRESET: TtsVoicePreset = {
   id: DEFAULT_TTS_VOICE_PRESET_ID,
-  label: '云端默认 · Backend 配置',
+  label: '云端默认',
   gender: 'female',
   accent: '英式英语',
-  description: '沿用现有 Backend 音色，不改变旧版本的默认行为。',
+  description: '沿用云端默认音色，不改变旧版本的默认行为。',
   rateFactor: 1,
   pitchFactor: 1,
 }

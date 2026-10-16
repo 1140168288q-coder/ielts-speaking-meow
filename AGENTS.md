@@ -2,7 +2,7 @@
 
 ## Project
 
-**Name:** 雅思口语喵<br>**Version:** V2.2.1<br>**Platform:** Android<br>**Primary mode:** IELTS Speaking single-question practice
+**Name:** 雅思口语喵<br>**Version:** V2.2.2<br>**Platform:** Android<br>**Primary mode:** IELTS Speaking single-question practice
 
 雅思口语喵是一款 IELTS Speaking 单题练习软件。V1.7 起答案以文本提交：
 用户使用手机系统键盘语音输入或手动输入，应用内不再录音、不再调用 STT。

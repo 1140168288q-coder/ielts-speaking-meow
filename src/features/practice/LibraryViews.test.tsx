@@ -107,7 +107,7 @@ describe('LearnerMemoryPanel', () => {
     }
 
     render(<LearnerMemoryPanel sessions={[session]} onDeleteFact={onDeleteFact} />)
-    await user.click(screen.getByText('你的口语轨迹 · 点开看看这段时间的痕迹'))
+    await user.click(screen.getByText('点开，看看自己走了多远'))
     await user.click(screen.getByRole('button', { name: '删除' }))
 
     await waitFor(() => expect(onDeleteFact).toHaveBeenCalledWith('memory-session', 'fact-1'))
